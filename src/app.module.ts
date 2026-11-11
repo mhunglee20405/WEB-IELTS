@@ -21,6 +21,10 @@ import { AuditModule } from 'src/modules/audit/audit.module';
 import { MailModule } from 'src/modules/mail/mail.module';
 import { NotificationsModule } from 'src/modules/notifications/notifications.module';
 import { JobsModule } from 'src/modules/jobs/jobs.module';
+import { ExamTestsModule } from 'src/modules/exam-tests/exam-tests.module';
+import { ExamAttemptsModule } from 'src/modules/exam-attempts/exam-attempts.module';
+import { ReadingTranslationsModule } from 'src/modules/reading-translations/reading-translations.module';
+import { MediaModule } from 'src/modules/media/media.module';
 
 @Module({
   imports: [
@@ -90,6 +94,10 @@ import { JobsModule } from 'src/modules/jobs/jobs.module';
     NotificationsModule,
     JobsModule,
     HealthModule,
+    ExamTestsModule,
+    ExamAttemptsModule,
+    ReadingTranslationsModule,
+    MediaModule,
   ],
 })
 export class AppModule { }

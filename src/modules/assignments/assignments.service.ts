@@ -11,6 +11,7 @@ import { Model, Types } from 'mongoose';
 import { Assignment, AssignmentDocument, ExerciseSnapshot } from 'src/database/schemas/assignment.schema';
 import { Course, CourseDocument } from 'src/database/schemas/course.schema';
 import { Exercise, ExerciseDocument } from 'src/database/schemas/exercise.schema';
+import { ExamTest, ExamTestDocument } from 'src/database/schemas/exam-test.schema';
 import { Enrollment, EnrollmentDocument } from 'src/database/schemas/enrollment.schema';
 import {
   StudentAssignment,
@@ -22,6 +23,7 @@ import {
   CourseStatus,
   EnrollmentStatus,
   ExerciseStatus,
+  ExamTestStatus,
   NotificationType,
   StudentAssignmentStatus,
   UserRole,
@@ -56,6 +58,7 @@ export class AssignmentsService {
     @InjectModel(Enrollment.name) private enrollmentModel: Model<EnrollmentDocument>,
     @InjectModel(StudentAssignment.name)
     private studentAssignmentModel: Model<StudentAssignmentDocument>,
+    @InjectModel(ExamTest.name) @Optional() private examTestModel?: Model<ExamTestDocument>,
     @Optional() private notificationsService?: NotificationsService,
     @Optional() private auditService?: AuditService,
   ) {}
@@ -87,16 +90,67 @@ export class AssignmentsService {
       }
     }
 
+    let exerciseTitle = '';
+    let exerciseVersion = 1;
+    let exerciseSnapshot: any = null;
+
     const exercise = await this.exerciseModel
       .findById(dto.exerciseId)
       .select('+questions.answerSpecification +questions.explanation')
       .exec();
 
-    if (!exercise) {
+    if (exercise) {
+      if (exercise.status !== ExerciseStatus.PUBLISHED) {
+        throw new BadRequestException('Only published exercises can be assigned to courses');
+      }
+      exerciseTitle = exercise.title;
+      exerciseVersion = exercise.version;
+      exerciseSnapshot = {
+        title: exercise.title,
+        type: exercise.type,
+        passage: exercise.passage,
+        audioAssets: exercise.audioAssets,
+        questions: exercise.questions as any,
+        passScore: exercise.passScore,
+        version: exercise.version,
+      };
+    } else if (this.examTestModel) {
+      const examTest = await this.examTestModel.findById(dto.exerciseId).exec();
+      if (!examTest) {
+        throw new NotFoundException('Exercise not found');
+      }
+      if (examTest.status !== ExamTestStatus.PUBLISHED) {
+        throw new BadRequestException('Only published exercises can be assigned to courses');
+      }
+
+      if (dto.requiredScope === 'PART' && dto.requiredPartId) {
+        const hasPart = (examTest.parts || []).some(
+          (p: any) => extractObjectId(p._id) === dto.requiredPartId,
+        );
+        if (!hasPart) {
+          throw new BadRequestException('requiredPartId does not exist in this exam test');
+        }
+      }
+
+      exerciseTitle = examTest.title;
+      exerciseVersion = examTest.version;
+      const questions: any[] = [];
+      for (const part of examTest.parts || []) {
+        for (const group of part.questionGroups || []) {
+          for (const q of group.questions || []) {
+            questions.push(q);
+          }
+        }
+      }
+      exerciseSnapshot = {
+        title: examTest.title,
+        type: examTest.skill.toLowerCase() as any,
+        questions,
+        passScore: examTest.passScore,
+        version: examTest.version,
+      };
+    } else {
       throw new NotFoundException('Exercise not found');
-    }
-    if (exercise.status !== ExerciseStatus.PUBLISHED) {
-      throw new BadRequestException('Only published exercises can be assigned to courses');
     }
 
     // Determine openAt & deadlineAt
@@ -128,29 +182,23 @@ export class AssignmentsService {
       throw new BadRequestException('openAt must be earlier than deadlineAt');
     }
 
-    const exerciseSnapshot: ExerciseSnapshot = {
-      title: exercise.title,
-      type: exercise.type,
-      passage: exercise.passage,
-      audioAssets: exercise.audioAssets,
-      questions: exercise.questions as any,
-      passScore: exercise.passScore,
-      version: exercise.version,
-    };
-
     const status = dto.status || AssignmentStatus.PUBLISHED;
 
     const assignment = new this.assignmentModel({
       courseId: course._id,
-      exerciseId: exercise._id,
-      exerciseVersion: exercise.version,
+      exerciseId: new Types.ObjectId(dto.exerciseId),
+      exerciseVersion,
       exerciseSnapshot,
       assignedBy: actor._id,
-      title: dto.title || exercise.title,
+      title: dto.title || exerciseTitle,
       openAt,
       deadlineAt,
       allowRetake: dto.allowRetake ?? false,
       maxAttempts: dto.maxAttempts,
+      requiredScope: dto.requiredScope || 'FULL',
+      requiredPartId: dto.requiredPartId,
+      allowedModes: dto.allowedModes || ['PART', 'FULL'],
+      durationSecondsOverride: dto.durationSecondsOverride,
       status,
     });
 
@@ -673,6 +721,10 @@ export class AssignmentsService {
       exerciseVersion: raw.exerciseVersion,
       assignedBy: extractObjectId(raw.assignedBy),
       title: raw.title,
+      requiredScope: raw.requiredScope || 'FULL',
+      requiredPartId: raw.requiredPartId || null,
+      allowedModes: raw.allowedModes || ['PART', 'FULL'],
+      durationSecondsOverride: raw.durationSecondsOverride || null,
       openAt: raw.openAt,
       openAtVn: formatVnDateTime(raw.openAt),
       deadlineAt: raw.deadlineAt,
@@ -726,6 +778,10 @@ export class AssignmentsService {
         : undefined,
       exerciseVersion: raw.exerciseVersion,
       title: raw.title,
+      requiredScope: raw.requiredScope || 'FULL',
+      requiredPartId: raw.requiredPartId || null,
+      allowedModes: raw.allowedModes || ['PART', 'FULL'],
+      durationSecondsOverride: raw.durationSecondsOverride || null,
       openAt: raw.openAt,
       openAtVn: formatVnDateTime(raw.openAt),
       deadlineAt: raw.deadlineAt,

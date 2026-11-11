@@ -3399,6 +3399,1185 @@
           "Health"
         ]
       }
+    },
+    "/exam-tests": {
+      "get": {
+        "operationId": "ExamTestsController_findAll",
+        "summary": "List published exam tests for practice (Student safe)",
+        "parameters": [
+          {
+            "name": "skill",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "READING",
+                "LISTENING"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "DRAFT",
+                "PUBLISHED",
+                "ARCHIVED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Tests (Student & Public)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-tests/{testId}": {
+      "get": {
+        "operationId": "ExamTestsController_findOne",
+        "summary": "Get published exam test metadata and parts (Student safe)",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Tests (Student & Public)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-tests/{testId}/parts/{partId}": {
+      "get": {
+        "operationId": "ExamTestsController_findPart",
+        "summary": "Get part questions (Student safe - answers stripped)",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Tests (Student & Public)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests": {
+      "get": {
+        "operationId": "TeacherExamTestsController_findAll",
+        "summary": "List tests managed by teacher/admin",
+        "parameters": [
+          {
+            "name": "skill",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "READING",
+                "LISTENING"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "DRAFT",
+                "PUBLISHED",
+                "ARCHIVED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "TeacherExamTestsController_create",
+        "summary": "Create new exam test in DRAFT status",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExamTestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}": {
+      "get": {
+        "operationId": "TeacherExamTestsController_findOne",
+        "summary": "Get full exam test details including answer keys for authoring",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "TeacherExamTestsController_update",
+        "summary": "Update exam test metadata (DRAFT only)",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExamTestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/parts": {
+      "post": {
+        "operationId": "TeacherExamTestsController_addPart",
+        "summary": "Add a Reading Passage or Listening Section to DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExamPartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/parts/{partId}": {
+      "patch": {
+        "operationId": "TeacherExamTestsController_updatePart",
+        "summary": "Update passage/section in DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExamPartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "TeacherExamTestsController_deletePart",
+        "summary": "Delete passage/section from DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/parts/{partId}/question-groups": {
+      "post": {
+        "operationId": "TeacherExamTestsController_addQuestionGroup",
+        "summary": "Add a question group with questions to a part in DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuestionGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/question-groups/{groupId}": {
+      "patch": {
+        "operationId": "TeacherExamTestsController_updateQuestionGroup",
+        "summary": "Update question group and questions in DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "description": "QuestionGroup ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateQuestionGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/validate": {
+      "post": {
+        "operationId": "TeacherExamTestsController_validateTest",
+        "summary": "Validate completeness and question numbers before publishing",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/preview": {
+      "get": {
+        "operationId": "TeacherExamTestsController_preview",
+        "summary": "Preview test exactly as students will see it",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mode",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "PART",
+                "FULL"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/publish": {
+      "post": {
+        "operationId": "TeacherExamTestsController_publish",
+        "summary": "Publish exam test and make its current version immutable",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/new-version": {
+      "post": {
+        "operationId": "TeacherExamTestsController_newVersion",
+        "summary": "Fork a published test into a new editable DRAFT version",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts": {
+      "post": {
+        "operationId": "ExamAttemptsController_createAttempt",
+        "summary": "Start a new exam attempt (PART or FULL mode)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExamAttemptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}": {
+      "get": {
+        "operationId": "ExamAttemptsController_getAttempt",
+        "summary": "Get current attempt state, timer, and saved answers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/answers": {
+      "put": {
+        "operationId": "ExamAttemptsController_saveAnswers",
+        "summary": "Autosave answers with optimistic revision concurrency",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAnswersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/submit": {
+      "post": {
+        "operationId": "ExamAttemptsController_submitAttempt",
+        "summary": "Submit attempt for server-side auto-grading",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitAttemptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/result": {
+      "get": {
+        "operationId": "ExamAttemptsController_getResult",
+        "summary": "Get graded attempt result breakdown",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/review": {
+      "get": {
+        "operationId": "ExamAttemptsController_getReview",
+        "summary": "Review answers and explanations (Unlocked ONLY when PASSED >= 70%)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/eligibility": {
+      "get": {
+        "operationId": "ReadingTranslationsController_getEligibility",
+        "summary": "Check per-passage translation unlock status for a Reading test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "query",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentAssignmentId",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/{passageId}": {
+      "get": {
+        "operationId": "ReadingTranslationsController_getPassageTranslation",
+        "summary": "Get Reading passage text and existing draft/review status",
+        "parameters": [
+          {
+            "name": "passageId",
+            "required": true,
+            "in": "path",
+            "description": "Passage (ExamPart) ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "testId",
+            "required": true,
+            "in": "query",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentAssignmentId",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/{passageId}/draft": {
+      "put": {
+        "operationId": "ReadingTranslationsController_saveDraft",
+        "summary": "Save Vietnamese translation draft (Requires passed attempt for this passage)",
+        "parameters": [
+          {
+            "name": "passageId",
+            "required": true,
+            "in": "path",
+            "description": "Passage (ExamPart) ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTranslationDraftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/{passageId}/submit": {
+      "post": {
+        "operationId": "ReadingTranslationsController_submitTranslation",
+        "summary": "Submit Vietnamese translation for teacher review",
+        "parameters": [
+          {
+            "name": "passageId",
+            "required": true,
+            "in": "path",
+            "description": "Passage (ExamPart) ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitReadingTranslationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/reading-translations": {
+      "get": {
+        "operationId": "TeacherReadingTranslationsController_findAllForTeacher",
+        "summary": "List submitted translations needing teacher review",
+        "parameters": [
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "submitted",
+                "reviewed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Reading Translations (Review)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/reading-translations/{translationId}/review": {
+      "post": {
+        "operationId": "TeacherReadingTranslationsController_review",
+        "summary": "Provide teacher feedback and mark translation as REVIEWED",
+        "parameters": [
+          {
+            "name": "translationId",
+            "required": true,
+            "in": "path",
+            "description": "TranslationSubmission ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewReadingTranslationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Reading Translations (Review)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/media/audio/{assetId}/playback": {
+      "get": {
+        "operationId": "MediaController_getPlayback",
+        "summary": "Get signed playback stream URL for listening section audio",
+        "parameters": [
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "path",
+            "description": "Audio Asset ObjectId / key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Media & Audio Storage"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/media/audio/upload-intent": {
+      "post": {
+        "operationId": "MediaController_createUploadIntent",
+        "summary": "Obtain signed upload URL for teacher audio file (Max 50MB)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudioUploadIntentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Media & Audio Storage"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -3964,6 +5143,33 @@
               "archived"
             ],
             "default": "published"
+          },
+          "requiredScope": {
+            "type": "string",
+            "enum": [
+              "PART",
+              "FULL"
+            ],
+            "default": "FULL"
+          },
+          "requiredPartId": {
+            "type": "string",
+            "description": "ExamPart ObjectId if assigning a specific PART"
+          },
+          "allowedModes": {
+            "example": [
+              "PART",
+              "FULL"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "durationSecondsOverride": {
+            "type": "number",
+            "example": 1200,
+            "description": "Duration in seconds override"
           }
         },
         "required": [
@@ -4148,6 +5354,545 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "CreateExamTestDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "IELTS Reading Practice Test 01"
+          },
+          "skill": {
+            "type": "string",
+            "enum": [
+              "READING",
+              "LISTENING"
+            ],
+            "example": "READING"
+          },
+          "description": {
+            "type": "string",
+            "example": "Luyện tập Reading 3 passages"
+          },
+          "examPreset": {
+            "type": "string",
+            "enum": [
+              "IELTS_ACADEMIC",
+              "CUSTOM"
+            ],
+            "default": "IELTS_ACADEMIC"
+          },
+          "allowedModes": {
+            "type": "array",
+            "default": [
+              "PART",
+              "FULL"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "PART",
+                "FULL"
+              ]
+            }
+          },
+          "passScore": {
+            "type": "number",
+            "default": 70,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "fullDurationSeconds": {
+            "type": "number",
+            "example": 3600,
+            "description": "Duration in seconds for full test"
+          },
+          "translationEnabled": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "title",
+          "skill"
+        ]
+      },
+      "UpdateExamTestDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Updated title"
+          },
+          "description": {
+            "type": "string"
+          },
+          "examPreset": {
+            "type": "string",
+            "enum": [
+              "IELTS_ACADEMIC",
+              "CUSTOM"
+            ]
+          },
+          "allowedModes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "PART",
+                "FULL"
+              ]
+            }
+          },
+          "passScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "fullDurationSeconds": {
+            "type": "number"
+          },
+          "translationEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateExamPartDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PASSAGE",
+              "SECTION"
+            ],
+            "example": "PASSAGE"
+          },
+          "ordinal": {
+            "type": "number",
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "example": "Passage 1 — The History of Glass"
+          },
+          "contentHtml": {
+            "type": "string",
+            "example": "<p>Glass was first produced in...</p>"
+          },
+          "audioAssetId": {
+            "type": "string",
+            "description": "Asset ObjectId for audio"
+          },
+          "durationSeconds": {
+            "type": "number",
+            "example": 1200
+          }
+        },
+        "required": [
+          "type",
+          "ordinal",
+          "title"
+        ]
+      },
+      "UpdateExamPartDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "number"
+          },
+          "contentHtml": {
+            "type": "string"
+          },
+          "audioAssetId": {
+            "type": "string"
+          },
+          "durationSeconds": {
+            "type": "number"
+          }
+        }
+      },
+      "ExamOptionDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "A"
+          },
+          "text": {
+            "type": "string",
+            "example": "Option A description"
+          }
+        },
+        "required": [
+          "key",
+          "text"
+        ]
+      },
+      "ExamGradingDto": {
+        "type": "object",
+        "properties": {
+          "acceptedKeys": {
+            "example": [
+              "A",
+              "TRUE"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "default": false
+          },
+          "maxWords": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "acceptedKeys"
+        ]
+      },
+      "ExamQuestionDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number",
+            "example": 1
+          },
+          "prompt": {
+            "type": "string",
+            "example": "The study concluded that..."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ],
+            "example": "MULTIPLE_CHOICE_SINGLE"
+          },
+          "points": {
+            "type": "number",
+            "example": 1
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "grading": {
+            "$ref": "#/components/schemas/ExamGradingDto"
+          }
+        },
+        "required": [
+          "number",
+          "prompt",
+          "type",
+          "points"
+        ]
+      },
+      "CreateQuestionGroupDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Questions 1–5"
+          },
+          "instruction": {
+            "type": "string",
+            "example": "Choose TRUE, FALSE or NOT GIVEN"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ],
+            "example": "TRUE_FALSE_NOT_GIVEN"
+          },
+          "order": {
+            "type": "number",
+            "example": 1
+          },
+          "sharedOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "maxWords": {
+            "type": "number",
+            "example": 3
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamQuestionDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "order",
+          "questions"
+        ]
+      },
+      "UpdateQuestionGroupDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "instruction": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ]
+          },
+          "order": {
+            "type": "number"
+          },
+          "sharedOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "maxWords": {
+            "type": "number"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamQuestionDto"
+            }
+          }
+        }
+      },
+      "CreateExamAttemptDto": {
+        "type": "object",
+        "properties": {
+          "testId": {
+            "type": "string",
+            "description": "ExamTest ObjectId"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "PART",
+              "FULL"
+            ],
+            "example": "PART"
+          },
+          "partId": {
+            "type": "object",
+            "description": "ExamPart ObjectId (required when mode is PART, must be omitted or null when FULL)",
+            "example": "65f01234567890abcdef1234"
+          },
+          "studentAssignmentId": {
+            "type": "object",
+            "description": "Optional StudentAssignment ObjectId if attempt is linked to homework"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Client idempotency UUID to prevent duplicate attempt creation",
+            "example": "start-unique-client-uuid-1234"
+          }
+        },
+        "required": [
+          "testId",
+          "mode"
+        ]
+      },
+      "AnswerItemDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "example": "1"
+          },
+          "value": {
+            "type": "object",
+            "example": "TRUE",
+            "description": "Answer value: string for single/TFNG/completion, or array of strings for multiple choice"
+          }
+        },
+        "required": [
+          "questionId",
+          "value"
+        ]
+      },
+      "SaveAnswersDto": {
+        "type": "object",
+        "properties": {
+          "baseRevision": {
+            "type": "number",
+            "example": 0,
+            "description": "Current revision known by client (for optimistic concurrency check)"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnswerItemDto"
+            }
+          }
+        },
+        "required": [
+          "baseRevision",
+          "answers"
+        ]
+      },
+      "SubmitAttemptDto": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "example": "submit-unique-client-uuid-1234",
+            "description": "Client idempotency UUID for submit call"
+          },
+          "expectedRevision": {
+            "type": "number",
+            "example": 4
+          }
+        }
+      },
+      "SaveTranslationDraftDto": {
+        "type": "object",
+        "properties": {
+          "testId": {
+            "type": "string",
+            "description": "ExamTest ObjectId"
+          },
+          "studentAssignmentId": {
+            "type": "string",
+            "description": "Optional StudentAssignment ObjectId"
+          },
+          "exerciseVersion": {
+            "type": "number",
+            "example": 1
+          },
+          "textVi": {
+            "type": "string",
+            "example": "Bản dịch tiếng Việt của bài đọc..."
+          },
+          "revision": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "testId",
+          "textVi"
+        ]
+      },
+      "SubmitReadingTranslationDto": {
+        "type": "object",
+        "properties": {
+          "testId": {
+            "type": "string",
+            "description": "ExamTest ObjectId"
+          },
+          "studentAssignmentId": {
+            "type": "string",
+            "description": "Optional StudentAssignment ObjectId"
+          },
+          "exerciseVersion": {
+            "type": "number",
+            "example": 1
+          },
+          "textVi": {
+            "type": "string",
+            "example": "Bản dịch tiếng Việt hoàn chỉnh..."
+          }
+        },
+        "required": [
+          "testId"
+        ]
+      },
+      "ReviewReadingTranslationDto": {
+        "type": "object",
+        "properties": {
+          "teacherComment": {
+            "type": "string",
+            "example": "Bản dịch rất tốt, văn phong tự nhiên và chính xác thuật ngữ."
+          }
+        },
+        "required": [
+          "teacherComment"
+        ]
+      },
+      "AudioUploadIntentDto": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "example": "section1_recording.mp3"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "audio/mpeg"
+          },
+          "fileSize": {
+            "type": "number",
+            "example": 10485760,
+            "description": "File size in bytes (max 50MB)"
+          }
+        },
+        "required": [
+          "filename",
+          "mimeType",
+          "fileSize"
         ]
       }
     }

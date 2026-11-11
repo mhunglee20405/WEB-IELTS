@@ -276,3 +276,170 @@ const requestBody = {
 };
 ```
 
+---
+
+## 5. Phase 9: IELTS Exam Modes, Question Bank & Reading Translation Unlock
+
+### 5.1 Enums & Types
+```ts
+export enum ExamSkill {
+  READING = 'READING',
+  LISTENING = 'LISTENING',
+}
+
+export enum ExamMode {
+  PART = 'PART',
+  FULL = 'FULL',
+}
+
+export enum PartType {
+  PASSAGE = 'PASSAGE',
+  SECTION = 'SECTION',
+}
+
+export enum ExamTestStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum AttemptStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  SUBMITTED = 'SUBMITTED',
+  EXPIRED = 'EXPIRED',
+  ABANDONED = 'ABANDONED',
+}
+
+export enum TranslationStatus {
+  LOCKED = 'LOCKED',
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  REVIEWED = 'REVIEWED',
+}
+```
+
+### 5.2 Flow: Taking an Exam (PART or FULL)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Student
+  participant Web as Next.js App
+  participant API as Backend API
+  
+  Student->>Web: Selects Test & Mode (PART / FULL)
+  Web->>API: POST /api/v1/exam-attempts { testId, mode, partId }
+  API-->>Web: 201 Created { id, remainingSeconds, answersRevision: 0, scopeQuestionIds }
+  
+  loop Autosave every 30s or on Answer Change
+    Web->>API: PUT /api/v1/exam-attempts/:id/answers { baseRevision, answers }
+    API-->>Web: 200 OK { answersRevision: revision + 1, savedAt }
+    Note over Web,API: 409 Conflict if baseRevision mismatch (refresh state)
+  end
+  
+  Student->>Web: Clicks "Submit Test"
+  Web->>API: POST /api/v1/exam-attempts/:id/submit { idempotencyKey }
+  API-->>Web: 200 OK { scorePercent, passed, translation: { unlockedPassageIds } }
+  
+  opt Student checks explanations
+    Web->>API: GET /api/v1/exam-attempts/:id/review
+    API-->>Web: 200 OK { reviewQuestions: [ { questionId, studentAnswer, correctAnswers, explanation } ] }
+  end
+```
+
+### 5.3 Flow: Reading Translation Unlock Workflow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Student
+  actor Teacher
+  participant Web as Next.js App
+  participant API as Backend API
+  
+  Student->>Web: Opens Reading Translation Tab
+  Web->>API: GET /api/v1/reading-translations/eligibility?testId=xxx
+  API-->>Web: 200 OK { passages: [ { passageId, unlocked: true/false, status } ] }
+  
+  alt Passage is LOCKED (Score < 70%)
+    Student->>Web: Attempts to access translation
+    Web->>API: POST /api/v1/reading-translations/passages/:id/draft
+    API-->>Web: 403 Forbidden { error: "TRANSLATION_LOCKED" }
+  else Passage is UNLOCKED (Score >= 70%)
+    Student->>Web: Edits Vietnamese translation draft
+    Web->>API: POST /api/v1/reading-translations/passages/:id/draft { textVi }
+    API-->>Web: 200 OK { status: "DRAFT" }
+    
+    Student->>Web: Submits translation for Teacher review
+    Web->>API: POST /api/v1/reading-translations/passages/:id/submit { textVi }
+    API-->>Web: 200 OK { status: "SUBMITTED" }
+    
+    Teacher->>Web: Opens Teacher Review Dashboard
+    Web->>API: GET /api/v1/teacher/reading-translations
+    API-->>Web: 200 OK [ { id, studentName, passageTitle, translatedText } ]
+    
+    Teacher->>Web: Scores and submits feedback
+    Web->>API: PATCH /api/v1/teacher/reading-translations/:id/review { score, teacherComment }
+    API-->>Web: 200 OK { status: "REVIEWED" }
+  end
+```
+
+### 5.4 Sample Payloads
+
+#### Start Exam Attempt
+```ts
+// POST /api/v1/exam-attempts
+// For PART mode:
+{
+  "testId": "673238901111...",
+  "mode": "PART",
+  "partId": "673238902222...",
+  "idempotencyKey": "part-attempt-uuid-001"
+}
+// For FULL mode:
+{
+  "testId": "673238901111...",
+  "mode": "FULL",
+  "idempotencyKey": "full-attempt-uuid-002"
+}
+```
+
+#### Autosave Answers
+```ts
+// PUT /api/v1/exam-attempts/:id/answers
+{
+  "baseRevision": 2,
+  "answers": [
+    { "questionId": "1", "value": "TRUE" },
+    { "questionId": "2", "value": "FALSE" },
+    { "questionId": "3", "value": "NOT GIVEN" }
+  ]
+}
+```
+
+#### Submit Exam Attempt
+```ts
+// POST /api/v1/exam-attempts/:id/submit
+{
+  "idempotencyKey": "submit-attempt-uuid-001"
+}
+
+// Response 200 OK
+{
+  "statusCode": 200,
+  "data": {
+    "attemptId": "673238903333...",
+    "mode": "PART",
+    "correctCount": 8,
+    "totalPoints": 10,
+    "scorePercent": 80,
+    "passed": true,
+    "translation": {
+      "unlockedPassageIds": ["673238902222..."]
+    }
+  },
+  "timestamp": "2026-11-12T05:30:00.000Z"
+}
+```
+
+

@@ -5,6 +5,7 @@ import { AssignmentsService } from './assignments.service';
 import { Assignment, AssignmentSchema } from 'src/database/schemas/assignment.schema';
 import { Course, CourseSchema } from 'src/database/schemas/course.schema';
 import { Exercise, ExerciseSchema } from 'src/database/schemas/exercise.schema';
+import { ExamTest, ExamTestSchema } from 'src/database/schemas/exam-test.schema';
 import { Enrollment, EnrollmentSchema } from 'src/database/schemas/enrollment.schema';
 import {
   StudentAssignment,
@@ -19,6 +20,7 @@ import { AuditModule } from 'src/modules/audit/audit.module';
       { name: Assignment.name, schema: AssignmentSchema },
       { name: Course.name, schema: CourseSchema },
       { name: Exercise.name, schema: ExerciseSchema },
+      { name: ExamTest.name, schema: ExamTestSchema },
       { name: Enrollment.name, schema: EnrollmentSchema },
       { name: StudentAssignment.name, schema: StudentAssignmentSchema },
     ]),

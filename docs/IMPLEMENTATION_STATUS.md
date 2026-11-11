@@ -182,6 +182,25 @@ Cập nhật theo từng phase. Trạng thái: ✅ Done | 🚧 In Progress | ❌
 
 ---
 
+## Phase 9 — IELTS Exam Modes, Teacher Question Bank, Auto-Grading & Reading Translation Unlock ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Teacher Question Bank & Test Authoring | ✅ | `src/modules/exam-tests/` — Quản lý bài thi đa kỹ năng (READING / LISTENING), hỗ trợ phân cấp Test -> Parts (Passages 1-3, Sections 1-4) -> Question Groups -> Questions. Hỗ trợ preview đầy đủ đáp án cho giáo viên, kiểm tra tính toàn vẹn (validate) và phát hành bất biến (publish). Tạo phiên bản mới (`DRAFT`) từ bài thi đã phát hành. |
+| Media Audio Integration | ✅ | `src/modules/media/` — Endpoints `/api/v1/media/audio/upload-intent` và `/api/v1/media/audio/:assetId/playback` ký URL phát âm thanh có thời hạn cho bài thi Listening. |
+| Student Catalog & Zero-Leakage Projection | ✅ | Học viên xem danh sách bài thi đã phát hành (`GET /api/v1/exam-tests`). Endpoint chi tiết phần thi (`GET /api/v1/exam-tests/:id/parts/:partId`) lọc bỏ 100% `grading` (acceptedKeys, scoringStrategy, explanation) qua `ExamTestMapper`. |
+| Exam Modes Engine (PART & FULL) | ✅ | `src/modules/exam-attempts/` — Khởi tạo phiên làm bài thi (`POST /api/v1/exam-attempts`) với chế độ `PART` (giới hạn câu hỏi theo phần, tính điểm theo phần) hoặc `FULL` (đầy đủ các phần, đánh số câu hỏi liên tục toàn bài). |
+| Realtime Autosave & Optimistic Concurrency | ✅ | `PUT /api/v1/exam-attempts/:id/answers` hỗ trợ lưu nháp đáp án kèm kiểm soát xung đột qua `answersRevision` (`baseRevision === currentRevision`, trả về 409 Conflict nếu xung đột). |
+| Server-Side Auto-Grading Engine (14 IELTS Types) | ✅ | `src/common/utils/exam-grading.util.ts` — Hỗ trợ 14 loại câu hỏi IELTS: Multiple Choice, True/False/Not Given, Yes/No/Not Given, Matching Headings/Information/Features/Sentence Endings, Summary/Sentence/Note/Table/Flowchart/Diagram Completion, Short Answer. Chấm điểm server-side, bảo lưu ngưỡng đạt PASS ≥ 70% không làm tròn (unrounded). |
+| Dynamic Reading Translation Unlock Engine | ✅ | `src/modules/reading-translations/` — Học viên thi đạt PASS (≥ 70%) mở khóa quyền dịch bài đọc Reading: chế độ `PART` mở khóa DUY NHẤT Passage đã đạt; chế độ `FULL` mở khóa TOÀN BỘ Passages trong bài. Chưa đạt trả về 403 `TRANSLATION_LOCKED`. |
+| Reading Translation Submission & Teacher Review | ✅ | Học viên lưu nháp (`POST .../draft`) và nộp bài dịch (`POST .../submit`). Giáo viên phụ trách xem danh sách bài dịch cần chấm (`GET /api/v1/teacher/reading-translations`) và chấm điểm/để lại nhận xét nhận diện trạng thái `REVIEWED`. |
+| Course Assignment Integration | ✅ | `src/modules/assignments/` — Giáo viên có thể giao bài thi IELTS cho khóa học với phạm vi yêu cầu `requiredScope` (`PART` hoặc `FULL`), chỉ định `requiredPartId` và ghi đè thời lượng làm bài `durationSecondsOverride`. |
+| Unit Tests (Phase 9) | ✅ | `exam-tests.service.spec.ts` (10 tests), `exam-attempts.service.spec.ts` (7 tests), `reading-translations.service.spec.ts` (6 tests) -> **133/133 Unit Tests PASS (19/19 suites)**. |
+| Real MongoDB & Redis E2E Tests (Phase 9) | ✅ | `test/phase9.e2e-spec.ts` (18/18 tests PASS trên replica set `rs0`): bao phủ trọn vẹn từ AC-01 đến AC-20. |
+| **Toàn bộ Test Suite** | ✅ | **133/133 Unit Tests PASS (19/19 suites)**, **124/124 E2E Tests PASS (9/9 suites)**, `npm run build` PASS (0 errors), `npx tsc --noEmit` PASS (0 errors). |
+
+---
+
 ## Blockers & Trạng thái giải quyết
 
 1. **MongoDB Replica Set:** Yêu cầu replica set để hỗ trợ multi-document transactions. Đã cung cấp sẵn cấu hình tự động khởi tạo `rs0` qua `docker-compose.yml` và `docker/mongo-init.js`.

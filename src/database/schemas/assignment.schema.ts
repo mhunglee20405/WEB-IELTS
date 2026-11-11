@@ -49,6 +49,18 @@ export class Assignment {
   @Prop({ min: 1 })
   maxAttempts?: number;
 
+  @Prop({ type: String, enum: ['PART', 'FULL'], default: 'FULL' })
+  requiredScope?: string;
+
+  @Prop({ type: String })
+  requiredPartId?: string;
+
+  @Prop({ type: [String], default: ['PART', 'FULL'] })
+  allowedModes?: string[];
+
+  @Prop({ type: Number })
+  durationSecondsOverride?: number;
+
   @Prop({
     type: String,
     enum: Object.values(AssignmentStatus),

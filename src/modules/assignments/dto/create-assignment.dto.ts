@@ -7,6 +7,7 @@ import {
   IsNumber,
   Min,
   IsEnum,
+  IsArray,
   MaxLength,
   Matches,
 } from 'class-validator';
@@ -61,5 +62,27 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsEnum(AssignmentStatus)
   status?: AssignmentStatus;
+
+  @ApiPropertyOptional({ enum: ['PART', 'FULL'], default: 'FULL' })
+  @IsOptional()
+  @IsEnum(['PART', 'FULL'])
+  requiredScope?: string;
+
+  @ApiPropertyOptional({ description: 'ExamPart ObjectId if assigning a specific PART' })
+  @IsOptional()
+  @IsString()
+  requiredPartId?: string;
+
+  @ApiPropertyOptional({ example: ['PART', 'FULL'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedModes?: string[];
+
+  @ApiPropertyOptional({ example: 1200, description: 'Duration in seconds override' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  durationSecondsOverride?: number;
 }
 

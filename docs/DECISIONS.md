@@ -316,6 +316,56 @@ Không dùng `countDocuments` + insert riêng lẻ (race condition).
 
 ---
 
+### A29 — Dedicated `exam_tests` Collection with Hierarchical Structure
+
+**Quyết định:** Tạo collection chuyên dụng `exam_tests` tách biệt khỏi collection bài tập kế thừa `exercises`.
+- **Lý do kiến trúc:** Hỗ trợ mô hình cấu trúc phân cấp chuẩn quốc tế IELTS: Test -> Parts (Passages 1–3 hoặc Sections 1–4) -> Question Groups (chứa đoạn văn phụ/hướng dẫn) -> Questions (với cấu hình auto-grading chi tiết). Giữ nguyên vẹn tính toàn vẹn và tương thích ngược của collection `exercises` kế thừa từ Phase 4.
+- **Tích hợp giao bài tập:** `Assignment` hỗ trợ tham chiếu cả `exerciseId` và `examTestId` (snapshot thông tin bài thi, `requiredScope` PART/FULL, `requiredPartId`, và `durationSecondsOverride`).
+
+---
+
+### A30 — Ephemeral Exam Attempt Lifecycle vs Permanent Submissions
+
+**Quyết định:** Tách biệt trạng thái làm bài trực tiếp (`exam_attempts`) khỏi lịch sử nộp bài vĩnh viễn (`submissions`).
+- Collection `exam_attempts` quản lý phiên làm bài: `mode` (PART/FULL), `partId`, `scopeQuestionIds`, `answersRevision`, `savedAnswers`, `startedAt`, `expiresAt`, `status` (`IN_PROGRESS` / `SUBMITTED` / `EXPIRED`).
+- Khi học viên nộp bài (`POST /exam-attempts/:id/submit`), hệ thống chấm điểm server-side và lưu trữ bản ghi nộp bài chính thức vào `submissions` với đầy đủ snapshot câu trả lời, điểm số, và trạng thái PASS/FAIL.
+
+---
+
+### A31 — Dynamic & Scope-Aware Reading Translation Unlock Engine
+
+**Quyết định:** Mở khóa dịch bài đọc Reading dựa trên kết quả thi thực tế của học viên với ngưỡng đạt chuẩn ≥ 70% không làm tròn:
+- **Thi chế độ PART:** Đạt điểm ≥ 70% của phần thi đó chỉ mở khóa bản dịch cho DUY NHẤT Passage tương ứng (`unlockedPassageIds = [partId]`).
+- **Thi chế độ FULL:** Đạt điểm ≥ 70% của toàn bài thi mở khóa bản dịch cho TẤT CẢ các Passage trong bài thi (`unlockedPassageIds = [p1, p2, p3]`).
+- **Bảo mật bản dịch:** Endpoint lưu nháp và nộp bản dịch (`/reading-translations`) kiểm tra nghiêm ngặt tính hợp lệ của việc mở khóa từ collection `exam_attempts`. Nếu chưa có attempt nào đạt ≥ 70%, trả về lỗi HTTP 403 `TRANSLATION_LOCKED`.
+
+---
+
+### A32 — Zero-Leakage Data Projection for Student Exam Views
+
+**Quyết định:** Tuyệt đối không để lộ đáp án (`acceptedKeys`), quy tắc chấm (`grading`), hoặc lời giải thích (`explanation`) cho học viên trước khi nộp bài:
+- Endpoint xem nội dung thi dành cho học viên (`GET /api/v1/exam-tests/:id/parts/:partId`) sử dụng Mapper chuyên dụng `ExamTestMapper.toStudentPartView` để bóc tách 100% trường `grading` ra khỏi JSON payload.
+- Học viên chỉ được xem đáp án và giải thích chi tiết sau khi đã nộp bài thông qua endpoint `/api/v1/exam-attempts/:id/review`.
+
+---
+
+### A33 — Optimistic Concurrency Control via `answersRevision` for Exam Autosave
+
+**Quyết định:** Áp dụng cơ chế khóa lạc quan (Optimistic Concurrency) cho tính năng tự động lưu đáp án (`PUT /api/v1/exam-attempts/:id/answers`).
+- Client gửi kèm `baseRevision`. Nếu `baseRevision !== attempt.answersRevision`, hệ thống từ chối cập nhật với mã lỗi HTTP 409 Conflict.
+- Khi revision khớp, hệ thống hợp nhất các đáp án mới và tăng `answersRevision` lên 1, đảm bảo không bị ghi đè dữ liệu ngoài ý muốn do độ trễ mạng hoặc mở nhiều tab cùng lúc.
+
+---
+
+### A34 — Standardized Status Formatting (API Contract Uppercase vs DB Schema Lowercase)
+
+**Quyết định:** Chuẩn hóa quy ước trạng thái giữa API Contract v2.0 và Mongoose DB Schema:
+- Mongoose schema lưu trạng thái dưới dạng lowercase enum (`draft`, `submitted`, `reviewed`) để đồng nhất với cơ sở dữ liệu hiện hữu.
+- DTO tầng Controller chấp nhận cả lowercase và uppercase thông qua `@Transform` (lowercase hóa khi lưu trữ).
+- Tầng Service và Serializer luôn trả về trạng thái chữ hoa chuẩn OpenAPI (`DRAFT`, `SUBMITTED`, `REVIEWED`, `LOCKED`), đảm bảo tương thích 100% với giao diện Frontend theo hợp đồng API Contract v2.0.
+
+---
+
 ## Thay đổi lịch sử
 
 | Ngày       | Quyết định | Người quyết định |
@@ -327,4 +377,5 @@ Không dùng `countDocuments` + insert riêng lẻ (race condition).
 | 2026-11-12 | Phase 6: A13 Quota VnMonth, A14 Idempotent Overdue & Ledger, A15 Compensating Reversal, A16 Effective Deadline Decoupling | Backend Architect |
 | 2026-11-12 | Phase 7: A17 Pure Points, A18 Overdue Scoping, A19 Auto Reversal, A20 Quota Concurrency Lock, A21 BullMQ Async, A22 Audit Redaction | Backend Architect |
 | 2026-11-12 | Phase 8: A23 Redis Refresh Store, A24 Correlation ID, A25 Controlled Indexing, A26 Transactional Outbox Sweeper, A27 Multi-Probe Readiness, A28 Decoupled Liveness & Memory | Backend Architect |
+| 2026-11-12 | Phase 9: A29 Dedicated Exam Tests, A30 Ephemeral Attempt Lifecycle, A31 Dynamic Translation Unlock, A32 Zero-Leakage Projection, A33 Optimistic Autosave, A34 Standardized Status Formatting | Backend Architect |
 

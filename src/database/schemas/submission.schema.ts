@@ -51,6 +51,24 @@ export class Submission {
   @Prop({ required: true, min: 1 })
   exerciseVersion: number;
 
+  @Prop({ type: Types.ObjectId, ref: 'ExamAttempt' })
+  examAttemptId?: Types.ObjectId;
+
+  @Prop({ type: String, enum: ['PART', 'FULL'] })
+  mode?: string;
+
+  @Prop({ type: String })
+  partId?: string;
+
+  @Prop({ type: [String], default: [] })
+  scopeQuestionIds?: string[];
+
+  @Prop({ type: Number })
+  earnedPoints?: number;
+
+  @Prop({ type: Number })
+  totalPoints?: number;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
