@@ -201,8 +201,9 @@ When your Next.js client encounters a `401 Unauthorized`:
 ### 3.12 Observability & Health (`/health`, `/jobs`)
 | Method | Endpoint | Role | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/health/live` | Public | Liveness probe (heap memory check). |
-| `GET` | `/health/ready` | Public | Readiness probe (MongoDB and Redis connection check). |
+| `GET` | `/health/live` | Public | Liveness probe (verifies process event-loop responsiveness; independent of heap). |
+| `GET` | `/health/ready` | Public | Readiness probe (verifies critical external dependencies: MongoDB & Redis readiness). |
+| `GET` | `/health/memory`| Public | Memory monitoring (isolated heap check against configured threshold). |
 | `GET` | `/jobs/health` | `ADMIN` | BullMQ queue metrics (email queue, deadline queue). |
 | `POST` | `/jobs/deadlines/trigger` | `ADMIN`, `TEACHER` | Trigger immediate background overdue check. |
 

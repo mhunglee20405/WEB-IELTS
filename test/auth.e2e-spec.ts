@@ -58,11 +58,24 @@ describe('Auth (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/health/live', () => {
-    it('should return healthy', () => {
+  describe('Health Probes & Heap Separation Regression Tests', () => {
+    it('GET /api/v1/health/live should return healthy 200 without being coupled to heap usage', () => {
       return request(app.getHttpServer())
         .get('/api/v1/health/live')
         .expect(200);
+    });
+
+    it('GET /api/v1/health/ready should return 200 verifying critical dependencies', () => {
+      return request(app.getHttpServer())
+        .get('/api/v1/health/ready')
+        .expect(200);
+    });
+
+    it('GET /api/v1/health/memory should isolate heap check to separate monitoring', async () => {
+      const res = await request(app.getHttpServer()).get('/api/v1/health/memory');
+      expect([200, 503]).toContain(res.status);
+      const payload = res.body.data || res.body;
+      expect(payload.details || payload.info).toHaveProperty('memory_heap');
     });
   });
 });

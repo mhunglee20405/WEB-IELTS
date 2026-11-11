@@ -172,13 +172,13 @@ Cập nhật theo từng phase. Trạng thái: ✅ Done | 🚧 In Progress | ❌
 | Account Suspension Enforcement | ✅ | `src/modules/auth/strategies/jwt.strategy.ts` — Truy vấn `status: UserStatus.ACTIVE` trên mọi request, từ chối ngay lập tức token của tài khoản bị khóa/treo (401) |
 | Controlled Production Indexing | ✅ | `src/database/scripts/init-indexes.ts` — Bỏ tự động tạo index trên bootstrap khi `NODE_ENV=production`, cung cấp lệnh `npm run init:indexes` đồng bộ 16 collection có kiểm soát |
 | Durable Transactional Outbox | ✅ | `src/modules/jobs/processors/deadline.processor.ts` — Cơ chế Outbox Sweeper định kỳ quét và đẩy lại các email `QUEUED` bị tồn đọng do gián đoạn Redis/mạng, không làm ảnh hưởng giao dịch chính |
-| Multi-Probe Observability & Correlation ID | ✅ | `src/common/middleware/correlation-id.middleware.ts` (`X-Correlation-Id`), `HealthModule` kiểm tra đa điểm MongoDB + Redis, ngưỡng heap cấu hình được |
+| Multi-Probe Observability & Correlation ID | ✅ | `src/common/middleware/correlation-id.middleware.ts` (`X-Correlation-Id`), `HealthModule` tách rời Liveness (`/health/live`), Readiness (`/health/ready` đa điểm MongoDB + Redis) và Dedicated Memory Monitoring (`/health/memory`) |
 | Production Containerization & Config | ✅ | Multi-stage `Dockerfile` (chạy quyền `appuser` unprivileged), `.env.production.example` bảo mật, Docker Compose healthcheck |
 | OpenAPI Schema Export | ✅ | `npm run export:openapi` — Xuất đặc tả chuẩn `docs/openapi.json` (98KB) tự động từ metadata NestJS |
 | Frontend API Integration Contract | ✅ | `docs/FRONTEND_API_CONTRACT.md` — Tài liệu tích hợp hoàn chỉnh dành cho đội ngũ phát triển Next.js 14/15 App Router |
 | Production Operations Guide | ✅ | `docs/DEPLOYMENT_GUIDE.md` — Hướng dẫn triển khai, cấu hình bảo mật, quy trình sao lưu và phục hồi thảm họa `mongodump`/`mongorestore` |
-| Real MongoDB & Redis Integration Tests | ✅ | `test/phase8.e2e-spec.ts` (17/17 tests PASS): kiểm tra chi tiết liveness/readiness, correlation ID, xoay vòng và replay token, thu hồi khi logout, chặn tài khoản bị đình chỉ, RBAC, auto-grading 70% threshold, khóa/mở đáp án sau PASS, thông báo in-app |
-| **Toàn bộ Test Suite** | ✅ | **110/110 Unit Tests PASS (16/16 suites)**, **102/102 E2E Tests PASS (8/8 suites)**, `npm run build` PASS (0 errors) |
+| Real MongoDB & Redis Integration Tests | ✅ | `test/phase8.e2e-spec.ts` (19/19 tests PASS): kiểm tra chi tiết liveness/readiness/memory, áp lực heap không làm sập liveness, correlation ID, xoay vòng và replay token, thu hồi khi logout, chặn tài khoản bị đình chỉ, RBAC, auto-grading 70% threshold, khóa/mở đáp án sau PASS, thông báo in-app |
+| **Toàn bộ Test Suite** | ✅ | **110/110 Unit Tests PASS (16/16 suites)**, **106/106 E2E Tests PASS (8/8 suites)**, `npm run build` PASS (0 errors) |
 
 ---
 

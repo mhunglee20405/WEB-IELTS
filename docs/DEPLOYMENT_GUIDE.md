@@ -141,12 +141,15 @@ docker exec -i ielts-lms-redis redis-cli BGSAVE
   - Interval: 15s  
   - Timeout: 5s  
   - Failure threshold: 3  
-  - Checks: Process event loop and heap memory (< 768MB).
+  - Purpose: Verifies Node.js process event-loop responsiveness (independent of transient heap spikes to avoid cascading pod kills).
 - **Readiness Probe:** `GET /api/v1/health/ready`  
   - Interval: 10s  
   - Timeout: 5s  
   - Failure threshold: 2  
-  - Checks: MongoDB replica set ping and Redis ping.
+  - Purpose: Validates external dependencies (MongoDB replica set ping and Redis ping). Removes pod from ingress during outages.
+- **Memory Monitoring:** `GET /api/v1/health/memory`  
+  - Interval: 30s  
+  - Purpose: Dedicated monitoring endpoint for APM/Prometheus scraping memory heap status against configured `HEALTH_HEAP_THRESHOLD_MB`.
 
 ### 7.2 Queue & Worker Health (Admin Only)
 - **Endpoint:** `GET /api/v1/jobs/health`  

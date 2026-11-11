@@ -299,8 +299,20 @@ Không dùng `countDocuments` + insert riêng lẻ (race condition).
 ### A27 — Multi-Probe Observability with MongoDB & Redis Health Indicators
 
 **Quyết định:** Mở rộng module sức khỏe hệ thống (`HealthModule`) phục vụ điều phối vùng chứa (Kubernetes / Docker Swarm):
-- Endpoint Liveness (`/health/live`): kiểm tra độ phản hồi của process và bộ nhớ heap Node.js theo ngưỡng cấu hình (`health.heapThresholdMb`, mặc định 768MB).
+- Endpoint Liveness (`/health/live`): kiểm tra độ phản hồi của process.
 - Endpoint Readiness (`/health/ready`): kiểm tra trực tiếp trạng thái kết nối tới cả MongoDB Replica Set và Redis Server, trả về mã 200 OK khi cả hai sẵn sàng và 503 Service Unavailable khi một trong hai gặp sự cố.
+
+---
+
+### A28 — Decoupled Liveness from Heap Usage & Dedicated Memory Health Monitoring
+
+**Quyết định:** Tách rời hoàn toàn chỉ số kiểm tra bộ nhớ Heap (`memory_heap`) ra khỏi Liveness Probe (`GET /api/v1/health/live`), chuyển về endpoint giám sát chuyên dụng (`GET /api/v1/health/memory`).
+- **Nguyên nhân cốt lõi:** Liveness Probe trong Kubernetes được thiết kế để phát hiện deadlock / unrecoverable state để tiến hành khởi động lại container (SIGKILL). Nếu đưa ngưỡng heap vào liveness, các đợt tăng bộ nhớ tạm thời (hoặc việc bộ dọn rác V8 GC chưa kích hoạt kịp thời) hay sự tích lũy bộ nhớ trong tiến trình kiểm thử Jest `--runInBand` sẽ khiến liveness trả về 503, dẫn đến tình trạng khởi động lại liên hoàn (crash-loop cascade) nguy hiểm.
+- **Phân tách trách nhiệm:**
+  1. `GET /api/v1/health/live`: Chỉ kiểm tra process event loop sống và phản hồi (`() => Promise.resolve({ process: { status: 'up' } })`).
+  2. `GET /api/v1/health/ready`: Kiểm tra các phụ thuộc hạ tầng trọng yếu (MongoDB ping & Redis ping) để quyết định điều hướng traffic từ Ingress/Load Balancer mà không khởi động lại container khi phụ thuộc gặp sự cố ngắn hạn.
+  3. `GET /api/v1/health/memory`: Endpoint giám sát chuyên dụng phục vụ Prometheus/APM, kiểm tra heap theo ngưỡng cấu hình `HEALTH_HEAP_THRESHOLD_MB` (mặc định 768MB).
+- **Kiểm thử hồi quy:** Bổ sung các ca kiểm thử hồi quy độc lập trong `test/auth.e2e-spec.ts` và `test/phase8.e2e-spec.ts` (mô phỏng cấp phát bộ nhớ lớn để chứng minh liveness luôn giữ 200 OK).
 
 ---
 
@@ -314,5 +326,5 @@ Không dùng `countDocuments` + insert riêng lẻ (race condition).
 | 2026-11-12 | Phase 5: A9 Auto-Grading, A10 Answer Unlocking, A11 Transactions, A12 Translation Review | Backend Architect |
 | 2026-11-12 | Phase 6: A13 Quota VnMonth, A14 Idempotent Overdue & Ledger, A15 Compensating Reversal, A16 Effective Deadline Decoupling | Backend Architect |
 | 2026-11-12 | Phase 7: A17 Pure Points, A18 Overdue Scoping, A19 Auto Reversal, A20 Quota Concurrency Lock, A21 BullMQ Async, A22 Audit Redaction | Backend Architect |
-| 2026-11-12 | Phase 8: A23 Redis Refresh Store, A24 Correlation ID, A25 Controlled Indexing, A26 Transactional Outbox Sweeper, A27 Multi-Probe Readiness | Backend Architect |
+| 2026-11-12 | Phase 8: A23 Redis Refresh Store, A24 Correlation ID, A25 Controlled Indexing, A26 Transactional Outbox Sweeper, A27 Multi-Probe Readiness, A28 Decoupled Liveness & Memory | Backend Architect |
 

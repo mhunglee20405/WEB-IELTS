@@ -26,21 +26,35 @@ export class HealthController {
   }
 
   @Get('live')
-  @ApiOperation({ summary: 'Liveness probe (process responsiveness & heap memory)' })
+  @ApiOperation({
+    summary: 'Liveness probe (verifies process event-loop responsiveness, independent of transient heap)',
+  })
   @HealthCheck()
   live() {
     return this.health.check([
-      () => this.memoryHealth.checkHeap('memory_heap', this.heapThresholdBytes),
+      () => Promise.resolve({ process: { status: 'up' } }),
     ]);
   }
 
   @Get('ready')
-  @ApiOperation({ summary: 'Readiness probe (MongoDB & Redis connection readiness)' })
+  @ApiOperation({
+    summary: 'Readiness probe (verifies critical external dependencies: MongoDB & Redis readiness)',
+  })
   @HealthCheck()
   ready() {
     return this.health.check([
       () => this.mongooseHealth.pingCheck('mongodb'),
       () => this.redisHealth.isHealthy('redis'),
+    ]);
+  }
+
+  @Get('memory')
+  @ApiOperation({
+    summary: 'Heap and memory health monitoring (isolated from liveness to prevent cascading pod termination)',
+  })
+  @HealthCheck()
+  memory() {
+    return this.health.check([
       () => this.memoryHealth.checkHeap('memory_heap', this.heapThresholdBytes),
     ]);
   }
