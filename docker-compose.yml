@@ -1,0 +1,99 @@
+services:
+  # ==============================
+  # MongoDB Replica Set (required for transactions)
+  # ==============================
+  mongodb:
+    image: mongo:7.0
+    container_name: ielts-lms-mongo
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "${MONGO_HOST_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ielts-net
+
+  # MongoDB replica set initiator (runs once)
+  mongo-init:
+    image: mongo:7.0
+    container_name: ielts-lms-mongo-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command: >
+      mongosh --host mongodb:27017 --eval
+      "try { rs.status() } catch(e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongodb:27017' }] }) }"
+    networks:
+      - ielts-net
+    restart: on-failure
+
+  # ==============================
+  # Redis
+  # ==============================
+  redis:
+    image: redis:7.4-alpine
+    container_name: ielts-lms-redis
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    command: >
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD"; else exec redis-server; fi'
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ielts-net
+
+  # ==============================
+  # API Server
+  # ==============================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    container_name: ielts-lms-api
+    env_file: .env
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/ielts_lms?replicaSet=rs0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - ielts-net
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  redis_data:
+
+networks:
+  ielts-net:
+    driver: bridge
+
