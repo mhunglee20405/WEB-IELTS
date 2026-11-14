@@ -201,8 +201,9 @@ When your Next.js client encounters a `401 Unauthorized`:
 ### 3.12 Observability & Health (`/health`, `/jobs`)
 | Method | Endpoint | Role | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/health/live` | Public | Liveness probe (heap memory check). |
-| `GET` | `/health/ready` | Public | Readiness probe (MongoDB and Redis connection check). |
+| `GET` | `/health/live` | Public | Liveness probe (verifies process event-loop responsiveness; independent of heap). |
+| `GET` | `/health/ready` | Public | Readiness probe (verifies critical external dependencies: MongoDB & Redis readiness). |
+| `GET` | `/health/memory`| Public | Memory monitoring (isolated heap check against configured threshold). |
 | `GET` | `/jobs/health` | `ADMIN` | BullMQ queue metrics (email queue, deadline queue). |
 | `POST` | `/jobs/deadlines/trigger` | `ADMIN`, `TEACHER` | Trigger immediate background overdue check. |
 
@@ -274,4 +275,283 @@ const requestBody = {
   reason: "Bị sốt xuất huyết phải nhập viện điều trị 3 ngày, xin phép gia hạn nộp bài."
 };
 ```
+
+---
+
+## 5. Phase 9: IELTS Exam Modes, Question Bank & Reading Translation Unlock
+
+### 5.1 Enums & Types
+```ts
+export enum ExamSkill {
+  READING = 'READING',
+  LISTENING = 'LISTENING',
+}
+
+export enum ExamMode {
+  PART = 'PART',
+  FULL = 'FULL',
+}
+
+export enum PartType {
+  PASSAGE = 'PASSAGE',
+  SECTION = 'SECTION',
+}
+
+export enum ExamTestStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum AttemptStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  SUBMITTED = 'SUBMITTED',
+  EXPIRED = 'EXPIRED',
+  ABANDONED = 'ABANDONED',
+}
+
+export enum TranslationStatus {
+  LOCKED = 'LOCKED',
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  REVIEWED = 'REVIEWED',
+}
+```
+
+### 5.2 Flow: Taking an Exam (PART or FULL)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Student
+  participant Web as Next.js App
+  participant API as Backend API
+  
+  Student->>Web: Selects Test & Mode (PART / FULL)
+  Web->>API: POST /api/v1/exam-attempts { testId, mode, partId }
+  API-->>Web: 201 Created { id, remainingSeconds, answersRevision: 0, scopeQuestionIds }
+  
+  loop Autosave every 30s or on Answer Change
+    Web->>API: PUT /api/v1/exam-attempts/:id/answers { baseRevision, answers }
+    API-->>Web: 200 OK { answersRevision: revision + 1, savedAt }
+    Note over Web,API: 409 Conflict if baseRevision mismatch (refresh state)
+  end
+  
+  Student->>Web: Clicks "Submit Test"
+  Web->>API: POST /api/v1/exam-attempts/:id/submit { idempotencyKey }
+  API-->>Web: 200 OK { scorePercent, passed, translation: { unlockedPassageIds } }
+  
+  opt Student checks explanations
+    Web->>API: GET /api/v1/exam-attempts/:id/review
+    API-->>Web: 200 OK { reviewQuestions: [ { questionId, studentAnswer, correctAnswers, explanation } ] }
+  end
+```
+
+### 5.3 Flow: Reading Translation Unlock Workflow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Student
+  actor Teacher
+  participant Web as Next.js App
+  participant API as Backend API
+  
+  Student->>Web: Opens Reading Translation Tab
+  Web->>API: GET /api/v1/reading-translations/eligibility?testId=xxx
+  API-->>Web: 200 OK { passages: [ { passageId, unlocked: true/false, status } ] }
+  
+  alt Passage is LOCKED (Score < 70%)
+    Student->>Web: Attempts to access translation
+    Web->>API: POST /api/v1/reading-translations/passages/:id/draft
+    API-->>Web: 403 Forbidden { error: "TRANSLATION_LOCKED" }
+  else Passage is UNLOCKED (Score >= 70%)
+    Student->>Web: Edits Vietnamese translation draft
+    Web->>API: POST /api/v1/reading-translations/passages/:id/draft { textVi }
+    API-->>Web: 200 OK { status: "DRAFT" }
+    
+    Student->>Web: Submits translation for Teacher review
+    Web->>API: POST /api/v1/reading-translations/passages/:id/submit { textVi }
+    API-->>Web: 200 OK { status: "SUBMITTED" }
+    
+    Teacher->>Web: Opens Teacher Review Dashboard
+    Web->>API: GET /api/v1/teacher/reading-translations
+    API-->>Web: 200 OK [ { id, studentName, passageTitle, translatedText } ]
+    
+    Teacher->>Web: Scores and submits feedback
+    Web->>API: PATCH /api/v1/teacher/reading-translations/:id/review { score, teacherComment }
+    API-->>Web: 200 OK { status: "REVIEWED" }
+  end
+```
+
+### 5.4 Sample Payloads
+
+#### Start Exam Attempt
+```ts
+// POST /api/v1/exam-attempts
+// For PART mode:
+{
+  "testId": "673238901111...",
+  "mode": "PART",
+  "partId": "673238902222...",
+  "idempotencyKey": "part-attempt-uuid-001"
+}
+// For FULL mode:
+{
+  "testId": "673238901111...",
+  "mode": "FULL",
+  "idempotencyKey": "full-attempt-uuid-002"
+}
+```
+
+#### Autosave Answers
+```ts
+// PUT /api/v1/exam-attempts/:id/answers
+{
+  "baseRevision": 2,
+  "answers": [
+    { "questionId": "1", "value": "TRUE" },
+    { "questionId": "2", "value": "FALSE" },
+    { "questionId": "3", "value": "NOT GIVEN" }
+  ]
+}
+```
+
+#### Submit Exam Attempt
+```ts
+// POST /api/v1/exam-attempts/:id/submit
+{
+  "idempotencyKey": "submit-attempt-uuid-001"
+}
+
+// Response 200 OK
+{
+  "statusCode": 200,
+  "data": {
+    "attemptId": "673238903333...",
+    "mode": "PART",
+    "correctCount": 8,
+    "totalPoints": 10,
+    "scorePercent": 80,
+    "passed": true,
+    "translation": {
+      "unlockedPassageIds": ["673238902222..."]
+    }
+  },
+  "timestamp": "2026-11-12T05:30:00.000Z"
+}
+```
+
+---
+
+## 6. Phase 10: Daily Assignment Scheduling & Teacher-Configurable Assignments
+
+### 6.1 Fixed Daily Window Model (06:00 VN)
+- **Timezone:** `Asia/Ho_Chi_Minh` (+07:00).
+- **Daily Window:** Available from `06:00:00` local on `assignedDate` until `06:00:00` on the following day (exactly 24h).
+- **Access Interval:** `[availableAt, dueAt)`. At exactly `dueAt`, assignment is expired unless a valid extension applies.
+- **Timestamps:** Returned in ISO 8601 UTC with companion `+07:00` Vietnam display fields (`availableAtVn`, `dueAtVn`, `openAtVn`, `deadlineAtVn`).
+
+### 6.2 Status Lifecycle
+- `DRAFT`: Teacher draft, invisible to students.
+- `SCHEDULED`: Scheduled for future date (`now < availableAt`). Visible on student calendar/dashboard with countdown timer, but content (passages, questions, audio) is strictly locked.
+- `AVAILABLE`: Currently open for attempts (`availableAt <= now < dueAt`).
+- `EXPIRED`: Deadline has passed (`now >= dueAt`). No new attempts allowed.
+- `COMPLETED`: Student has submitted and completed the assignment.
+
+### 6.3 Endpoints Reference
+
+#### Validate Assignment Configuration
+```http
+POST /api/v1/assignments/validate
+Authorization: Bearer <teacher_jwt>
+Content-Type: application/json
+```
+Request Body:
+```json
+{
+  "courseId": "673238901111222233334444",
+  "exerciseId": "673238905555666677778888",
+  "assignedDate": "2026-11-28",
+  "requiredScope": "PART",
+  "requiredPartId": "673238902222333344445555",
+  "selectedQuestionGroupIds": ["673238909999000011112222"],
+  "targetScorePercent": 75,
+  "durationSecondsOverride": 1800
+}
+```
+Response 200 OK:
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "valid": true,
+    "errors": []
+  },
+  "timestamp": "2026-11-14T05:30:00.000Z"
+}
+```
+
+#### Preview Assignment (Dry Run)
+```http
+POST /api/v1/assignments/preview
+Authorization: Bearer <teacher_jwt>
+Content-Type: application/json
+```
+Response 200 OK:
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "course": { "id": "...", "code": "IELTS-01", "title": "IELTS Master" },
+    "title": "Climate Change Reading Test",
+    "skill": "READING",
+    "scope": "PART",
+    "assignedDate": "2026-11-28",
+    "availableAt": "2026-11-27T23:00:00.000Z",
+    "availableAtVn": "2026-11-28T06:00:00+07:00",
+    "dueAt": "2026-11-28T23:00:00.000Z",
+    "dueAtVn": "2026-11-29T06:00:00+07:00",
+    "durationSeconds": 1800,
+    "targetScorePercent": 75,
+    "questionCount": 5,
+    "totalPoints": 5,
+    "enrolledStudentsCount": 24,
+    "passage": "<p>Reading passage content...</p>",
+    "questions": [...]
+  }
+}
+```
+
+#### Get Full Preview by Assignment ID (Teacher/Admin)
+```http
+GET /api/v1/assignments/:id/preview
+Authorization: Bearer <teacher_jwt>
+```
+
+#### Student Dashboard & Zero-Leakage View
+When `scheduleStatus === 'SCHEDULED'`:
+- `GET /api/v1/assignments/mine` returns `scheduleStatus: "SCHEDULED"`, `isAvailable: false`, and `remainingSeconds`.
+- `GET /api/v1/assignments/:id` returns metadata only. `exercise` field omits `passage` and `questions`.
+- Starting an attempt via `POST /api/v1/exam-attempts` before `availableAt` returns `403 Forbidden`:
+```json
+{
+  "statusCode": 403,
+  "error": "Forbidden",
+  "code": "ASSIGNMENT_NOT_YET_AVAILABLE",
+  "message": "Assignment is scheduled and not yet available until 2026-11-28T06:00:00+07:00"
+}
+```
+
+#### Attempt Timer Capped by Deadline
+When student starts an attempt during `AVAILABLE` window, expiration is strictly capped:
+`expiresAt = min(startedAt + duration, effectiveDeadlineAt)`
+```json
+{
+  "attemptId": "...",
+  "startedAt": "2026-11-28T22:50:00.000Z",
+  "expiresAt": "2026-11-28T23:00:00.000Z"
+}
+```
+
 

@@ -42,6 +42,30 @@ export class AssignmentsController {
     return this.assignmentsService.create(dto, actor);
   }
 
+  @Post('validate')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Validate assignment configuration before scheduling' })
+  validate(@Body() dto: CreateAssignmentDto, @CurrentUser() actor: UserDocument) {
+    return this.assignmentsService.validateAssignment(dto, actor);
+  }
+
+  @Post('preview')
+  @HttpCode(HttpStatus.OK)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Preview assignment structure, questions, and enrolled students' })
+  preview(@Body() dto: CreateAssignmentDto, @CurrentUser() actor: UserDocument) {
+    return this.assignmentsService.previewAssignment(dto, actor);
+  }
+
+  @Get(':id/preview')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Preview existing assignment structure (Teacher/Admin)' })
+  @ApiParam({ name: 'id', description: 'Assignment ObjectId' })
+  previewById(@Param('id') id: string, @CurrentUser() actor: UserDocument) {
+    return this.assignmentsService.previewById(id, actor);
+  }
+
   @Get()
   @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({ summary: 'List assignments (Admin or assigned Teacher only)' })

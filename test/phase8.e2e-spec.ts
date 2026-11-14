@@ -238,15 +238,15 @@ describe('Phase 8: Security Audit, System Integration Testing & Production Readi
   // Section 1: Observability & Health Checks
   // ==========================================
   describe('Observability & Health Checks', () => {
-    it('GET /api/v1/health/live returns 200 with memory heap status', async () => {
+    it('GET /api/v1/health/live returns 200 with process liveness status (independent of heap)', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/health/live')
         .expect(200);
 
       const payload = res.body.data || res.body;
       expect(payload.status).toBe('ok');
-      expect(payload.info).toHaveProperty('memory_heap');
-      expect(payload.info.memory_heap.status).toBe('up');
+      expect(payload.info).toHaveProperty('process');
+      expect(payload.info.process.status).toBe('up');
     });
 
     it('GET /api/v1/health/ready returns 200 with mongodb and redis indicators', async () => {
@@ -260,6 +260,27 @@ describe('Phase 8: Security Audit, System Integration Testing & Production Readi
       expect(payload.info.mongodb.status).toBe('up');
       expect(payload.info).toHaveProperty('redis');
       expect(payload.info.redis.status).toBe('up');
+    });
+
+    it('GET /api/v1/health/memory returns isolated memory heap monitoring', async () => {
+      const res = await request(app.getHttpServer()).get('/api/v1/health/memory');
+      expect([200, 503]).toContain(res.status);
+      const payload = res.body.data || res.body;
+      expect(payload.details || payload.info).toHaveProperty('memory_heap');
+    });
+
+    it('regression: GET /api/v1/health/live stays healthy (200 OK) regardless of accumulated memory', async () => {
+      // Allocate temporary buffer to simulate memory pressure
+      const largeBuffer = Buffer.alloc(50 * 1024 * 1024, 'A');
+      expect(largeBuffer.length).toBeGreaterThan(0);
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/health/live')
+        .expect(200);
+
+      const payload = res.body.data || res.body;
+      expect(payload.status).toBe('ok');
+      expect(payload.info.process.status).toBe('up');
     });
 
     it('returns custom or auto-generated X-Correlation-Id header', async () => {

@@ -39,6 +39,9 @@ export class StudentAssignment {
   @Prop()
   penaltyAppliedAt?: Date;
 
+  @Prop({ default: false })
+  isTargetAchieved?: boolean;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

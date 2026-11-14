@@ -57,8 +57,11 @@ export enum AssignmentStatus {
   DRAFT = 'draft',
   SCHEDULED = 'scheduled',
   PUBLISHED = 'published',
+  AVAILABLE = 'available',
+  EXPIRED = 'expired',
   CLOSED = 'closed',
   ARCHIVED = 'archived',
+  COMPLETED = 'completed',
 }
 
 export enum StudentAssignmentStatus {
@@ -66,6 +69,7 @@ export enum StudentAssignmentStatus {
   IN_PROGRESS = 'in_progress',
   SUBMITTED = 'submitted',
   PASSED = 'passed',
+  COMPLETED = 'completed',
   OVERDUE = 'overdue',
   EXCUSED = 'excused',
 }
@@ -102,5 +106,58 @@ export enum EmailDeliveryStatus {
   SENDING = 'sending',
   SENT = 'sent',
   FAILED = 'failed',
+}
+
+// ─── Phase 9: Exam Enums ──────────────────────────────────────────────────────
+
+export enum ExamSkill {
+  READING = 'READING',
+  LISTENING = 'LISTENING',
+}
+
+export enum ExamMode {
+  PART = 'PART',
+  FULL = 'FULL',
+}
+
+export enum PartType {
+  PASSAGE = 'PASSAGE',
+  SECTION = 'SECTION',
+}
+
+export enum AttemptStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  SUBMITTED = 'SUBMITTED',
+  AUTO_SUBMITTED = 'AUTO_SUBMITTED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum ExamTestStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum ExamPreset {
+  IELTS_ACADEMIC = 'IELTS_ACADEMIC',
+  CUSTOM = 'CUSTOM',
+}
+
+export enum ExamQuestionType {
+  MULTIPLE_CHOICE_SINGLE = 'MULTIPLE_CHOICE_SINGLE',
+  MULTIPLE_CHOICE_MULTIPLE = 'MULTIPLE_CHOICE_MULTIPLE',
+  TRUE_FALSE_NOT_GIVEN = 'TRUE_FALSE_NOT_GIVEN',
+  YES_NO_NOT_GIVEN = 'YES_NO_NOT_GIVEN',
+  MATCHING_HEADINGS = 'MATCHING_HEADINGS',
+  MATCHING_INFORMATION = 'MATCHING_INFORMATION',
+  MATCHING_FEATURES = 'MATCHING_FEATURES',
+  MATCHING_SENTENCE_ENDINGS = 'MATCHING_SENTENCE_ENDINGS',
+  SENTENCE_COMPLETION = 'SENTENCE_COMPLETION',
+  SUMMARY_COMPLETION = 'SUMMARY_COMPLETION',
+  NOTE_COMPLETION = 'NOTE_COMPLETION',
+  TABLE_COMPLETION = 'TABLE_COMPLETION',
+  FLOW_CHART_COMPLETION = 'FLOW_CHART_COMPLETION',
+  DIAGRAM_LABEL_COMPLETION = 'DIAGRAM_LABEL_COMPLETION',
+  SHORT_ANSWER = 'SHORT_ANSWER',
 }
 
