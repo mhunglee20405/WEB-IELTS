@@ -1,3 +1,4 @@
+import { isMockApiMode } from "../../env";
 import { apiRequest, buildQueryString } from "../client";
 import type {
   Assignment,
@@ -37,10 +38,17 @@ export const assignmentsApi = {
     courseId: string,
     query: ListAssignmentsQuery = {},
   ): Promise<PaginatedResponse<Assignment>> {
-    const qs = buildQueryString({ ...query });
+    if (isMockApiMode()) {
+      const qs = buildQueryString({ ...query });
+      return apiRequest<PaginatedResponse<Assignment>>({
+        method: "GET",
+        path: `/assignments/course/${encodeURIComponent(courseId)}${qs}`,
+      });
+    }
+    const qs = buildQueryString({ courseId, ...query });
     return apiRequest<PaginatedResponse<Assignment>>({
       method: "GET",
-      path: `/assignments/course/${encodeURIComponent(courseId)}${qs}`,
+      path: `/assignments${qs}`,
     });
   },
 
