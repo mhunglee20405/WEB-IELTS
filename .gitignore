@@ -1,12 +1,13 @@
 # Dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.*
 
-# Next.js build outputs
-/.next/
-/out/
-/build/
+# Next.js & build outputs
+.next/
+out/
+build/
+dist/
 next-env.d.ts
 *.tsbuildinfo
 
@@ -14,11 +15,13 @@ next-env.d.ts
 .env*.local
 
 # Testing & coverage
-/coverage
-/playwright-report
-/test-results
+coverage/
+playwright-report/
+test-results/
 
 # Misc
 .DS_Store
 Thumbs.db
+*.log
+
 
