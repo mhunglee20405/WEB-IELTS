@@ -89,7 +89,7 @@ export const studentAssignmentsApi = {
     payload: ReviewTranslationRequest,
   ): Promise<TranslationWorkspace> {
     return apiRequest<TranslationWorkspace, ReviewTranslationRequest>({
-      method: "POST",
+      method: "PATCH",
       path: `/translations/${encodeURIComponent(translationId)}/review`,
       body: payload,
     });

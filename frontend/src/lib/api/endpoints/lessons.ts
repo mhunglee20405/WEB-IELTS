@@ -1,3 +1,4 @@
+import { isMockApiMode } from "../../env";
 import { apiRequest, buildQueryString } from "../client";
 import { LessonSchema } from "../schemas";
 import type {
@@ -20,7 +21,7 @@ export const lessonsApi = {
     const qs = buildQueryString({ ...query });
     const raw = await apiRequest<PaginatedResponse<unknown>>({
       method: "GET",
-      path: `/lessons${qs}`,
+      path: `/lessons/mine${qs}`,
     });
 
     const rawItems = Array.isArray(raw?.items) ? raw.items : [];

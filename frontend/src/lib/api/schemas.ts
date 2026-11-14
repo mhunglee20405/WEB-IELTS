@@ -23,7 +23,7 @@ export const AuthTokensSchema = z.object({
 });
 
 export const LoginResponseSchema = z.object({
-  user: AuthUserSchema,
+  user: AuthUserSchema.optional(),
   tokens: AuthTokensSchema,
 });
 

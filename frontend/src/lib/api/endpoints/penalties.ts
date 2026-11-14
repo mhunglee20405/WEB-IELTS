@@ -1,3 +1,4 @@
+import { isMockApiMode } from "../../env";
 import { apiRequest } from "../client";
 import type {
   PenaltyRecord,
@@ -14,9 +15,16 @@ export const penaltiesApi = {
   },
 
   getByStudent(studentId: string): Promise<PenaltySummary> {
+    if (isMockApiMode()) {
+      return apiRequest<PenaltySummary>({
+        method: "GET",
+        path: `/students/${encodeURIComponent(studentId)}/penalties`,
+      });
+    }
+
     return apiRequest<PenaltySummary>({
       method: "GET",
-      path: `/students/${encodeURIComponent(studentId)}/penalties`,
+      path: `/penalties?studentId=${encodeURIComponent(studentId)}`,
     });
   },
 
