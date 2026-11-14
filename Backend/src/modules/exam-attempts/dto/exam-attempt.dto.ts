@@ -73,11 +73,19 @@ export class SaveAnswersDto {
   @Min(0)
   baseRevision: number;
 
-  @ApiProperty({ type: [AnswerItemDto] })
+  @ApiProperty({
+    description: 'Array of { questionId, value } or Record of { [questionId]: value }',
+  })
+  @IsDefined()
+  answers: AnswerItemDto[] | Record<string, any>;
+
+  @ApiPropertyOptional({
+    description: 'Optional list of flagged question IDs',
+    example: ['1', '5'],
+  })
+  @IsOptional()
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => AnswerItemDto)
-  answers: AnswerItemDto[];
+  flaggedQuestionIds?: string[];
 }
 
 export class SubmitAttemptDto {

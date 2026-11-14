@@ -118,9 +118,24 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     return user;
   }
 
-  async login(loginDto: LoginDto): Promise<TokenPair> {
+  async login(loginDto: LoginDto): Promise<TokenPair & { user?: any; tokens?: TokenPair }> {
     const user = await this.validateUser(loginDto.email, loginDto.password);
-    return this.generateTokenPair(user);
+    const tokens = await this.generateTokenPair(user);
+    const userSummary = {
+      id: (user._id as Types.ObjectId).toHexString(),
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      roles: [user.role],
+      status: user.status,
+      phone: user.phone,
+      timezone: 'Asia/Ho_Chi_Minh',
+    };
+    return {
+      ...tokens,
+      user: userSummary,
+      tokens,
+    };
   }
 
   /**

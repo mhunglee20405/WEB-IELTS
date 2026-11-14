@@ -507,15 +507,21 @@ export class SubmissionsService {
 
     return {
       id: extractObjectId(submission._id),
+      submissionId: extractObjectId(submission._id),
       studentAssignmentId: extractObjectId(submission.studentAssignmentId),
       assignmentId: extractObjectId(submission.assignmentId),
       studentId: extractObjectId(submission.studentId),
       attemptNo: submission.attemptNo,
       scorePercent: submission.scorePercent,
+      score: submission.scorePercent,
       correctCount: submission.correctCount,
       totalQuestions: submission.totalQuestions,
       isPassed: submission.isPassed,
-      submittedAt: submission.submittedAt,
+      passed: Boolean(submission.isPassed),
+      bestScore: submission.scorePercent,
+      answerReviewUnlocked: Boolean(submission.isPassed),
+      translationAvailable: Boolean(submission.isPassed),
+      submittedAt: submission.submittedAt ? new Date(submission.submittedAt).toISOString() : new Date().toISOString(),
       exerciseVersion: submission.exerciseVersion,
       feedback: questionsFeedback,
     };

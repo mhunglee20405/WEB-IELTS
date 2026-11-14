@@ -47,5 +47,22 @@ export class MediaController {
   ) {
     return this.mediaService.createUploadIntent(dto, actor);
   }
+
+  @Post('upload-init')
+  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Obtain signed upload URL (alias for upload-intent)' })
+  uploadInit(
+    @Body() dto: AudioUploadIntentDto,
+    @CurrentUser() actor: UserDocument,
+  ) {
+    return this.mediaService.createUploadIntent(dto, actor);
+  }
+
+  @Post('upload-complete')
+  @Roles(UserRole.TEACHER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Acknowledge audio upload complete' })
+  uploadComplete(@Body() _body: any) {
+    return { ok: true };
+  }
 }
 

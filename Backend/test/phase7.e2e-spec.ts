@@ -232,7 +232,7 @@ describe('Phase 7: Redis, BullMQ, Background Workers & Email Notifications (e2e)
       const res = await request(app.getHttpServer())
         .get('/api/v1/audit-logs')
         .set('Authorization', `Bearer ${adminToken}`)
-        .query({ entityType: 'Enrollment', limit: 10 })
+        .query({ entityType: 'Enrollment', actorId: teacherId, limit: 10 })
         .expect(200);
 
       expect(res.body.data.items).toBeDefined();

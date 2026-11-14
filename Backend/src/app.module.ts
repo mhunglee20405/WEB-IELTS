@@ -25,6 +25,7 @@ import { ExamTestsModule } from 'src/modules/exam-tests/exam-tests.module';
 import { ExamAttemptsModule } from 'src/modules/exam-attempts/exam-attempts.module';
 import { ReadingTranslationsModule } from 'src/modules/reading-translations/reading-translations.module';
 import { MediaModule } from 'src/modules/media/media.module';
+import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -33,7 +34,7 @@ import { MediaModule } from 'src/modules/media/media.module';
       isGlobal: true,
       load: [configuration],
       validationSchema,
-      envFilePath: '.env',
+      envFilePath: ['.env', 'Backend/.env', '../Backend/.env'],
     }),
 
     // Redis & BullMQ
@@ -98,6 +99,7 @@ import { MediaModule } from 'src/modules/media/media.module';
     ExamAttemptsModule,
     ReadingTranslationsModule,
     MediaModule,
+    DashboardModule,
   ],
 })
 export class AppModule { }

@@ -73,6 +73,18 @@ export class AssignmentsController {
     return this.assignmentsService.findAll(actor, query);
   }
 
+  @Get('course/:courseId')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
+  @ApiOperation({ summary: 'List assignments for a specific course' })
+  findByCourse(
+    @Param('courseId') courseId: string,
+    @CurrentUser() actor: UserDocument,
+    @Query() query: AssignmentQueryDto,
+  ) {
+    query.courseId = courseId;
+    return this.assignmentsService.findAll(actor, query);
+  }
+
   @Get('mine')
   @Roles(UserRole.STUDENT)
   @ApiOperation({ summary: 'Get assigned tasks and progress for authenticated student' })

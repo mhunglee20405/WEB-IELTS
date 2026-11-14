@@ -31,14 +31,24 @@ export function createIdempotencyKey(): string {
 
 async function parseErrorResponse(response: Response): Promise<ApiError> {
   try {
-    const json = (await response.json()) as Partial<ApiErrorPayload>;
+    const json = (await response.json()) as Partial<ApiErrorPayload> & {
+      correlationId?: string;
+      errors?: unknown;
+    };
+    const rawMsg = json.message;
+    const message = Array.isArray(rawMsg)
+      ? rawMsg.join("; ")
+      : typeof rawMsg === "string"
+        ? rawMsg
+        : response.statusText ?? "Yêu cầu thất bại.";
+
     return new ApiError({
       statusCode: json.statusCode ?? response.status,
       code: json.code ?? `HTTP_${response.status}`,
-      message: json.message ?? response.statusText ?? "Yêu cầu thất bại.",
-      requestId: json.requestId,
+      message,
+      requestId: json.requestId ?? json.correlationId,
       timestamp: json.timestamp,
-      details: json.details,
+      details: json.details ?? json.errors,
     });
   } catch {
     return new ApiError({
@@ -72,7 +82,8 @@ async function attemptTokenRefresh(): Promise<string | null> {
         return null;
       }
 
-      const tokens = (await response.json()) as AuthTokens;
+      const raw = await response.json();
+      const tokens = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as AuthTokens;
       if (existingSession) {
         tokenStore.setSession({
           user: existingSession.user,
@@ -176,7 +187,17 @@ export async function apiRequest<TResponse, TBody = unknown>(
 
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes("application/json")) {
-        return (await response.json()) as TResponse;
+        const payload = await response.json();
+        if (
+          payload !== null &&
+          typeof payload === "object" &&
+          "statusCode" in payload &&
+          "data" in payload &&
+          typeof (payload as { statusCode: unknown }).statusCode === "number"
+        ) {
+          return (payload as { data: TResponse }).data;
+        }
+        return payload as TResponse;
       }
       return (await response.text()) as TResponse;
     } catch (error) {
