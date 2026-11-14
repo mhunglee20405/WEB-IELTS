@@ -941,7 +941,7 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
 
   // Translation teacher review
   const trReviewMatch = /^\/translations\/([^/]+)\/review$/.exec(pathname);
-  if (trReviewMatch && method === "POST") {
+  if (trReviewMatch && (method === "POST" || method === "PATCH")) {
     const trId = trReviewMatch[1]!;
     const workspace = Object.values(mockState.translations).find(
       (item) => item.translationId === trId,

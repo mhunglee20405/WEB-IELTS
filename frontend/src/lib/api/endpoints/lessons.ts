@@ -1,3 +1,4 @@
+import { isMockApiMode } from "../../env";
 import { apiRequest, buildQueryString } from "../client";
 import type {
   CreateLessonRequest,
@@ -17,16 +18,38 @@ export interface ListLessonsQuery {
 export const lessonsApi = {
   list(query: ListLessonsQuery = {}): Promise<PaginatedResponse<Lesson>> {
     const qs = buildQueryString({ ...query });
+    if (isMockApiMode()) {
+      return apiRequest<PaginatedResponse<Lesson>>({
+        method: "GET",
+        path: `/lessons${qs}`,
+      });
+    }
+
+    if (query.courseId) {
+      return apiRequest<PaginatedResponse<Lesson>>({
+        method: "GET",
+        path: `/courses/${encodeURIComponent(query.courseId)}/lessons${qs}`,
+      });
+    }
+
     return apiRequest<PaginatedResponse<Lesson>>({
       method: "GET",
-      path: `/lessons${qs}`,
+      path: `/lessons/mine${qs}`,
     });
   },
 
   create(payload: CreateLessonRequest): Promise<Lesson> {
+    if (isMockApiMode()) {
+      return apiRequest<Lesson, CreateLessonRequest>({
+        method: "POST",
+        path: "/lessons",
+        body: payload,
+      });
+    }
+
     return apiRequest<Lesson, CreateLessonRequest>({
       method: "POST",
-      path: "/lessons",
+      path: `/courses/${encodeURIComponent(payload.courseId)}/lessons`,
       body: payload,
     });
   },

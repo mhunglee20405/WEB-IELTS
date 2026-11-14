@@ -69,7 +69,7 @@ async function attemptTokenRefresh(): Promise<string | null> {
     const refreshToken = tokenStore.getRefreshToken();
     const existingSession = tokenStore.getSession();
     try {
-      const response = await fetch(`${env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`, {
+      const response = await fetch(buildUrl("/auth/refresh"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(refreshToken ? { refreshToken } : {}),
@@ -128,7 +128,8 @@ export async function apiRequest<TResponse, TBody = unknown>(
     requestHeaders.Authorization = `Bearer ${accessToken}`;
   }
 
-  if (isMockApiMode()) {
+  const isMock = isMockApiMode();
+  if (isMock) {
     const { dispatchMockRequest } = await import("./mocks/router");
     return dispatchMockRequest<TResponse>({
       method,
@@ -139,9 +140,21 @@ export async function apiRequest<TResponse, TBody = unknown>(
     });
   }
 
-  const isJsonBody = options.body !== undefined && !(options.body instanceof FormData);
+  let requestBody: unknown = options.body;
+  const isJsonBody = requestBody !== undefined && !(requestBody instanceof FormData);
   if (isJsonBody) {
     requestHeaders["Content-Type"] = "application/json";
+    if (
+      options.idempotencyKey &&
+      typeof requestBody === "object" &&
+      requestBody !== null &&
+      !("idempotencyKey" in (requestBody as Record<string, unknown>))
+    ) {
+      requestBody = {
+        ...(requestBody as Record<string, unknown>),
+        idempotencyKey: options.idempotencyKey,
+      };
+    }
   }
 
   const maxAttempts = method === "GET" ? 2 : 1;
@@ -153,11 +166,11 @@ export async function apiRequest<TResponse, TBody = unknown>(
         method,
         headers: requestHeaders,
         body:
-          options.body === undefined
+          requestBody === undefined
             ? undefined
-            : options.body instanceof FormData
-              ? options.body
-              : JSON.stringify(options.body),
+            : requestBody instanceof FormData
+              ? requestBody
+              : JSON.stringify(requestBody),
         credentials: "include",
         signal: options.signal,
       });

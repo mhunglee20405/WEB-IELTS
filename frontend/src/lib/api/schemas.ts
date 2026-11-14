@@ -5,25 +5,59 @@ import { MAX_EXTENSIONS_PER_MONTH, PASS_SCORE_THRESHOLD } from "./types";
 export const UserRoleSchema = z.enum(["student", "teacher", "admin"]);
 export const UserStatusSchema = z.enum(["active", "inactive", "suspended"]);
 
-export const AuthUserSchema = z.object({
-  id: z.string(),
-  email: z.string().email(),
-  fullName: z.string(),
-  roles: z.array(UserRoleSchema).min(1),
-  status: UserStatusSchema,
-  timezone: z.string().default("Asia/Ho_Chi_Minh"),
-  avatarUrl: z.string().optional(),
-  createdAt: z.string().optional(),
-});
+export const AuthUserSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object") {
+      const obj = { ...(val as Record<string, unknown>) };
+      if (!obj.id && obj._id) {
+        obj.id = String(obj._id);
+      }
+      if (!obj.roles && obj.role) {
+        obj.roles = [obj.role];
+      }
+      if (!obj.status) {
+        obj.status = "active";
+      }
+      if (!obj.timezone) {
+        obj.timezone = "Asia/Ho_Chi_Minh";
+      }
+      return obj;
+    }
+    return val;
+  },
+  z.object({
+    id: z.string(),
+    email: z.string().email(),
+    fullName: z.string(),
+    roles: z.array(UserRoleSchema).min(1),
+    status: UserStatusSchema,
+    timezone: z.string().default("Asia/Ho_Chi_Minh"),
+    avatarUrl: z.string().optional(),
+    createdAt: z.string().optional(),
+  }),
+);
 
-export const AuthTokensSchema = z.object({
-  accessToken: z.string(),
-  refreshToken: z.string().optional(),
-  expiresIn: z.number().optional(),
-});
+export const AuthTokensSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object") {
+      const obj = { ...(val as Record<string, unknown>) };
+      if (typeof obj.expiresIn === "string") {
+        const parsed = parseInt(obj.expiresIn, 10);
+        obj.expiresIn = Number.isNaN(parsed) ? obj.expiresIn : parsed;
+      }
+      return obj;
+    }
+    return val;
+  },
+  z.object({
+    accessToken: z.string(),
+    refreshToken: z.string().optional(),
+    expiresIn: z.union([z.number(), z.string()]).optional(),
+  }),
+);
 
 export const LoginResponseSchema = z.object({
-  user: AuthUserSchema,
+  user: AuthUserSchema.optional(),
   tokens: AuthTokensSchema,
 });
 
