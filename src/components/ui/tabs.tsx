@@ -178,7 +178,7 @@ export function TabPanel({
       aria-labelledby={tabId}
       tabIndex={0}
       className={cn(
-        "rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700",
+        "lms-tabpanel-enter rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700",
         className,
       )}
     >

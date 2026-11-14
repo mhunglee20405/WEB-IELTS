@@ -209,9 +209,6 @@ export function LoginForm() {
               <label htmlFor="email" className="text-sm font-semibold text-slate-900">
                 Email đăng nhập <span aria-hidden="true" className="text-red-700">*</span>
               </label>
-              <span id="email-hint" className="text-xs text-slate-600">
-                Định dạng: ten@domain.com
-              </span>
               <input
                 id="email"
                 type="email"
@@ -247,9 +244,6 @@ export function LoginForm() {
                   Quên mật khẩu?
                 </button>
               </div>
-              <span id="password-hint" className="text-xs text-slate-600">
-                Tối thiểu 6 ký tự (hỗ trợ dán từ trình quản lý mật khẩu).
-              </span>
               <div className="relative">
                 <input
                   id="password"

@@ -86,6 +86,7 @@ export function PortalShell({
         navItems={navItems}
         unreadNotificationsCount={unreadNotificationsCount}
         notificationsHref={portal === "student" ? "/student/notifications" : undefined}
+        showFooter={portal !== "admin"}
         headerActions={
           <div className="flex items-center gap-2">
             {userRoles.length > 1 ? (

@@ -3,17 +3,27 @@ import { cn } from "@/lib/utils/cn";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
   as?: "article" | "section" | "div";
+  interactive?: boolean;
   children: ReactNode;
 }
 
 /**
  * Shared container card adhering to `.lms-card` design tokens, contrast,
- * and consistent hairline separation.
+ * and consistent hairline separation. Supports `interactive` for smooth hover elevation.
  */
-export function Card({ as = "div", className, children, ...props }: CardProps) {
+export function Card({
+  as = "div",
+  interactive = false,
+  className,
+  children,
+  ...props
+}: CardProps) {
   const Component = as;
   return (
-    <Component className={cn("lms-card", className)} {...props}>
+    <Component
+      className={cn("lms-card", interactive && "lms-card-interactive", className)}
+      {...props}
+    >
       {children}
     </Component>
   );

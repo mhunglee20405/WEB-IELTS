@@ -42,7 +42,7 @@ export function buttonVariants({
   className,
 }: ButtonStyleOptions = {}): string {
   return cn(
-    "inline-flex items-center justify-center rounded-lg font-semibold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex items-center justify-center rounded-lg font-semibold whitespace-nowrap transition-all duration-150 active:scale-[0.97] motion-reduce:transform-none select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50",
     VARIANT_CLASSES[variant],
     SIZE_CLASSES[size],
     fullWidth && "w-full",

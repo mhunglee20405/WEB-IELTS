@@ -309,7 +309,7 @@ export const LoginFormSchema = z.object({
     .string()
     .trim()
     .min(1, "Vui lòng nhập email đăng nhập.")
-    .email("Email chưa đúng định dạng (ví dụ: ten@domain.com)."),
+    .email("Email chưa đúng định dạng."),
   password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự."),
 });
 
@@ -318,7 +318,7 @@ export const ForgotPasswordFormSchema = z.object({
     .string()
     .trim()
     .min(1, "Vui lòng nhập email tài khoản.")
-    .email("Email chưa đúng định dạng (ví dụ: ten@domain.com)."),
+    .email("Email chưa đúng định dạng."),
 });
 
 export const ResetPasswordFormSchema = z.object({

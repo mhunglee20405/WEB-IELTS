@@ -39,12 +39,10 @@ async function getShellLayoutMetrics(page: Page) {
     const asideRect = aside?.getBoundingClientRect();
     const mainRect = main?.getBoundingClientRect();
     const htmlStyle = window.getComputedStyle(document.documentElement);
-    const mainStyle = main ? window.getComputedStyle(main) : null;
     const activeStyle = activeNav ? window.getComputedStyle(activeNav) : null;
     return {
       viewportHeight: window.innerHeight,
-      htmlScrollbarGutter: htmlStyle.scrollbarGutter,
-      mainScrollbarGutter: mainStyle?.scrollbarGutter ?? "",
+      htmlOverflow: htmlStyle.overflow,
       asideWidth: asideRect ? Math.round(asideRect.width) : 0,
       asideLeft: asideRect ? Math.round(asideRect.left) : -1,
       asideRight: asideRect ? Math.round(asideRect.right) : -1,
@@ -245,14 +243,18 @@ test.describe("IELTS LMS Frontend End-to-End Verification", () => {
     await assertZeroAxeViolations(page, "/teacher/dashboard");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const dashboardLayoutMetrics = await getShellLayoutMetrics(page);
-    expect(dashboardLayoutMetrics.htmlScrollbarGutter).toBe("stable");
-    expect(dashboardLayoutMetrics.mainScrollbarGutter).toBe("stable");
-    expect(dashboardLayoutMetrics.asideWidth).toBe(260);
+    expect(dashboardLayoutMetrics.htmlOverflow).toBe("hidden");
+    expect(dashboardLayoutMetrics.asideLeft).toBe(0);
+    expect(dashboardLayoutMetrics.asideWidth).toBe(256);
     expect(dashboardLayoutMetrics.asideBottom).toBeGreaterThanOrEqual(
       dashboardLayoutMetrics.viewportHeight - 1,
     );
+    await expect(page.getByRole("contentinfo")).toBeVisible();
+    await expect(page.getByRole("contentinfo")).toContainText(
+      "© 2026 IELTS Academic LMS. All rights reserved.",
+    );
 
-    // Teacher courses UI/UX: fluid grid, strict 260px full-viewport sidebar, zero horizontal shift vs tall pages & single-page pagination cleanup
+    // Teacher courses UI/UX: fluid grid, standardized 256px full-viewport sidebar, zero horizontal shift vs tall pages & single-page pagination cleanup
     await page.goto("/teacher/courses");
     await expect(page).toHaveTitle(/Quản lý khóa học \| IELTS Academic LMS/);
     await expect(page.getByText("IELTS-FOUND-K12")).toBeVisible();
@@ -300,6 +302,7 @@ test.describe("IELTS LMS Frontend End-to-End Verification", () => {
     await assertZeroAxeViolations(page, "/admin/users");
     const adminLayoutMetrics = await getShellLayoutMetrics(page);
     expect(adminLayoutMetrics).toEqual(dashboardLayoutMetrics);
+    await expect(page.getByRole("contentinfo")).toHaveCount(0);
 
     // Multi-role header switcher navigates to Teacher portal cleanly
     await page.getByRole("navigation", { name: "Chuyển cổng vai trò" }).getByRole("link", { name: "Giảng viên" }).click();
@@ -347,7 +350,8 @@ test.describe("IELTS LMS Frontend End-to-End Verification", () => {
     await expect(
       page.getByRole("heading", { name: /IELTS Academic Reading Full Test 01/i }),
     ).toBeVisible();
-    await expect(studentPracticeLink).toHaveCSS("background-color", "rgb(29, 78, 216)");
+    await expect(studentPracticeLink).toHaveAttribute("aria-current", "page");
+    await expect(studentPracticeLink).toHaveClass(/bg-blue-50/);
     await assertZeroAxeViolations(page, "/student/practice");
     await assertNoHorizontalOverflow(page);
 
@@ -443,7 +447,8 @@ test.describe("IELTS LMS Frontend End-to-End Verification", () => {
     await expect(
       page.getByText(/IELTS Academic Reading Full Test 01/i),
     ).toBeVisible();
-    await expect(teacherBankLink).toHaveCSS("background-color", "rgb(29, 78, 216)");
+    await expect(teacherBankLink).toHaveAttribute("aria-current", "page");
+    await expect(teacherBankLink).toHaveClass(/bg-blue-50/);
     await assertZeroAxeViolations(page, "/teacher/question-bank");
     await assertNoHorizontalOverflow(page);
 

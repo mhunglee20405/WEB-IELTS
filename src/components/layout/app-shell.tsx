@@ -1,69 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Bell, BookOpen, Globe2, Menu, X } from "lucide-react";
+import { X } from "lucide-react";
+import { Header } from "./header";
+import { Sidebar, SidebarNav, type NavItem } from "./sidebar";
+import { Footer } from "./footer";
 
-export interface NavItem {
-  href: string;
-  label: string;
-  icon?: ReactNode;
-}
+export type { NavItem };
 
 export interface AppShellProps {
   brandLabel?: string;
   roleLabel?: string;
   userName?: string;
-  navItems: NavItem[];
+  navItems: readonly NavItem[];
   unreadNotificationsCount?: number;
   notificationsHref?: string;
   headerActions?: ReactNode;
+  showFooter?: boolean;
   children: ReactNode;
 }
 
-function SidebarNav({
-  navItems,
-  pathname,
-  onNavigate,
-}: {
-  navItems: NavItem[];
-  pathname: string;
-  onNavigate?: () => void;
-}) {
-  const cleanPath = pathname.replace(/\/+$/, "") || "/";
-
-  return (
-    <ul className="space-y-1 p-3">
-      {navItems.map((item) => {
-        const cleanHref = item.href.replace(/\/+$/, "") || "/";
-        const isActive =
-          cleanPath === cleanHref ||
-          (cleanHref !== "/" && cleanPath.startsWith(`${cleanHref}/`));
-
-        return (
-          <li key={item.href}>
-            <Link
-              href={item.href}
-              onClick={onNavigate}
-              aria-current={isActive ? "page" : undefined}
-              className="lms-sidebar-link"
-            >
-              {item.icon ? <span className="shrink-0" aria-hidden={true}>{item.icon}</span> : null}
-              <span className="single-line-truncate">{item.label}</span>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 /**
- * Accessible base LMS shell with:
- * - Skip link directly to `<main id="main-content">`.
- * - Single `<main>`, `<header>`, and `<nav aria-label>` landmarks.
- * - Mobile native `<dialog>` drawer via `showModal()` with `closedby="any"` + fallback.
+ * Global App Shell / Dashboard Layout adhering to zero-layout-shift architecture:
+ * 1. Root: `h-screen w-screen overflow-hidden flex flex-col` (browser never produces outer scrollbar).
+ * 2. Stationary Header: `shrink-0 h-16 w-full z-20 border-b bg-white` (never scrolls out of view).
+ * 3. Body Wrapper: `flex flex-1 min-h-0 w-full max-w-none px-0 overflow-hidden`.
+ * 4. Desktop Sidebar: Flush at `left: 0`, standardized `w-64 min-w-[16rem] max-w-[16rem] shrink-0 h-full overflow-y-auto`.
+ * 5. Single Scrollable Container: `<main id="main-content">` (`flex-1 h-full overflow-y-auto flex flex-col min-w-0`).
+ * 6. Responsive Mobile Drawer: Native `<dialog>` slide-over with smooth backdrop fade.
+ * 7. Contextual Footer: Mounted inside `<main>` via `mt-auto` (conditionally shown for non-admin portals).
  */
 export function AppShell({
   brandLabel = "IELTS Academic LMS",
@@ -73,20 +39,27 @@ export function AppShell({
   unreadNotificationsCount = 0,
   notificationsHref,
   headerActions,
+  showFooter = true,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [prevPath, setPrevPath] = useState(pathname);
   const drawerRef = useRef<HTMLDialogElement>(null);
   const drawerId = useId();
   const drawerTitleId = useId();
 
+  // Close mobile drawer on route change without triggering React 19 Compiler ESLint warnings
+  if (prevPath !== pathname) {
+    setPrevPath(pathname);
+    if (drawerOpen) {
+      setDrawerOpen(false);
+    }
+  }
+
   useEffect(() => {
     const drawer = drawerRef.current;
-    if (!drawer) {
-      return;
-    }
-    drawer.setAttribute("closedby", "any");
+    if (!drawer) return;
 
     if (drawerOpen) {
       if (!drawer.open) {
@@ -97,119 +70,61 @@ export function AppShell({
     }
   }, [drawerOpen]);
 
-  const handleDrawerBackdropClick = (event: MouseEvent<HTMLDialogElement>) => {
-    const drawer = drawerRef.current;
-    if (!drawer || "closedBy" in HTMLDialogElement.prototype || event.detail === 0) {
-      return;
-    }
-    const rect = drawer.getBoundingClientRect();
-    const clickedInside =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-    if (!clickedInside) {
-      drawer.close();
+  const handleBackdropClick = (event: MouseEvent<HTMLDialogElement>) => {
+    if (event.target === drawerRef.current) {
+      setDrawerOpen(false);
     }
   };
 
   return (
-    <div className="flex min-h-dvh w-full flex-col bg-slate-50 text-slate-900 lg:h-dvh lg:overflow-hidden">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-50 text-slate-900">
+      {/* Accessible skip link */}
       <a href="#main-content" className="skip-link">
         Bỏ qua đến nội dung chính
       </a>
 
-      <header className="sticky top-0 z-20 shrink-0 border-b border-slate-200 bg-white lg:static">
-        <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              aria-expanded={drawerOpen}
-              aria-controls={drawerId}
-              aria-label="Mở menu điều hướng"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 lg:hidden"
-            >
-              <Menu className="h-5 w-5" aria-hidden={true} />
-            </button>
+      {/* Stationary Top Header */}
+      <Header
+        brandLabel={brandLabel}
+        roleLabel={roleLabel}
+        userName={userName}
+        unreadNotificationsCount={unreadNotificationsCount}
+        notificationsHref={notificationsHref}
+        headerActions={headerActions}
+        onOpenDrawer={() => setDrawerOpen(true)}
+        drawerOpen={drawerOpen}
+        drawerId={drawerId}
+      />
 
-            <Link
-              href="/"
-              className="flex items-center gap-2.5 text-slate-950 no-underline"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-700 text-white">
-                <BookOpen className="h-5 w-5" aria-hidden={true} />
-              </span>
-              <span className="font-bold tracking-tight text-base sm:text-lg">
-                {brandLabel}
-              </span>
-            </Link>
+      {/* Main Body Wrapper (flex-1 min-h-0 overflow-hidden w-full max-w-none) */}
+      <div className="flex flex-1 min-h-0 w-full max-w-none overflow-hidden px-0">
+        {/* Desktop Fixed Flush-Left Sidebar */}
+        <Sidebar navItems={navItems} pathname={pathname} />
 
-            <span className="hidden rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800 sm:inline-flex">
-              {roleLabel}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-1.5 rounded-md border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 md:inline-flex">
-              <Globe2 className="h-3.5 w-3.5 text-slate-600" aria-hidden={true} />
-              <span>GMT+7 (Asia/Ho_Chi_Minh)</span>
-            </span>
-
-            {notificationsHref ? (
-              <Link
-                href={notificationsHref}
-                aria-label={
-                  unreadNotificationsCount > 0
-                    ? `Thông báo, ${unreadNotificationsCount} chưa đọc`
-                    : "Thông báo"
-                }
-                className="relative inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-              >
-                <Bell className="h-5 w-5" aria-hidden={true} />
-                {unreadNotificationsCount > 0 ? (
-                  <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-red-700 px-1 text-[11px] font-bold text-white">
-                    {unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}
-                  </span>
-                ) : null}
-              </Link>
-            ) : null}
-
-            {userName ? (
-              <span className="hidden text-sm font-medium text-slate-800 sm:inline">
-                {userName}
-              </span>
-            ) : null}
-
-            {headerActions}
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto flex w-full max-w-[1440px] flex-1 lg:min-h-0 min-[1440px]:border-x min-[1440px]:border-slate-200">
-        <aside className="lms-sidebar hidden w-[260px] min-w-[260px] max-w-[260px] shrink-0 overflow-x-hidden border-e border-slate-200 bg-white lg:block lg:h-full lg:overflow-y-auto">
-          <nav aria-label="Điều hướng chính" className="min-h-full">
-            <SidebarNav navItems={navItems} pathname={pathname} />
-          </nav>
-        </aside>
-
+        {/* Exclusive vertical scroll area */}
         <main
           id="main-content"
           tabIndex={-1}
-          className="lms-scroll-pane min-w-0 flex-1 p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:p-8"
+          className="flex flex-1 flex-col h-full min-w-0 overflow-y-auto"
         >
-          {children}
+          {/* Inner content with smooth page enter animation */}
+          <div key={pathname} className="lms-page-enter flex-1 p-4 md:p-6 lg:p-8">
+            {children}
+          </div>
+
+          {/* Contextual Footer (rendered inside main scroller via mt-auto) */}
+          {showFooter ? <Footer /> : null}
         </main>
       </div>
 
-      {/* Mobile Modal Navigation Drawer */}
+      {/* Responsive Slide-Over Mobile Drawer */}
       <dialog
         id={drawerId}
         ref={drawerRef}
         className="lms-drawer lg:hidden"
         aria-labelledby={drawerTitleId}
         onClose={() => setDrawerOpen(false)}
-        onClick={handleDrawerBackdropClick}
+        onClick={handleBackdropClick}
       >
         <div className="flex h-full flex-col">
           <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
@@ -220,7 +135,7 @@ export function AppShell({
               type="button"
               onClick={() => setDrawerOpen(false)}
               aria-label="Đóng menu điều hướng"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition-colors hover:bg-slate-100"
             >
               <X className="h-5 w-5" aria-hidden={true} />
             </button>
@@ -238,3 +153,5 @@ export function AppShell({
   );
 }
 
+/** Export DashboardLayout as alias of AppShell */
+export const DashboardLayout = AppShell;
