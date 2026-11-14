@@ -52,13 +52,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
     }
 
-    response.status(status).json({
+    const out: Record<string, any> = {
       statusCode: status,
       error,
       message,
       path: request.url,
       timestamp: new Date().toISOString(),
       ...(correlationId ? { correlationId } : {}),
-    });
+    };
+
+    if (exception instanceof HttpException) {
+      const exceptionResponse = exception.getResponse();
+      if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+        const resp = exceptionResponse as Record<string, unknown>;
+        if (resp['code']) out.code = resp['code'];
+        if (resp['errors']) out.errors = resp['errors'];
+        if (resp['details']) out.details = resp['details'];
+        if (resp['info']) out.info = resp['info'];
+      }
+    }
+
+    response.status(status).json(out);
   }
 }

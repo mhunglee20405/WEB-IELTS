@@ -14,9 +14,15 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ExamMode } from 'src/database/schemas/enums';
 
 export class CreateExamAttemptDto {
-  @ApiProperty({ description: 'ExamTest ObjectId' })
+  @ApiPropertyOptional({ description: 'ExamTest ObjectId' })
+  @IsOptional()
   @IsMongoId()
-  testId: string;
+  testId?: string;
+
+  @ApiPropertyOptional({ description: 'Assignment ObjectId if attempt is linked to homework' })
+  @IsOptional()
+  @IsMongoId()
+  assignmentId?: string;
 
   @ApiProperty({ enum: ExamMode, example: ExamMode.PART })
   @IsEnum(ExamMode)

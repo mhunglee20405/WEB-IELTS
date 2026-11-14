@@ -201,6 +201,24 @@ Cập nhật theo từng phase. Trạng thái: ✅ Done | 🚧 In Progress | ❌
 
 ---
 
+## Phase 10 — Daily Assignment Scheduling & Teacher-Configurable IELTS Assignments ✅
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Fixed Daily Assignment Window (06:00 VN) | ✅ | `src/common/utils/timezone.util.ts` — `createVnDailyAssignmentBounds(assignedDate)` tạo khung giờ `[06:00:00, 06:00:00 ngày hôm sau)` theo múi giờ `Asia/Ho_Chi_Minh` (+07:00), lưu trữ chuẩn UTC Date. Giữ nguyên `createVnDailyBounds(targetDate)` (`00:00:00` đến `23:59:59.999`) tương thích ngược Phase 4-8. |
+| Status Lifecycle Architecture | ✅ | `src/database/schemas/assignment.schema.ts` & `student-assignment.schema.ts` — Dual-track status: lưu trữ DB lowercase (`draft`, `scheduled`, `published`, `closed`), tính toán và trả về API chuẩn hóa chữ hoa (`DRAFT`, `SCHEDULED`, `AVAILABLE`, `EXPIRED`, `COMPLETED`). |
+| Advance Scheduling & Zero-Leakage | ✅ | Bài tập `SCHEDULED` (`now < openAt`) chỉ hiển thị metadata và đếm ngược trên dashboard/lịch (`GET /assignments/mine`, `GET /assignments/:id`). Bóc tách 100% `passage`, `questions`, `audioAssets`. Bắt đầu làm bài trước `openAt` bị từ chối nghiêm ngặt với mã lỗi HTTP 403 `ASSIGNMENT_NOT_YET_AVAILABLE`. |
+| Teacher Assignment Validation & Preview | ✅ | `POST /api/v1/assignments/validate` (HTTP 200 `{ valid, errors }`), `POST /api/v1/assignments/preview` (dry-run không ghi DB), `GET /api/v1/assignments/:id/preview` (xem trước toàn bộ nội dung bài tập cho giáo viên/admin). |
+| Question Bank Scope & Custom Question Groups | ✅ | Hỗ trợ lọc nhóm câu hỏi `selectedQuestionGroupIds` và biên soạn câu hỏi trực tiếp `customQuestionGroups` với 14 loại câu hỏi IELTS `ExamQuestionType`, tự động tính toán số câu hỏi và tổng điểm. |
+| Client Idempotency Protection | ✅ | Hỗ trợ `idempotencyKey` khi tạo bài tập, tự động trả về bản ghi hiện hữu nếu key đã tồn tại; kiểm tra chống trùng lặp theo `(courseId, exerciseId, openAt)`. |
+| Deadline-Capped Attempt Expiration | ✅ | `src/modules/exam-attempts/exam-attempts.service.ts` — Thời gian hết hạn phiên làm bài tự động bị giới hạn theo deadline bài tập: `expiresAt = min(startedAt + duration, effectiveDeadlineAt)`. |
+| Decoupled Target Score vs 70% Unlock | ✅ | Cho phép giáo viên cấu hình điểm mục tiêu hoàn thành khóa học `targetScorePercent` (mặc định 70%). Quy tắc mở khóa bài dịch Reading bảo lưu tuyệt đối ngưỡng đạt 70% unrounded (đạt 60% khi target 50% vẫn không mở khóa bản dịch). |
+| Unit Tests (Phase 10) | ✅ | `assignments.service.spec.ts` (12 tests) -> **135/135 Unit Tests PASS (19/19 suites)**. |
+| Real MongoDB Replica Set & Redis E2E Tests | ✅ | `test/phase10.e2e-spec.ts` (14/14 tests PASS trên replica set `rs0`): bao phủ trọn vẹn AC-01 đến AC-11b. |
+| **Toàn bộ Test Suite Tổng thể** | ✅ | **135/135 Unit Tests PASS (19/19 suites)**, **138/138 E2E Tests PASS (10/10 suites)**, `npm run build` PASS (0 errors), `npx tsc --noEmit` PASS (0 errors). |
+
+---
+
 ## Blockers & Trạng thái giải quyết
 
 1. **MongoDB Replica Set:** Yêu cầu replica set để hỗ trợ multi-document transactions. Đã cung cấp sẵn cấu hình tự động khởi tạo `rs0` qua `docker-compose.yml` và `docker/mongo-init.js`.

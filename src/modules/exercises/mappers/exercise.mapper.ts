@@ -48,8 +48,9 @@ export class ExerciseMapper {
     const raw = typeof doc.toObject === 'function' ? doc.toObject() : doc;
     const id = raw._id ? (raw._id instanceof Types.ObjectId ? raw._id.toHexString() : String(raw._id)) : raw.id;
 
-    const questions: SanitizedQuestion[] = (raw.questions || []).map((q: any) => ({
-      questionId: q.questionId,
+    const questions: any[] = (raw.questions || []).map((q: any) => ({
+      questionId: q.questionId || (q.number !== undefined ? String(q.number) : undefined),
+      number: q.number,
       type: q.type,
       prompt: q.prompt,
       options: q.options ? q.options.map((opt: any) => ({ key: opt.key, text: opt.text })) : undefined,

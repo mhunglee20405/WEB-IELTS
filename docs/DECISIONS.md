@@ -366,6 +366,63 @@ Không dùng `countDocuments` + insert riêng lẻ (race condition).
 
 ---
 
+### A35 — Fixed Daily Assignment Window (`06:00:00+07:00` to Next Day `06:00:00+07:00`)
+
+**Quyết định:** Chuẩn hóa khung giờ giao bài tập hằng ngày cho toàn bộ bài tập IELTS:
+- **Múi giờ quy chuẩn:** `Asia/Ho_Chi_Minh` (+07:00).
+- **Khung thời gian cố định:** Mở từ đúng `06:00:00.000` của ngày giao bài (`assignedDate`) đến đúng `06:00:00.000` của ngày kế tiếp (thời hạn 24 giờ).
+- **Khoảng thời gian hiệu lực:** `[availableAt, dueAt)`. Đúng thời điểm `dueAt`, bài tập tự động chuyển sang trạng thái hết hạn (`EXPIRED`) trừ khi có gia hạn được phê duyệt.
+- **Lưu trữ chuẩn UTC:** Cơ sở dữ liệu MongoDB lưu trữ dưới dạng UTC Date object (`openAtUtc = Date.UTC(y, m-1, d, 6, 0, 0) - 7h`), hoàn toàn độc lập với múi giờ của client.
+- **Hàm tiện ích:** `createVnDailyAssignmentBounds(assignedDate)` trong `timezone.util.ts`. Giữ nguyên `createVnDailyBounds(targetDate)` (từ `00:00:00` đến `23:59:59.999`) để tương thích ngược 100% với các bài tập kế thừa Phase 4-8.
+
+---
+
+### A36 — Dual-Track Status Architecture for Backward Compatibility & Standard Lifecycles
+
+**Quyết định:** Thiết kế kiến trúc trạng thái hai tầng (Dual-Track Status) đảm bảo tương thích ngược tuyệt đối với Phase 0–9 đồng thời hỗ trợ mô hình vòng đời chuẩn hóa của Phase 10:
+- **Tầng lưu trữ (Database Schema):** Trường `status` trong MongoDB giữ nguyên enum chữ thường (`draft`, `scheduled`, `published`, `closed`) để đảm bảo không phá vỡ logic truy vấn và migration của hệ thống hiện hữu.
+- **Tầng biểu diễn (API Response):** Trả về trường `scheduleStatus` với các giá trị chữ hoa chuẩn hóa: `DRAFT`, `SCHEDULED`, `AVAILABLE`, `EXPIRED`, `COMPLETED`.
+- **Tính toán động (Dynamic Evaluation):** Trạng thái được tính toán thời gian thực tại thời điểm truy vấn thông qua `computeAssignmentLifecycleStatus` và `computeStudentAssignmentLifecycleStatus`, bảo đảm tính chính xác dựa trên thẩm quyền thời gian phía máy chủ (Server Time Authority).
+
+---
+
+### A37 — Advance Scheduling & Zero-Leakage Content Protection
+
+**Quyết định:** Bảo vệ tuyệt đối nội dung bài tập được lên lịch trước (`SCHEDULED` hoặc `now < openAt`):
+- Khi bài tập ở trạng thái `SCHEDULED`, học viên chỉ thấy thông tin tóm tắt trên danh sách/lịch (`GET /assignments/mine`) gồm tiêu đề, kỹ năng, ngày giao, và thời gian đếm ngược (`remainingSeconds`, `isAvailable: false`).
+- Khi học viên truy vấn chi tiết (`GET /assignments/:id`), hệ thống bóc tách 100% nội dung bài tập (`passage`, `questions`, `audioAssets`) khỏi phản hồi. Học viên chỉ nhận được metadata cơ bản.
+- Chặn học viên mở phiên làm bài sớm: Yêu cầu bắt đầu làm bài (`POST /api/v1/exam-attempts`) trước thời điểm `openAt` bị từ chối nghiêm ngặt với mã lỗi HTTP 403 `ASSIGNMENT_NOT_YET_AVAILABLE`.
+
+---
+
+### A38 — Deadline-Capped Attempt Timer (`expiresAt = min(startedAt + duration, effectiveDeadlineAt)`)
+
+**Quyết định:** Ràng buộc thời gian hết hạn phiên làm bài của học viên theo deadline thực tế của bài tập:
+- Khi học viên bắt đầu làm bài (`POST /exam-attempts`), hệ thống tính toán thời điểm hết hạn: `expiresAt = min(startedAt + duration, effectiveDeadlineAt)`.
+- Nếu thời gian còn lại của bài tập ít hơn thời lượng bài thi (ví dụ: bài thi 60 phút nhưng deadline chỉ còn 10 phút), `expiresAt` tự động bị giới hạn tại đúng thời điểm `effectiveDeadlineAt`.
+- Ngăn chặn học viên gian lận kéo dài thời gian làm bài vượt quá hạn chót nộp bài của lớp học.
+
+---
+
+### A39 — Decoupled Course Target (`targetScorePercent`) vs Translation Unlock Threshold (70%)
+
+**Quyết định:** Tách rời hoàn toàn điểm mục tiêu bài tập do giáo viên cấu hình khỏi ngưỡng mở khóa bản dịch Reading:
+- Giáo viên có thể tự do cấu hình điểm mục tiêu hoàn thành bài tập (`targetScorePercent`, mặc định 70%) phù hợp với từng giai đoạn học tập. Đạt điểm này giúp học viên đạt chỉ tiêu hoàn thành khóa học (`isTargetAchieved = true`).
+- Quy tắc mở khóa bài dịch đọc hiểu (Reading Translation Unlock) duy trì bất biến tại ngưỡng điểm chuẩn IELTS 70% không làm tròn (`scorePercent >= 70`).
+- Học viên đạt mục tiêu bài tập nhưng có điểm số < 70% (ví dụ: đạt 60% khi target = 50%) vẫn không được phép mở khóa bản dịch bài đọc.
+
+---
+
+### A40 — Idempotent Daily Assignment Creation & Scoped Question Filtering
+
+**Quyết định:** Chống tạo bài tập trùng lặp và cho phép lọc nhóm câu hỏi linh hoạt:
+- **Khóa bất biến (Client Idempotency Key):** Hỗ trợ header/field `idempotencyKey` khi tạo bài tập. Nếu phát hiện key trùng lặp, hệ thống trả về ngay bản ghi bài tập đã tạo trước đó mà không tạo thêm bản ghi mới.
+- **Kiểm tra trùng lặp tự nhiên:** Kiểm tra trùng lặp trên cặp khóa `(courseId, exerciseId, openAt)` đối với các bài tập chưa đóng hoặc chưa lưu trữ.
+- **Lọc nhóm câu hỏi (`selectedQuestionGroupIds`):** Giáo viên có thể chọn gán một phần bài tập từ ngân hàng câu hỏi bằng cách truyền danh sách ID nhóm câu hỏi. Hệ thống tự động snapshot đúng các nhóm được chọn và tính toán lại tổng điểm, thời lượng tương ứng.
+- **Biên soạn câu hỏi trực tiếp (`customQuestionGroups`):** Cho phép giáo viên tạo bài tập với các nhóm câu hỏi tự biên soạn theo 14 loại câu hỏi chuẩn IELTS (`ExamQuestionType`).
+
+---
+
 ## Thay đổi lịch sử
 
 | Ngày       | Quyết định | Người quyết định |
@@ -378,4 +435,5 @@ Không dùng `countDocuments` + insert riêng lẻ (race condition).
 | 2026-11-12 | Phase 7: A17 Pure Points, A18 Overdue Scoping, A19 Auto Reversal, A20 Quota Concurrency Lock, A21 BullMQ Async, A22 Audit Redaction | Backend Architect |
 | 2026-11-12 | Phase 8: A23 Redis Refresh Store, A24 Correlation ID, A25 Controlled Indexing, A26 Transactional Outbox Sweeper, A27 Multi-Probe Readiness, A28 Decoupled Liveness & Memory | Backend Architect |
 | 2026-11-12 | Phase 9: A29 Dedicated Exam Tests, A30 Ephemeral Attempt Lifecycle, A31 Dynamic Translation Unlock, A32 Zero-Leakage Projection, A33 Optimistic Autosave, A34 Standardized Status Formatting | Backend Architect |
+| 2026-11-14 | Phase 10: A35 Fixed Daily Window (06:00 VN), A36 Dual-Track Status, A37 Scheduled Zero-Leakage, A38 Deadline-Capped Timer, A39 Decoupled Target Score vs 70% Unlock, A40 Idempotency & Question Filtering | Backend Architect |
 

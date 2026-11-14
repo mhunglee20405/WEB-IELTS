@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
   Optional,
   Logger,
 } from '@nestjs/common';
@@ -31,7 +32,7 @@ import {
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { AssignmentQueryDto } from './dto/assignment-query.dto';
-import { formatVnDateTime, createVnDailyBounds } from 'src/common/utils/timezone.util';
+import { formatVnDateTime, createVnDailyBounds, createVnDailyAssignmentBounds } from 'src/common/utils/timezone.util';
 import { ExerciseMapper } from 'src/modules/exercises/mappers/exercise.mapper';
 import { NotificationsService } from 'src/modules/notifications/notifications.service';
 import { AuditService } from 'src/modules/audit/audit.service';
@@ -45,6 +46,93 @@ export function extractObjectId(ref: unknown): string {
     return id instanceof Types.ObjectId ? id.toHexString() : String(id);
   }
   return String(ref);
+}
+
+/**
+ * Computes assignment lifecycle status based on current time:
+ * DRAFT -> SCHEDULED (now < availableAt) -> AVAILABLE (availableAt <= now < dueAt) -> EXPIRED (now >= dueAt)
+ */
+export function computeAssignmentLifecycleStatus(
+  assignment: any,
+  now: Date = new Date(),
+): string {
+  const status = assignment.status;
+  if (status === AssignmentStatus.DRAFT || status === 'DRAFT') {
+    return 'DRAFT';
+  }
+  if (status === AssignmentStatus.ARCHIVED || status === AssignmentStatus.CLOSED) {
+    return String(status).toUpperCase();
+  }
+  const nowMs = now.getTime();
+  const openMs = new Date(assignment.openAt).getTime();
+  const deadlineMs = new Date(assignment.deadlineAt).getTime();
+
+  if (nowMs < openMs) {
+    return 'SCHEDULED';
+  }
+  if (nowMs >= openMs && nowMs < deadlineMs) {
+    return 'AVAILABLE';
+  }
+  return 'EXPIRED';
+}
+
+/**
+ * Computes student assignment status based on submission and deadline bounds:
+ * Returns status, scheduleStatus (DRAFT, SCHEDULED, AVAILABLE, EXPIRED, COMPLETED), isAvailable and remainingSeconds.
+ */
+export function computeStudentAssignmentLifecycleStatus(
+  assignment: any,
+  studentAssignment: any,
+  now: Date = new Date(),
+): { status: string; scheduleStatus: string; isAvailable: boolean; remainingSeconds: number } {
+  const nowMs = now.getTime();
+  const openMs = new Date(assignment.openAt).getTime();
+  const effectiveDeadlineMs = new Date(studentAssignment.effectiveDeadlineAt).getTime();
+
+  const isCompleted =
+    studentAssignment.status === StudentAssignmentStatus.PASSED ||
+    studentAssignment.status === StudentAssignmentStatus.SUBMITTED ||
+    studentAssignment.status === StudentAssignmentStatus.COMPLETED;
+
+  if (isCompleted) {
+    return {
+      status: studentAssignment.status || 'completed',
+      scheduleStatus: 'COMPLETED',
+      isAvailable: false,
+      remainingSeconds: 0,
+    };
+  }
+
+  // If assignment is explicitly marked SCHEDULED, or has assignedDate and now < openMs
+  const isScheduled =
+    assignment.status === AssignmentStatus.SCHEDULED ||
+    (Boolean(assignment.assignedDate) && nowMs < openMs) ||
+    (assignment.status !== AssignmentStatus.PUBLISHED && nowMs < openMs);
+
+  if (isScheduled && nowMs < openMs) {
+    return {
+      status: StudentAssignmentStatus.NOT_STARTED,
+      scheduleStatus: 'SCHEDULED',
+      isAvailable: false,
+      remainingSeconds: Math.max(0, Math.floor((openMs - nowMs) / 1000)),
+    };
+  }
+
+  if (nowMs >= effectiveDeadlineMs) {
+    return {
+      status: StudentAssignmentStatus.OVERDUE,
+      scheduleStatus: 'EXPIRED',
+      isAvailable: false,
+      remainingSeconds: 0,
+    };
+  }
+
+  return {
+    status: studentAssignment.status || StudentAssignmentStatus.NOT_STARTED,
+    scheduleStatus: 'AVAILABLE',
+    isAvailable: true,
+    remainingSeconds: Math.max(0, Math.floor((effectiveDeadlineMs - nowMs) / 1000)),
+  };
 }
 
 @Injectable()
@@ -63,15 +151,365 @@ export class AssignmentsService {
     @Optional() private auditService?: AuditService,
   ) {}
 
+  async validateAssignment(dto: CreateAssignmentDto, actor: UserDocument): Promise<{ valid: boolean; errors: string[] }> {
+    const errors: string[] = [];
+
+    if (actor.role === UserRole.STUDENT) {
+      errors.push('Students are not authorized to create or validate assignments');
+      return { valid: false, errors };
+    }
+
+    let course: any = null;
+    if (!dto.courseId || !Types.ObjectId.isValid(dto.courseId)) {
+      errors.push('courseId is missing or invalid');
+    } else {
+      course = await this.courseModel.findById(dto.courseId).exec();
+      if (!course) {
+        errors.push('Target course does not exist');
+      } else {
+        if (course.status === CourseStatus.ARCHIVED) {
+          errors.push('Cannot assign exercises to an archived course');
+        }
+        if (actor.role === UserRole.TEACHER) {
+          const isTeacher = extractObjectId(course.teacherId) === extractObjectId(actor._id);
+          if (!isTeacher) {
+            errors.push('You can only create assignments for courses you teach');
+          }
+        }
+      }
+    }
+
+    let resolvedExamTest: any = null;
+    let questionsInScope: any[] = [];
+
+    if (!dto.exerciseId || !Types.ObjectId.isValid(dto.exerciseId)) {
+      errors.push('exerciseId is missing or invalid');
+    } else {
+      const exercise = await this.exerciseModel
+        .findById(dto.exerciseId)
+        .select('+questions.answerSpecification +questions.explanation')
+        .exec();
+
+      if (exercise) {
+        if (exercise.status !== ExerciseStatus.PUBLISHED) {
+          errors.push('Selected exercise is not published (must be PUBLISHED)');
+        }
+        questionsInScope = exercise.questions || [];
+      } else if (this.examTestModel) {
+        resolvedExamTest = await this.examTestModel.findById(dto.exerciseId).exec();
+        if (!resolvedExamTest) {
+          errors.push('Selected exercise or exam test was not found');
+        } else {
+          if (resolvedExamTest.status !== ExamTestStatus.PUBLISHED) {
+            errors.push('Selected exam test is not published (must be PUBLISHED)');
+          }
+
+          if (dto.requiredScope === 'PART') {
+            if (!dto.requiredPartId) {
+              errors.push('requiredPartId is required when requiredScope is PART');
+            } else {
+              const part = (resolvedExamTest.parts || []).find(
+                (p: any) => extractObjectId(p._id) === dto.requiredPartId,
+              );
+              if (!part) {
+                errors.push('requiredPartId does not exist in this exam test');
+              } else {
+                let groups = part.questionGroups || [];
+                if (dto.selectedQuestionGroupIds && dto.selectedQuestionGroupIds.length > 0) {
+                  const availableGroupIds = new Set(groups.map((g: any) => extractObjectId(g._id)));
+                  for (const gid of dto.selectedQuestionGroupIds) {
+                    if (!availableGroupIds.has(gid)) {
+                      errors.push(`selectedQuestionGroupId '${gid}' does not exist in the selected part`);
+                    }
+                  }
+                  groups = groups.filter((g: any) => dto.selectedQuestionGroupIds!.includes(extractObjectId(g._id)));
+                }
+                for (const g of groups) {
+                  for (const q of g.questions || []) {
+                    questionsInScope.push(q);
+                  }
+                }
+              }
+            }
+          } else {
+            // FULL scope
+            for (const part of resolvedExamTest.parts || []) {
+              for (const g of part.questionGroups || []) {
+                for (const q of g.questions || []) {
+                  questionsInScope.push(q);
+                }
+              }
+            }
+          }
+        }
+      } else {
+        errors.push('Selected exercise or exam test was not found');
+      }
+    }
+
+    // Custom question groups override if provided
+    if (dto.customQuestionGroups && dto.customQuestionGroups.length > 0) {
+      questionsInScope = [];
+      const seenNumbers = new Set<number>();
+      for (const group of dto.customQuestionGroups) {
+        if (!group.type) {
+          errors.push('Every custom question group must specify an IELTS question type');
+        }
+        if (!group.questions || group.questions.length === 0) {
+          errors.push(`Custom question group '${group.title || group.order}' has no questions`);
+        } else {
+          for (const q of group.questions) {
+            if (seenNumbers.has(q.number)) {
+              errors.push(`Duplicate question number ${q.number} in custom question groups`);
+            }
+            seenNumbers.add(q.number);
+            if (!q.prompt || q.prompt.trim().length === 0) {
+              errors.push(`Question ${q.number} must have a non-empty prompt`);
+            }
+            if (!q.grading || !q.grading.acceptedKeys || q.grading.acceptedKeys.length === 0) {
+              errors.push(`Question ${q.number} must provide at least one acceptedKey in grading`);
+            }
+            questionsInScope.push(q);
+          }
+        }
+      }
+    } else {
+      const seenNumbers = new Set<number | string>();
+      for (const q of questionsInScope) {
+        const id = q.number !== undefined ? q.number : q.questionId;
+        if (seenNumbers.has(id)) {
+          errors.push(`Duplicate question identifier '${id}' within assignment scope`);
+        }
+        seenNumbers.add(id);
+      }
+    }
+
+    if (questionsInScope.length === 0 && errors.length === 0) {
+      errors.push('Assignment must contain at least 1 question in its scope');
+    }
+
+    if (dto.assignedDate) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dto.assignedDate.trim())) {
+        errors.push('assignedDate must be in YYYY-MM-DD format');
+      }
+    }
+
+    if (dto.openAt && dto.deadlineAt) {
+      if (new Date(dto.openAt).getTime() >= new Date(dto.deadlineAt).getTime()) {
+        errors.push('openAt must be strictly earlier than deadlineAt');
+      }
+    }
+
+    if (dto.durationSecondsOverride !== undefined && dto.durationSecondsOverride <= 0) {
+      errors.push('durationSecondsOverride must be greater than 0');
+    }
+
+    if (dto.targetScorePercent !== undefined) {
+      if (dto.targetScorePercent < 0 || dto.targetScorePercent > 100) {
+        errors.push('targetScorePercent must be between 0 and 100');
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+
+  async previewAssignment(dto: CreateAssignmentDto, actor: UserDocument) {
+    const val = await this.validateAssignment(dto, actor);
+    if (!val.valid) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'BadRequest',
+        code: 'ASSIGNMENT_VALIDATION_FAILED',
+        message: 'Assignment configuration is invalid',
+        errors: val.errors,
+      });
+    }
+
+    const course = await this.courseModel.findById(dto.courseId).select('code title teacherId').exec();
+    const enrolledCount = await this.enrollmentModel.countDocuments({
+      courseId: course?._id,
+      status: EnrollmentStatus.ACTIVE,
+    });
+
+    let bounds: any;
+    if (dto.assignedDate || dto.targetDate) {
+      bounds = createVnDailyAssignmentBounds(dto.assignedDate || dto.targetDate);
+    } else if (dto.openAt && dto.deadlineAt) {
+      bounds = {
+        availableAt: new Date(dto.openAt),
+        dueAt: new Date(dto.deadlineAt),
+        openAt: new Date(dto.openAt),
+        deadlineAt: new Date(dto.deadlineAt),
+        assignedDate: formatVnDateTime(dto.openAt).slice(0, 10),
+      };
+    } else {
+      bounds = createVnDailyAssignmentBounds();
+    }
+
+    let questionsPreview: any[] = [];
+    let title = dto.title || '';
+    let skill = 'READING';
+    let durationSeconds = dto.durationSecondsOverride || 3600;
+
+    let previewPassage: string | undefined = undefined;
+    const examTest = this.examTestModel ? await this.examTestModel.findById(dto.exerciseId).exec() : null;
+    if (examTest) {
+      if (!title) title = examTest.title;
+      skill = examTest.skill;
+      if (!dto.durationSecondsOverride) {
+        durationSeconds = examTest.fullDurationSeconds || 3600;
+      }
+      if (dto.requiredScope === 'PART') {
+        const part = (examTest.parts || []).find((p: any) => extractObjectId(p._id) === dto.requiredPartId);
+        if (part) {
+          previewPassage = part.contentHtml || (part as any).passage;
+          if (!dto.durationSecondsOverride && part.durationSeconds) {
+            durationSeconds = part.durationSeconds;
+          }
+          let groups = part.questionGroups || [];
+          if (dto.selectedQuestionGroupIds && dto.selectedQuestionGroupIds.length > 0) {
+            groups = groups.filter((g: any) => dto.selectedQuestionGroupIds!.includes(extractObjectId(g._id)));
+          }
+          for (const g of groups) {
+            for (const q of g.questions || []) {
+              questionsPreview.push({
+                ...q,
+                groupTitle: g.title,
+                instruction: g.instruction,
+                groupType: g.type,
+              });
+            }
+          }
+        }
+      } else {
+        previewPassage = (examTest.parts || []).map((p: any) => p.contentHtml || (p as any).passage).filter(Boolean).join('\n\n');
+        for (const part of examTest.parts || []) {
+          for (const g of part.questionGroups || []) {
+            for (const q of g.questions || []) {
+              questionsPreview.push({
+                ...q,
+                partTitle: part.title,
+                groupTitle: g.title,
+                instruction: g.instruction,
+                groupType: g.type,
+              });
+            }
+          }
+        }
+      }
+    } else {
+      const ex = await this.exerciseModel.findById(dto.exerciseId).select('+questions.answerSpecification +questions.explanation').exec();
+      if (ex) {
+        if (!title) title = ex.title;
+        skill = ex.type.toUpperCase();
+        previewPassage = ex.passage;
+        questionsPreview = ex.questions || [];
+      }
+    }
+
+    if (dto.customQuestionGroups && dto.customQuestionGroups.length > 0) {
+      questionsPreview = [];
+      for (const g of dto.customQuestionGroups) {
+        for (const q of g.questions || []) {
+          questionsPreview.push({
+            ...q,
+            groupTitle: g.title,
+            instruction: g.instruction,
+            groupType: g.type,
+          });
+        }
+      }
+    }
+
+    const totalPoints = questionsPreview.reduce((sum, q) => sum + (q.points || 1), 0);
+
+    return {
+      course: course ? { id: extractObjectId(course._id), code: course.code, title: course.title } : undefined,
+      title,
+      skill,
+      scope: dto.requiredScope || 'FULL',
+      requiredPartId: dto.requiredPartId || null,
+      assignedDate: bounds.assignedDate,
+      availableAt: bounds.availableAt,
+      availableAtVn: formatVnDateTime(bounds.availableAt),
+      openAt: bounds.availableAt,
+      openAtVn: formatVnDateTime(bounds.availableAt),
+      dueAt: bounds.dueAt,
+      dueAtVn: formatVnDateTime(bounds.dueAt),
+      deadlineAt: bounds.dueAt,
+      deadlineAtVn: formatVnDateTime(bounds.dueAt),
+      durationSeconds,
+      targetScorePercent: dto.targetScorePercent ?? 70,
+      questionCount: questionsPreview.length,
+      totalPoints,
+      enrolledStudentsCount: enrolledCount,
+      passage: previewPassage,
+      questions: questionsPreview,
+    };
+  }
+
+  async previewById(id: string, actor: UserDocument) {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Assignment not found');
+    }
+    const assignment = await this.assignmentModel
+      .findById(id)
+      .select('+exerciseSnapshot')
+      .populate('courseId', 'code title teacherId')
+      .populate('exerciseId', 'title type passScore')
+      .exec();
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+    const course: any = assignment.courseId;
+    if (actor.role === UserRole.TEACHER) {
+      const isTeacher = extractObjectId(course.teacherId) === extractObjectId(actor._id);
+      if (!isTeacher) {
+        throw new ForbiddenException('You do not teach this course');
+      }
+    }
+    const enrolledCount = await this.enrollmentModel.countDocuments({
+      courseId: course._id,
+      status: EnrollmentStatus.ACTIVE,
+    });
+    const snapshot: any = assignment.exerciseSnapshot || {};
+    const questions = snapshot.questions || [];
+    const totalPoints = questions.reduce((sum: number, q: any) => sum + (q.points || 1), 0);
+
+    return {
+      id: extractObjectId(assignment._id),
+      course: { id: extractObjectId(course._id), code: course.code, title: course.title },
+      title: assignment.title,
+      scope: assignment.requiredScope || 'FULL',
+      requiredPartId: assignment.requiredPartId || null,
+      assignedDate: assignment.assignedDate || formatVnDateTime(assignment.openAt).slice(0, 10),
+      availableAt: assignment.openAt,
+      availableAtVn: formatVnDateTime(assignment.openAt),
+      dueAt: assignment.deadlineAt,
+      dueAtVn: formatVnDateTime(assignment.deadlineAt),
+      durationSeconds: assignment.durationSecondsOverride || 3600,
+      targetScorePercent: assignment.targetScorePercent ?? 70,
+      questionCount: questions.length,
+      totalPoints,
+      enrolledStudentsCount: enrolledCount,
+      exerciseSnapshot: assignment.exerciseSnapshot,
+      passage: snapshot.passage,
+      questions,
+    };
+  }
+
   async create(dto: CreateAssignmentDto, actor: UserDocument) {
     if (actor.role === UserRole.STUDENT) {
       throw new ForbiddenException('Students cannot create assignments');
     }
 
-    if (!Types.ObjectId.isValid(dto.courseId)) {
+    if (!dto.courseId || !Types.ObjectId.isValid(dto.courseId)) {
       throw new BadRequestException('Invalid courseId');
     }
-    if (!Types.ObjectId.isValid(dto.exerciseId)) {
+    if (!dto.exerciseId || !Types.ObjectId.isValid(dto.exerciseId)) {
       throw new BadRequestException('Invalid exerciseId');
     }
 
@@ -90,6 +528,32 @@ export class AssignmentsService {
       }
     }
 
+    // 1. Validation check
+    const val = await this.validateAssignment(dto, actor);
+    if (!val.valid) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'BadRequest',
+        code: 'ASSIGNMENT_VALIDATION_FAILED',
+        message: 'Assignment configuration is invalid',
+        errors: val.errors,
+      });
+    }
+
+    // 2. Client Idempotency check
+    if (dto.idempotencyKey && typeof this.assignmentModel.findOne === 'function') {
+      const q = this.assignmentModel.findOne({ idempotencyKey: dto.idempotencyKey });
+      const existing = q?.populate
+        ? await q
+            .populate('courseId', 'code title')
+            .populate('exerciseId', 'title type')
+            .exec()
+        : await q;
+      if (existing) {
+        return this.formatAssignment(existing);
+      }
+    }
+
     let exerciseTitle = '';
     let exerciseVersion = 1;
     let exerciseSnapshot: any = null;
@@ -99,10 +563,8 @@ export class AssignmentsService {
       .select('+questions.answerSpecification +questions.explanation')
       .exec();
 
+    let examTest: any = null;
     if (exercise) {
-      if (exercise.status !== ExerciseStatus.PUBLISHED) {
-        throw new BadRequestException('Only published exercises can be assigned to courses');
-      }
       exerciseTitle = exercise.title;
       exerciseVersion = exercise.version;
       exerciseSnapshot = {
@@ -115,74 +577,140 @@ export class AssignmentsService {
         version: exercise.version,
       };
     } else if (this.examTestModel) {
-      const examTest = await this.examTestModel.findById(dto.exerciseId).exec();
+      examTest = await this.examTestModel.findById(dto.exerciseId).exec();
       if (!examTest) {
         throw new NotFoundException('Exercise not found');
       }
-      if (examTest.status !== ExamTestStatus.PUBLISHED) {
-        throw new BadRequestException('Only published exercises can be assigned to courses');
-      }
-
-      if (dto.requiredScope === 'PART' && dto.requiredPartId) {
-        const hasPart = (examTest.parts || []).some(
-          (p: any) => extractObjectId(p._id) === dto.requiredPartId,
-        );
-        if (!hasPart) {
-          throw new BadRequestException('requiredPartId does not exist in this exam test');
-        }
-      }
-
       exerciseTitle = examTest.title;
       exerciseVersion = examTest.version;
+
+      let partsToInclude = examTest.parts || [];
+      if (dto.requiredScope === 'PART' && dto.requiredPartId) {
+        partsToInclude = partsToInclude.filter(
+          (p: any) => extractObjectId(p._id) === dto.requiredPartId,
+        );
+      }
+
       const questions: any[] = [];
-      for (const part of examTest.parts || []) {
+      const selectedGroupSet = dto.selectedQuestionGroupIds && dto.selectedQuestionGroupIds.length > 0
+        ? new Set(dto.selectedQuestionGroupIds)
+        : null;
+
+      for (const part of partsToInclude) {
         for (const group of part.questionGroups || []) {
+          if (selectedGroupSet && !selectedGroupSet.has(extractObjectId(group._id))) {
+            continue;
+          }
           for (const q of group.questions || []) {
             questions.push(q);
           }
         }
       }
+
+      const passage = partsToInclude
+        .map((p: any) => p.contentHtml || p.passage)
+        .filter(Boolean)
+        .join('\n\n');
+
       exerciseSnapshot = {
         title: examTest.title,
         type: examTest.skill.toLowerCase() as any,
+        passage,
         questions,
         passScore: examTest.passScore,
         version: examTest.version,
       };
-    } else {
-      throw new NotFoundException('Exercise not found');
     }
 
-    // Determine openAt & deadlineAt
+    // Custom question groups override if provided
+    if (dto.customQuestionGroups && dto.customQuestionGroups.length > 0) {
+      const customQuestions: any[] = [];
+      for (const group of dto.customQuestionGroups) {
+        for (const q of group.questions || []) {
+          customQuestions.push(q);
+        }
+      }
+      exerciseSnapshot = {
+        title: dto.title || exerciseTitle,
+        type: exerciseSnapshot?.type || 'reading',
+        questions: customQuestions,
+        passScore: dto.targetScorePercent ?? 70,
+        version: 1,
+      };
+    }
+
+    // 3. Determine availableAt & dueAt (openAt & deadlineAt)
     let openAt: Date;
     let deadlineAt: Date;
+    let assignedDate: string;
 
-    if (dto.targetDate) {
+    if (dto.assignedDate) {
+      const bounds = createVnDailyAssignmentBounds(dto.assignedDate);
+      openAt = bounds.availableAt;
+      deadlineAt = bounds.dueAt;
+      assignedDate = bounds.assignedDate;
+    } else if (dto.targetDate) {
       const bounds = createVnDailyBounds(dto.targetDate);
       openAt = bounds.openAt;
       deadlineAt = bounds.deadlineAt;
+      assignedDate = undefined as any;
     } else if (dto.openAt && dto.deadlineAt) {
       openAt = new Date(dto.openAt);
       deadlineAt = new Date(dto.deadlineAt);
+      assignedDate = formatVnDateTime(openAt).slice(0, 10);
     } else if (dto.openAt && !dto.deadlineAt) {
       openAt = new Date(dto.openAt);
-      const bounds = createVnDailyBounds(openAt);
-      deadlineAt = bounds.deadlineAt;
+      const bounds = createVnDailyAssignmentBounds(openAt);
+      deadlineAt = bounds.dueAt;
+      assignedDate = bounds.assignedDate;
     } else if (!dto.openAt && dto.deadlineAt) {
       deadlineAt = new Date(dto.deadlineAt);
-      const bounds = createVnDailyBounds(deadlineAt);
-      openAt = bounds.openAt;
+      const bounds = createVnDailyAssignmentBounds(deadlineAt);
+      openAt = bounds.availableAt;
+      assignedDate = bounds.assignedDate;
     } else {
-      const bounds = createVnDailyBounds();
-      openAt = bounds.openAt;
-      deadlineAt = bounds.deadlineAt;
+      const bounds = createVnDailyAssignmentBounds();
+      openAt = bounds.availableAt;
+      deadlineAt = bounds.dueAt;
+      assignedDate = bounds.assignedDate;
     }
 
-    if (openAt.getTime() >= deadlineAt.getTime()) {
-      throw new BadRequestException('openAt must be earlier than deadlineAt');
+    // 4. Duplicate daily assignment check for same course, exercise and openAt
+    if (typeof this.assignmentModel.findOne === 'function') {
+      const q = this.assignmentModel.findOne({
+        courseId: course._id,
+        exerciseId: new Types.ObjectId(dto.exerciseId),
+        openAt,
+        status: { $nin: [AssignmentStatus.ARCHIVED, AssignmentStatus.CLOSED] },
+      });
+      const duplicate = q?.populate
+        ? await q
+            .populate('courseId', 'code title')
+            .populate('exerciseId', 'title type')
+            .exec()
+        : await q;
+
+      if (duplicate) {
+        return this.formatAssignment(duplicate);
+      }
     }
 
-    const status = dto.status || AssignmentStatus.PUBLISHED;
+    // 5. Determine status
+    const now = new Date();
+    let status: AssignmentStatus;
+    if (dto.action === 'draft' || dto.status === AssignmentStatus.DRAFT) {
+      status = AssignmentStatus.DRAFT;
+    } else if (dto.action === 'schedule' || dto.status === AssignmentStatus.SCHEDULED) {
+      status = AssignmentStatus.SCHEDULED;
+    } else if (dto.action === 'publish' || dto.status === AssignmentStatus.PUBLISHED) {
+      status = AssignmentStatus.PUBLISHED;
+    } else if (dto.assignedDate && now.getTime() < openAt.getTime()) {
+      status = AssignmentStatus.SCHEDULED;
+    } else if (now.getTime() < openAt.getTime() && !dto.targetDate) {
+      status = AssignmentStatus.SCHEDULED;
+    } else {
+      status = AssignmentStatus.PUBLISHED;
+    }
 
     const assignment = new this.assignmentModel({
       courseId: course._id,
@@ -193,6 +721,10 @@ export class AssignmentsService {
       title: dto.title || exerciseTitle,
       openAt,
       deadlineAt,
+      assignedDate,
+      selectedQuestionGroupIds: dto.selectedQuestionGroupIds || [],
+      targetScorePercent: dto.targetScorePercent ?? 70,
+      idempotencyKey: dto.idempotencyKey,
       allowRetake: dto.allowRetake ?? false,
       maxAttempts: dto.maxAttempts,
       requiredScope: dto.requiredScope || 'FULL',
@@ -216,12 +748,12 @@ export class AssignmentsService {
         .catch((err) => this.logger.warn(`Failed to audit assignment: ${err.message}`));
     }
 
-    // If published immediately, dispatch student assignments for all actively enrolled students
-    if (status === AssignmentStatus.PUBLISHED) {
+    // If published or scheduled, dispatch student assignments for all actively enrolled students
+    if (status !== AssignmentStatus.DRAFT) {
       await this.dispatchStudentAssignments(assignment);
     }
 
-    return this.formatAssignment(assignment);
+    return this.formatAssignment(assignment, true);
   }
 
   async findAll(actor: UserDocument, query: AssignmentQueryDto) {
@@ -318,8 +850,10 @@ export class AssignmentsService {
       .sort({ createdAt: -1 })
       .exec();
 
-    // Filter by query parameters if specified
-    let filtered = studentAssignments.filter((sa) => sa.assignmentId != null);
+    // Filter out drafts or nulls
+    let filtered = studentAssignments.filter(
+      (sa) => sa.assignmentId != null && (sa.assignmentId as any).status !== AssignmentStatus.DRAFT,
+    );
 
     if (query.courseId) {
       filtered = filtered.filter(
@@ -330,15 +864,27 @@ export class AssignmentsService {
     }
 
     if (query.status) {
-      filtered = filtered.filter((sa: any) => sa.assignmentId.status === query.status);
+      const qStatus = String(query.status).toLowerCase();
+      filtered = filtered.filter((sa: any) => {
+        const studentLifecycle = computeStudentAssignmentLifecycleStatus(sa.assignmentId, sa, new Date());
+        return (
+          sa.status === query.status ||
+          sa.assignmentId.status === query.status ||
+          studentLifecycle.scheduleStatus.toLowerCase() === qStatus ||
+          studentLifecycle.status.toLowerCase() === qStatus
+        );
+      });
     }
 
     const total = filtered.length;
     const paginated = filtered.slice((page - 1) * limit, page * limit);
 
+    const now = new Date();
     const items = paginated.map((sa: any) => {
       const assignment = sa.assignmentId;
+      const studentLifecycle = computeStudentAssignmentLifecycleStatus(assignment, sa, now);
       return {
+        id: extractObjectId(assignment._id),
         studentAssignmentId: extractObjectId(sa._id),
         assignmentId: extractObjectId(assignment._id),
         title: assignment.title,
@@ -357,14 +903,24 @@ export class AssignmentsService {
               passScore: assignment.exerciseId.passScore,
             }
           : undefined,
+        assignedDate: assignment.assignedDate || formatVnDateTime(assignment.openAt).slice(0, 10),
+        targetScorePercent: assignment.targetScorePercent ?? 70,
         openAt: assignment.openAt,
         openAtVn: formatVnDateTime(assignment.openAt),
+        availableAt: assignment.openAt,
+        availableAtVn: formatVnDateTime(assignment.openAt),
         deadlineAt: assignment.deadlineAt,
         deadlineAtVn: formatVnDateTime(assignment.deadlineAt),
+        dueAt: assignment.deadlineAt,
+        dueAtVn: formatVnDateTime(assignment.deadlineAt),
         effectiveDeadlineAt: sa.effectiveDeadlineAt,
         effectiveDeadlineAtVn: formatVnDateTime(sa.effectiveDeadlineAt),
         status: sa.status,
+        scheduleStatus: studentLifecycle.scheduleStatus,
+        isAvailable: studentLifecycle.isAvailable,
+        remainingSeconds: studentLifecycle.remainingSeconds,
         bestScore: sa.bestScore,
+        isTargetAchieved: sa.isTargetAchieved ?? false,
         passedAt: sa.passedAt,
         lastSubmittedAt: sa.lastSubmittedAt,
         allowRetake: assignment.allowRetake,
@@ -411,6 +967,10 @@ export class AssignmentsService {
     }
 
     // Role is STUDENT:
+    if (assignment.status === AssignmentStatus.DRAFT) {
+      throw new NotFoundException('Assignment not found');
+    }
+
     const studentAssignment = await this.studentAssignmentModel
       .findOne({
         assignmentId: assignment._id,
@@ -460,19 +1020,36 @@ export class AssignmentsService {
     if (dto.maxAttempts !== undefined) {
       assignment.maxAttempts = dto.maxAttempts;
     }
+    if (dto.targetScorePercent !== undefined) {
+      assignment.targetScorePercent = dto.targetScorePercent;
+    }
+    if (dto.selectedQuestionGroupIds !== undefined) {
+      assignment.selectedQuestionGroupIds = dto.selectedQuestionGroupIds;
+    }
+    if (dto.durationSecondsOverride !== undefined) {
+      assignment.durationSecondsOverride = dto.durationSecondsOverride;
+    }
 
     let datesModified = false;
     let newOpenAt = assignment.openAt;
     let newDeadlineAt = assignment.deadlineAt;
     const oldDeadline = assignment.deadlineAt;
 
-    if (dto.openAt) {
-      newOpenAt = new Date(dto.openAt);
+    if (dto.assignedDate) {
+      const bounds = createVnDailyAssignmentBounds(dto.assignedDate);
+      newOpenAt = bounds.availableAt;
+      newDeadlineAt = bounds.dueAt;
+      assignment.assignedDate = bounds.assignedDate;
       datesModified = true;
-    }
-    if (dto.deadlineAt) {
-      newDeadlineAt = new Date(dto.deadlineAt);
-      datesModified = true;
+    } else {
+      if (dto.openAt) {
+        newOpenAt = new Date(dto.openAt);
+        datesModified = true;
+      }
+      if (dto.deadlineAt) {
+        newDeadlineAt = new Date(dto.deadlineAt);
+        datesModified = true;
+      }
     }
 
     if (datesModified) {
@@ -497,18 +1074,29 @@ export class AssignmentsService {
     }
 
     const prevStatus = assignment.status;
-    if (dto.status && dto.status !== prevStatus) {
-      assignment.status = dto.status;
+    let targetStatus = dto.status;
+    if (dto.action === 'publish') {
+      targetStatus = AssignmentStatus.PUBLISHED;
+    } else if (dto.action === 'schedule') {
+      targetStatus = AssignmentStatus.SCHEDULED;
+    } else if (dto.action === 'draft') {
+      targetStatus = AssignmentStatus.DRAFT;
+    }
+
+    if (targetStatus && targetStatus !== prevStatus) {
+      assignment.status = targetStatus;
       if (
         prevStatus === AssignmentStatus.DRAFT &&
-        dto.status === AssignmentStatus.PUBLISHED
+        (targetStatus === AssignmentStatus.PUBLISHED ||
+          targetStatus === AssignmentStatus.SCHEDULED ||
+          targetStatus === AssignmentStatus.AVAILABLE)
       ) {
         await this.dispatchStudentAssignments(assignment);
       }
     }
 
     await assignment.save();
-    return this.formatAssignment(assignment);
+    return this.formatAssignment(assignment, true);
   }
 
   async getStudents(assignmentId: string, actor: UserDocument, page = 1, limit = 20) {
@@ -714,6 +1302,9 @@ export class AssignmentsService {
         : extractObjectId(raw.exerciseId)
       : undefined;
 
+    const now = new Date();
+    const lifecycleStatus = computeAssignmentLifecycleStatus(raw, now);
+
     const res: any = {
       id: extractObjectId(raw._id || raw.id),
       courseId,
@@ -725,13 +1316,22 @@ export class AssignmentsService {
       requiredPartId: raw.requiredPartId || null,
       allowedModes: raw.allowedModes || ['PART', 'FULL'],
       durationSecondsOverride: raw.durationSecondsOverride || null,
+      assignedDate: raw.assignedDate || formatVnDateTime(raw.openAt).slice(0, 10),
+      selectedQuestionGroupIds: raw.selectedQuestionGroupIds || [],
+      targetScorePercent: raw.targetScorePercent ?? 70,
       openAt: raw.openAt,
       openAtVn: formatVnDateTime(raw.openAt),
+      availableAt: raw.openAt,
+      availableAtVn: formatVnDateTime(raw.openAt),
       deadlineAt: raw.deadlineAt,
       deadlineAtVn: formatVnDateTime(raw.deadlineAt),
+      dueAt: raw.deadlineAt,
+      dueAtVn: formatVnDateTime(raw.deadlineAt),
       allowRetake: raw.allowRetake,
       maxAttempts: raw.maxAttempts,
       status: raw.status,
+      rawStatus: raw.status,
+      scheduleStatus: lifecycleStatus,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
     };
@@ -750,9 +1350,25 @@ export class AssignmentsService {
         ? studentAssignment.toObject()
         : studentAssignment;
 
+    const now = new Date();
+    const studentLifecycle = computeStudentAssignmentLifecycleStatus(raw, rawSa, now);
+
     let sanitizedExercise: any = undefined;
-    if (raw.exerciseSnapshot) {
+    // CRITICAL: Students must NOT access protected questions/passages before availableAt!
+    const isLocked =
+      raw.status === AssignmentStatus.SCHEDULED ||
+      (studentLifecycle.scheduleStatus === 'SCHEDULED' &&
+        (Boolean(raw.assignedDate) || raw.status !== AssignmentStatus.PUBLISHED));
+
+    if (!isLocked && raw.exerciseSnapshot) {
       sanitizedExercise = ExerciseMapper.toSanitized(raw.exerciseSnapshot);
+    } else if (raw.exerciseSnapshot) {
+      sanitizedExercise = {
+        title: raw.exerciseSnapshot.title,
+        type: raw.exerciseSnapshot.type,
+        passScore: raw.exerciseSnapshot.passScore,
+        questionCount: raw.exerciseSnapshot.questions?.length || 0,
+      };
     }
 
     return {
@@ -782,17 +1398,28 @@ export class AssignmentsService {
       requiredPartId: raw.requiredPartId || null,
       allowedModes: raw.allowedModes || ['PART', 'FULL'],
       durationSecondsOverride: raw.durationSecondsOverride || null,
+      assignedDate: raw.assignedDate || formatVnDateTime(raw.openAt).slice(0, 10),
+      targetScorePercent: raw.targetScorePercent ?? 70,
       openAt: raw.openAt,
       openAtVn: formatVnDateTime(raw.openAt),
+      availableAt: raw.openAt,
+      availableAtVn: formatVnDateTime(raw.openAt),
       deadlineAt: raw.deadlineAt,
       deadlineAtVn: formatVnDateTime(raw.deadlineAt),
+      dueAt: raw.deadlineAt,
+      dueAtVn: formatVnDateTime(raw.deadlineAt),
       effectiveDeadlineAt: rawSa.effectiveDeadlineAt,
       effectiveDeadlineAtVn: formatVnDateTime(rawSa.effectiveDeadlineAt),
       allowRetake: raw.allowRetake,
       maxAttempts: raw.maxAttempts,
       assignmentStatus: raw.status,
       myStatus: rawSa.status,
+      status: studentLifecycle.scheduleStatus,
+      scheduleStatus: studentLifecycle.scheduleStatus,
+      isAvailable: studentLifecycle.isAvailable,
+      remainingSeconds: studentLifecycle.remainingSeconds,
       bestScore: rawSa.bestScore,
+      isTargetAchieved: rawSa.isTargetAchieved ?? false,
       passedAt: rawSa.passedAt,
       lastSubmittedAt: rawSa.lastSubmittedAt,
       exercise: sanitizedExercise,

@@ -1694,8 +1694,11 @@
                 "draft",
                 "scheduled",
                 "published",
+                "available",
+                "expired",
                 "closed",
-                "archived"
+                "archived",
+                "completed"
               ],
               "type": "string"
             }
@@ -1714,6 +1717,96 @@
             "required": false,
             "in": "query",
             "description": "Filter deadlineAt <= to",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/validate": {
+      "post": {
+        "operationId": "AssignmentsController_validate",
+        "summary": "Validate assignment configuration before scheduling",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/preview": {
+      "post": {
+        "operationId": "AssignmentsController_preview",
+        "summary": "Preview assignment structure, questions, and enrolled students",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/preview": {
+      "get": {
+        "operationId": "AssignmentsController_previewById",
+        "summary": "Preview existing assignment structure (Teacher/Admin)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
             "schema": {
               "type": "string"
             }
@@ -1778,8 +1871,11 @@
                 "draft",
                 "scheduled",
                 "published",
+                "available",
+                "expired",
                 "closed",
-                "archived"
+                "archived",
+                "completed"
               ],
               "type": "string"
             }
@@ -5092,6 +5188,161 @@
           }
         }
       },
+      "ExamOptionDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "A"
+          },
+          "text": {
+            "type": "string",
+            "example": "Option A description"
+          }
+        },
+        "required": [
+          "key",
+          "text"
+        ]
+      },
+      "ExamGradingDto": {
+        "type": "object",
+        "properties": {
+          "acceptedKeys": {
+            "example": [
+              "A",
+              "TRUE"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "default": false
+          },
+          "maxWords": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "acceptedKeys"
+        ]
+      },
+      "ExamQuestionDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number",
+            "example": 1
+          },
+          "prompt": {
+            "type": "string",
+            "example": "The study concluded that..."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ],
+            "example": "MULTIPLE_CHOICE_SINGLE"
+          },
+          "points": {
+            "type": "number",
+            "example": 1
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "grading": {
+            "$ref": "#/components/schemas/ExamGradingDto"
+          }
+        },
+        "required": [
+          "number",
+          "prompt",
+          "type",
+          "points"
+        ]
+      },
+      "CreateQuestionGroupDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Questions 1–5"
+          },
+          "instruction": {
+            "type": "string",
+            "example": "Choose TRUE, FALSE or NOT GIVEN"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ],
+            "example": "TRUE_FALSE_NOT_GIVEN"
+          },
+          "order": {
+            "type": "number",
+            "example": 1
+          },
+          "sharedOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "maxWords": {
+            "type": "number",
+            "example": 3
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamQuestionDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "order",
+          "questions"
+        ]
+      },
       "CreateAssignmentDto": {
         "type": "object",
         "properties": {
@@ -5101,7 +5352,7 @@
           },
           "exerciseId": {
             "type": "string",
-            "description": "Published Exercise ObjectId"
+            "description": "Published Exercise or ExamTest ObjectId"
           },
           "title": {
             "type": "string",
@@ -5110,16 +5361,21 @@
           "targetDate": {
             "type": "string",
             "example": "2026-11-20",
-            "description": "Target VN date (YYYY-MM-DD). If provided, openAt=00:00:00 and deadlineAt=23:59:59.999 local VN time"
+            "description": "Target VN date (YYYY-MM-DD). If provided, openAt=06:00:00 and deadlineAt=06:00:00 following day in local VN time"
+          },
+          "assignedDate": {
+            "type": "string",
+            "example": "2026-11-20",
+            "description": "Assigned local VN date (YYYY-MM-DD). Computes availableAt 06:00 to dueAt 06:00 following day"
           },
           "openAt": {
             "type": "string",
-            "example": "2026-11-20T00:00:00.000Z",
+            "example": "2026-11-20T06:00:00.000Z",
             "description": "Explicit UTC open timestamp"
           },
           "deadlineAt": {
             "type": "string",
-            "example": "2026-11-20T23:59:59.999Z",
+            "example": "2026-11-21T06:00:00.000Z",
             "description": "Explicit UTC deadline timestamp"
           },
           "allowRetake": {
@@ -5139,10 +5395,22 @@
               "draft",
               "scheduled",
               "published",
+              "available",
+              "expired",
               "closed",
-              "archived"
+              "archived",
+              "completed"
             ],
             "default": "published"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "schedule",
+              "publish"
+            ],
+            "description": "Teacher action intent"
           },
           "requiredScope": {
             "type": "string",
@@ -5170,6 +5438,31 @@
             "type": "number",
             "example": 1200,
             "description": "Duration in seconds override"
+          },
+          "selectedQuestionGroupIds": {
+            "description": "Optional list of specific QuestionGroup IDs to include",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "targetScorePercent": {
+            "type": "number",
+            "example": 70,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Teacher-configured target score percent for assignment"
+          },
+          "customQuestionGroups": {
+            "description": "Optional custom IELTS question groups authored directly for this assignment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateQuestionGroupDto"
+            }
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Client idempotency key for preventing duplicate assignment creation"
           }
         },
         "required": [
@@ -5183,13 +5476,17 @@
           "title": {
             "type": "string"
           },
+          "assignedDate": {
+            "type": "string",
+            "example": "2026-11-20"
+          },
           "openAt": {
             "type": "string",
-            "example": "2026-11-20T00:00:00.000Z"
+            "example": "2026-11-20T06:00:00.000Z"
           },
           "deadlineAt": {
             "type": "string",
-            "example": "2026-11-20T23:59:59.999Z"
+            "example": "2026-11-21T06:00:00.000Z"
           },
           "allowRetake": {
             "type": "boolean"
@@ -5204,9 +5501,44 @@
               "draft",
               "scheduled",
               "published",
+              "available",
+              "expired",
               "closed",
-              "archived"
+              "archived",
+              "completed"
             ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "schedule",
+              "publish"
+            ]
+          },
+          "requiredScope": {
+            "type": "string",
+            "enum": [
+              "PART",
+              "FULL"
+            ]
+          },
+          "requiredPartId": {
+            "type": "string"
+          },
+          "durationSecondsOverride": {
+            "type": "number"
+          },
+          "selectedQuestionGroupIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "targetScorePercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
           }
         }
       },
@@ -5516,161 +5848,6 @@
           }
         }
       },
-      "ExamOptionDto": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string",
-            "example": "A"
-          },
-          "text": {
-            "type": "string",
-            "example": "Option A description"
-          }
-        },
-        "required": [
-          "key",
-          "text"
-        ]
-      },
-      "ExamGradingDto": {
-        "type": "object",
-        "properties": {
-          "acceptedKeys": {
-            "example": [
-              "A",
-              "TRUE"
-            ],
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "caseSensitive": {
-            "type": "boolean",
-            "default": false
-          },
-          "maxWords": {
-            "type": "number",
-            "example": 3
-          }
-        },
-        "required": [
-          "acceptedKeys"
-        ]
-      },
-      "ExamQuestionDto": {
-        "type": "object",
-        "properties": {
-          "number": {
-            "type": "number",
-            "example": 1
-          },
-          "prompt": {
-            "type": "string",
-            "example": "The study concluded that..."
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "MULTIPLE_CHOICE_SINGLE",
-              "MULTIPLE_CHOICE_MULTIPLE",
-              "TRUE_FALSE_NOT_GIVEN",
-              "YES_NO_NOT_GIVEN",
-              "MATCHING_HEADINGS",
-              "MATCHING_INFORMATION",
-              "MATCHING_FEATURES",
-              "MATCHING_SENTENCE_ENDINGS",
-              "SENTENCE_COMPLETION",
-              "SUMMARY_COMPLETION",
-              "NOTE_COMPLETION",
-              "TABLE_COMPLETION",
-              "FLOW_CHART_COMPLETION",
-              "DIAGRAM_LABEL_COMPLETION",
-              "SHORT_ANSWER"
-            ],
-            "example": "MULTIPLE_CHOICE_SINGLE"
-          },
-          "points": {
-            "type": "number",
-            "example": 1
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamOptionDto"
-            }
-          },
-          "grading": {
-            "$ref": "#/components/schemas/ExamGradingDto"
-          }
-        },
-        "required": [
-          "number",
-          "prompt",
-          "type",
-          "points"
-        ]
-      },
-      "CreateQuestionGroupDto": {
-        "type": "object",
-        "properties": {
-          "title": {
-            "type": "string",
-            "example": "Questions 1–5"
-          },
-          "instruction": {
-            "type": "string",
-            "example": "Choose TRUE, FALSE or NOT GIVEN"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "MULTIPLE_CHOICE_SINGLE",
-              "MULTIPLE_CHOICE_MULTIPLE",
-              "TRUE_FALSE_NOT_GIVEN",
-              "YES_NO_NOT_GIVEN",
-              "MATCHING_HEADINGS",
-              "MATCHING_INFORMATION",
-              "MATCHING_FEATURES",
-              "MATCHING_SENTENCE_ENDINGS",
-              "SENTENCE_COMPLETION",
-              "SUMMARY_COMPLETION",
-              "NOTE_COMPLETION",
-              "TABLE_COMPLETION",
-              "FLOW_CHART_COMPLETION",
-              "DIAGRAM_LABEL_COMPLETION",
-              "SHORT_ANSWER"
-            ],
-            "example": "TRUE_FALSE_NOT_GIVEN"
-          },
-          "order": {
-            "type": "number",
-            "example": 1
-          },
-          "sharedOptions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamOptionDto"
-            }
-          },
-          "maxWords": {
-            "type": "number",
-            "example": 3
-          },
-          "questions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ExamQuestionDto"
-            }
-          }
-        },
-        "required": [
-          "type",
-          "order",
-          "questions"
-        ]
-      },
       "UpdateQuestionGroupDto": {
         "type": "object",
         "properties": {
@@ -5727,6 +5904,10 @@
             "type": "string",
             "description": "ExamTest ObjectId"
           },
+          "assignmentId": {
+            "type": "string",
+            "description": "Assignment ObjectId if attempt is linked to homework"
+          },
           "mode": {
             "type": "string",
             "enum": [
@@ -5751,7 +5932,6 @@
           }
         },
         "required": [
-          "testId",
           "mode"
         ]
       },

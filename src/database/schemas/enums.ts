@@ -57,8 +57,11 @@ export enum AssignmentStatus {
   DRAFT = 'draft',
   SCHEDULED = 'scheduled',
   PUBLISHED = 'published',
+  AVAILABLE = 'available',
+  EXPIRED = 'expired',
   CLOSED = 'closed',
   ARCHIVED = 'archived',
+  COMPLETED = 'completed',
 }
 
 export enum StudentAssignmentStatus {
@@ -66,6 +69,7 @@ export enum StudentAssignmentStatus {
   IN_PROGRESS = 'in_progress',
   SUBMITTED = 'submitted',
   PASSED = 'passed',
+  COMPLETED = 'completed',
   OVERDUE = 'overdue',
   EXCUSED = 'excused',
 }

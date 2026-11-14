@@ -61,6 +61,18 @@ export class Assignment {
   @Prop({ type: Number })
   durationSecondsOverride?: number;
 
+  @Prop({ type: String })
+  assignedDate?: string;
+
+  @Prop({ type: [String], default: [] })
+  selectedQuestionGroupIds?: string[];
+
+  @Prop({ type: Number, min: 0, max: 100, default: 70 })
+  targetScorePercent?: number;
+
+  @Prop({ type: String })
+  idempotencyKey?: string;
+
   @Prop({
     type: String,
     enum: Object.values(AssignmentStatus),
@@ -76,4 +88,6 @@ export const AssignmentSchema = SchemaFactory.createForClass(Assignment);
 AssignmentSchema.index({ courseId: 1, status: 1 });
 AssignmentSchema.index({ deadlineAt: 1, status: 1 });
 AssignmentSchema.index({ status: 1 });
+AssignmentSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+AssignmentSchema.index({ courseId: 1, exerciseId: 1, openAt: 1 });
 

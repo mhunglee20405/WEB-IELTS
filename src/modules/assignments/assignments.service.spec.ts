@@ -110,6 +110,13 @@ describe('AssignmentsService', () => {
     assignmentModel = MockAssignmentInstance;
     assignmentModel.find = jest.fn();
     assignmentModel.findById = jest.fn();
+    assignmentModel.findOne = jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      }),
+    });
     assignmentModel.countDocuments = jest.fn();
 
     courseModel = {
@@ -276,6 +283,37 @@ describe('AssignmentsService', () => {
         { ordered: false },
       );
     });
+
+    it('creates daily assignment with assignedDate computing 06:00 VN bounds', async () => {
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleCourse),
+      });
+      exerciseModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(sampleExercise),
+      });
+      enrollmentModel.find.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([
+          { studentId: student1Id, status: EnrollmentStatus.ACTIVE },
+        ]),
+      });
+
+      const res = await service.create(
+        {
+          courseId: courseId.toHexString(),
+          exerciseId: exerciseId.toHexString(),
+          assignedDate: '2026-11-20',
+        },
+        teacherAActor,
+      );
+
+      expect(res).toBeDefined();
+      expect(res.assignedDate).toBe('2026-11-20');
+      expect(res.openAtVn).toContain('2026-11-20T06:00:00+07:00');
+      expect(res.deadlineAtVn).toContain('2026-11-21T06:00:00+07:00');
+      expect(res.scheduleStatus).toBe('SCHEDULED');
+    });
   });
 
   describe('findById & Answer Protection', () => {
@@ -297,8 +335,8 @@ describe('AssignmentsService', () => {
         version: 1,
       },
       title: 'Climate Change Assignment',
-      openAt: new Date('2026-11-20T00:00:00.000Z'),
-      deadlineAt: new Date('2026-11-20T23:59:59.999Z'),
+      openAt: new Date(Date.now() - 3600000),
+      deadlineAt: new Date(Date.now() + 86400000),
       status: AssignmentStatus.PUBLISHED,
       toObject: function () {
         return { ...this };
@@ -371,6 +409,46 @@ describe('AssignmentsService', () => {
       expect(res.exercise.questions[0].prompt).toBe('Main cause?');
       expect(res.exercise.questions[0].answerSpecification).toBeUndefined();
       expect(res.exercise.questions[0].explanation).toBeUndefined();
+    });
+
+    it('withholds exercise passage and questions if assignment is scheduled (now < openAt)', async () => {
+      const futureAssignmentDoc = {
+        ...mockAssignmentDoc,
+        openAt: new Date(Date.now() + 86400000), // Opens tomorrow
+        deadlineAt: new Date(Date.now() + 86400000 * 2),
+        status: AssignmentStatus.SCHEDULED,
+      };
+
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          populate: jest.fn().mockReturnValue({
+            populate: jest.fn().mockReturnValue({
+              exec: jest.fn().mockResolvedValue(futureAssignmentDoc),
+            }),
+          }),
+        }),
+      });
+
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: new Types.ObjectId(),
+          assignmentId,
+          studentId: student1Id,
+          status: StudentAssignmentStatus.NOT_STARTED,
+          effectiveDeadlineAt: futureAssignmentDoc.deadlineAt,
+          toObject: function () {
+            return { ...this };
+          },
+        }),
+      });
+
+      const res: any = await service.findById(assignmentId.toHexString(), student1Actor);
+      expect(res.scheduleStatus).toBe('SCHEDULED');
+      expect(res.isAvailable).toBe(false);
+      // Content protection: questions & passage are NOT leaked
+      expect(res.exercise.passage).toBeUndefined();
+      expect(res.exercise.questions).toBeUndefined();
+      expect(res.exercise.questionCount).toBe(1);
     });
   });
 

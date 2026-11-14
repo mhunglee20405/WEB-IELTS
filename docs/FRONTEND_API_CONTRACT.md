@@ -442,4 +442,116 @@ sequenceDiagram
 }
 ```
 
+---
+
+## 6. Phase 10: Daily Assignment Scheduling & Teacher-Configurable Assignments
+
+### 6.1 Fixed Daily Window Model (06:00 VN)
+- **Timezone:** `Asia/Ho_Chi_Minh` (+07:00).
+- **Daily Window:** Available from `06:00:00` local on `assignedDate` until `06:00:00` on the following day (exactly 24h).
+- **Access Interval:** `[availableAt, dueAt)`. At exactly `dueAt`, assignment is expired unless a valid extension applies.
+- **Timestamps:** Returned in ISO 8601 UTC with companion `+07:00` Vietnam display fields (`availableAtVn`, `dueAtVn`, `openAtVn`, `deadlineAtVn`).
+
+### 6.2 Status Lifecycle
+- `DRAFT`: Teacher draft, invisible to students.
+- `SCHEDULED`: Scheduled for future date (`now < availableAt`). Visible on student calendar/dashboard with countdown timer, but content (passages, questions, audio) is strictly locked.
+- `AVAILABLE`: Currently open for attempts (`availableAt <= now < dueAt`).
+- `EXPIRED`: Deadline has passed (`now >= dueAt`). No new attempts allowed.
+- `COMPLETED`: Student has submitted and completed the assignment.
+
+### 6.3 Endpoints Reference
+
+#### Validate Assignment Configuration
+```http
+POST /api/v1/assignments/validate
+Authorization: Bearer <teacher_jwt>
+Content-Type: application/json
+```
+Request Body:
+```json
+{
+  "courseId": "673238901111222233334444",
+  "exerciseId": "673238905555666677778888",
+  "assignedDate": "2026-11-28",
+  "requiredScope": "PART",
+  "requiredPartId": "673238902222333344445555",
+  "selectedQuestionGroupIds": ["673238909999000011112222"],
+  "targetScorePercent": 75,
+  "durationSecondsOverride": 1800
+}
+```
+Response 200 OK:
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "valid": true,
+    "errors": []
+  },
+  "timestamp": "2026-11-14T05:30:00.000Z"
+}
+```
+
+#### Preview Assignment (Dry Run)
+```http
+POST /api/v1/assignments/preview
+Authorization: Bearer <teacher_jwt>
+Content-Type: application/json
+```
+Response 200 OK:
+```json
+{
+  "statusCode": 200,
+  "data": {
+    "course": { "id": "...", "code": "IELTS-01", "title": "IELTS Master" },
+    "title": "Climate Change Reading Test",
+    "skill": "READING",
+    "scope": "PART",
+    "assignedDate": "2026-11-28",
+    "availableAt": "2026-11-27T23:00:00.000Z",
+    "availableAtVn": "2026-11-28T06:00:00+07:00",
+    "dueAt": "2026-11-28T23:00:00.000Z",
+    "dueAtVn": "2026-11-29T06:00:00+07:00",
+    "durationSeconds": 1800,
+    "targetScorePercent": 75,
+    "questionCount": 5,
+    "totalPoints": 5,
+    "enrolledStudentsCount": 24,
+    "passage": "<p>Reading passage content...</p>",
+    "questions": [...]
+  }
+}
+```
+
+#### Get Full Preview by Assignment ID (Teacher/Admin)
+```http
+GET /api/v1/assignments/:id/preview
+Authorization: Bearer <teacher_jwt>
+```
+
+#### Student Dashboard & Zero-Leakage View
+When `scheduleStatus === 'SCHEDULED'`:
+- `GET /api/v1/assignments/mine` returns `scheduleStatus: "SCHEDULED"`, `isAvailable: false`, and `remainingSeconds`.
+- `GET /api/v1/assignments/:id` returns metadata only. `exercise` field omits `passage` and `questions`.
+- Starting an attempt via `POST /api/v1/exam-attempts` before `availableAt` returns `403 Forbidden`:
+```json
+{
+  "statusCode": 403,
+  "error": "Forbidden",
+  "code": "ASSIGNMENT_NOT_YET_AVAILABLE",
+  "message": "Assignment is scheduled and not yet available until 2026-11-28T06:00:00+07:00"
+}
+```
+
+#### Attempt Timer Capped by Deadline
+When student starts an attempt during `AVAILABLE` window, expiration is strictly capped:
+`expiresAt = min(startedAt + duration, effectiveDeadlineAt)`
+```json
+{
+  "attemptId": "...",
+  "startedAt": "2026-11-28T22:50:00.000Z",
+  "expiresAt": "2026-11-28T23:00:00.000Z"
+}
+```
+
 

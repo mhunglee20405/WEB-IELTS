@@ -231,6 +231,16 @@ docs/                        # Tài liệu kỹ thuật
 | GET    | /api/v1/health/ready                   | Public                | Readiness probe kiểm tra kết nối trực tiếp tới MongoDB Replica Set và Redis    |
 | GET    | /api/v1/health/memory                  | Public                | Giám sát bộ nhớ Heap độc lập theo ngưỡng `health.heapThresholdMb`             |
 
+## API Endpoints (Phase 10 — Daily Scheduling & Teacher-Configurable Assignments)
+
+| Method | Path                                   | Auth                  | Mô tả                                                                          |
+|--------|----------------------------------------|-----------------------|--------------------------------------------------------------------------------|
+| POST   | /api/v1/assignments/validate           | Admin / Teacher       | Xác thực cấu hình bài tập trước khi giao (kiểm tra scope, partId, date, v.v.)   |
+| POST   | /api/v1/assignments/preview            | Admin / Teacher       | Xem trước cấu trúc bài tập, đoạn văn, danh sách câu hỏi và số lượng học viên  |
+| GET    | /api/v1/assignments/:id/preview       | Admin / Teacher       | Xem trước toàn diện nội dung bài tập đã tạo                                   |
+| POST   | /api/v1/assignments                   | Admin / Teacher       | Tạo bài tập theo ngày (06:00 VN) với `assignedDate`, lọc nhóm câu hỏi, idempotency |
+| GET    | /api/v1/assignments/mine              | Student               | Xem danh sách bài tập cá nhân kèm đếm ngược và trạng thái vòng đời `SCHEDULED`|
+
 ## Swagger UI
 
 Truy cập: http://localhost:3000/api/v1/docs

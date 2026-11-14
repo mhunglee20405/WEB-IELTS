@@ -35,6 +35,7 @@ import {
   ExamTestStatus,
   UserRole,
   StudentAssignmentStatus,
+  AssignmentStatus,
 } from 'src/database/schemas/enums';
 import {
   CreateExamAttemptDto,
@@ -43,6 +44,7 @@ import {
 } from './dto/exam-attempt.dto';
 import { extractObjectId } from 'src/modules/exam-tests/mappers/exam-test.mapper';
 import { gradeQuestion } from 'src/common/utils/exam-grading.util';
+import { formatVnDateTime } from 'src/common/utils/timezone.util';
 
 @Injectable()
 export class ExamAttemptsService {
@@ -61,7 +63,24 @@ export class ExamAttemptsService {
   ) {}
 
   async createAttempt(dto: CreateExamAttemptDto, student: UserDocument) {
-    if (!Types.ObjectId.isValid(dto.testId)) {
+    let resolvedTestId = dto.testId;
+
+    if (!resolvedTestId && dto.studentAssignmentId && Types.ObjectId.isValid(dto.studentAssignmentId)) {
+      const sa = await this.studentAssignmentModel.findById(dto.studentAssignmentId).exec();
+      if (sa) {
+        const asg = await this.assignmentModel.findById(sa.assignmentId).exec();
+        if (asg) {
+          resolvedTestId = extractObjectId(asg.exerciseId);
+        }
+      }
+    } else if (!resolvedTestId && dto.assignmentId && Types.ObjectId.isValid(dto.assignmentId)) {
+      const asg = await this.assignmentModel.findById(dto.assignmentId).exec();
+      if (asg) {
+        resolvedTestId = extractObjectId(asg.exerciseId);
+      }
+    }
+
+    if (!resolvedTestId || !Types.ObjectId.isValid(resolvedTestId)) {
       throw new NotFoundException('Exam test not found');
     }
 
@@ -75,7 +94,7 @@ export class ExamAttemptsService {
       }
     }
 
-    const test = await this.examTestModel.findById(dto.testId).exec();
+    const test = await this.examTestModel.findById(resolvedTestId).exec();
     if (!test) {
       throw new NotFoundException('Exam test not found');
     }
@@ -139,24 +158,64 @@ export class ExamAttemptsService {
       linkedAssignment = await this.assignmentModel
         .findById(linkedStudentAssignment.assignmentId)
         .exec();
+    } else if (dto.assignmentId) {
+      if (!Types.ObjectId.isValid(dto.assignmentId)) {
+        throw new BadRequestException('Invalid assignmentId');
+      }
+      linkedAssignment = await this.assignmentModel.findById(dto.assignmentId).exec();
+      if (!linkedAssignment) {
+        throw new NotFoundException('Assignment not found');
+      }
+      linkedStudentAssignment = await this.studentAssignmentModel
+        .findOne({
+          assignmentId: linkedAssignment._id,
+          studentId: student._id,
+        })
+        .exec();
+    }
 
-      if (linkedAssignment) {
-        if (linkedAssignment.requiredScope && linkedAssignment.requiredScope !== dto.mode) {
-          throw new ForbiddenException({
-            code: 'ASSIGNMENT_SCOPE_LOCKED',
-            message: `This assignment requires ${linkedAssignment.requiredScope} mode`,
-          });
-        }
-        if (
-          dto.mode === ExamMode.PART &&
-          linkedAssignment.requiredPartId &&
-          dto.partId !== linkedAssignment.requiredPartId
-        ) {
-          throw new ForbiddenException({
-            code: 'ASSIGNMENT_SCOPE_LOCKED',
-            message: `This assignment requires part ${linkedAssignment.requiredPartId}`,
-          });
-        }
+    if (linkedAssignment) {
+      const now = new Date();
+      if (
+        linkedAssignment.status === AssignmentStatus.SCHEDULED ||
+        now.getTime() < new Date(linkedAssignment.openAt).getTime()
+      ) {
+        throw new ForbiddenException({
+          statusCode: 403,
+          error: 'Forbidden',
+          code: 'ASSIGNMENT_NOT_YET_AVAILABLE',
+          message: `Assignment is scheduled and not yet available until ${formatVnDateTime(linkedAssignment.openAt)}`,
+          availableAt: linkedAssignment.openAt,
+          availableAtVn: formatVnDateTime(linkedAssignment.openAt),
+        });
+      }
+      const effectiveDeadline = linkedStudentAssignment?.effectiveDeadlineAt || linkedAssignment.deadlineAt;
+      if (effectiveDeadline && now.getTime() >= new Date(effectiveDeadline).getTime()) {
+        throw new BadRequestException({
+          statusCode: 400,
+          error: 'BadRequest',
+          code: 'ASSIGNMENT_EXPIRED',
+          message: 'Assignment deadline has passed',
+          deadlineAt: effectiveDeadline,
+          deadlineAtVn: formatVnDateTime(effectiveDeadline),
+        });
+      }
+
+      if (linkedAssignment.requiredScope && linkedAssignment.requiredScope !== dto.mode) {
+        throw new ForbiddenException({
+          code: 'ASSIGNMENT_SCOPE_LOCKED',
+          message: `This assignment requires ${linkedAssignment.requiredScope} mode`,
+        });
+      }
+      if (
+        dto.mode === ExamMode.PART &&
+        linkedAssignment.requiredPartId &&
+        dto.partId !== linkedAssignment.requiredPartId
+      ) {
+        throw new ForbiddenException({
+          code: 'ASSIGNMENT_SCOPE_LOCKED',
+          message: `This assignment requires part ${linkedAssignment.requiredPartId}`,
+        });
       }
     }
 
@@ -220,7 +279,14 @@ export class ExamAttemptsService {
     }
 
     const startedAt = new Date();
-    const expiresAt = new Date(startedAt.getTime() + durationSeconds * 1000);
+    let expiresAt = new Date(startedAt.getTime() + durationSeconds * 1000);
+    const effectiveDeadline = linkedStudentAssignment?.effectiveDeadlineAt || linkedAssignment?.deadlineAt;
+    if (effectiveDeadline) {
+      const deadline = new Date(effectiveDeadline);
+      if (expiresAt.getTime() > deadline.getTime()) {
+        expiresAt = deadline;
+      }
+    }
 
     const attempt = new this.examAttemptModel({
       studentId: student._id,
@@ -441,8 +507,15 @@ export class ExamAttemptsService {
 
         await submissionDoc.save();
 
+        const linkedAsn = attempt.assignmentId
+          ? await this.assignmentModel.findById(attempt.assignmentId).exec()
+          : null;
+        const targetScore = linkedAsn?.targetScorePercent ?? 70;
+        const isTargetAchieved = rawScore >= targetScore;
+
         sa.lastSubmittedAt = submittedAt;
         sa.bestScore = Math.max(sa.bestScore || 0, scorePercent);
+        sa.isTargetAchieved = isTargetAchieved;
         if (isPassed) {
           sa.status = StudentAssignmentStatus.PASSED;
           if (!sa.passedAt) sa.passedAt = submittedAt;
