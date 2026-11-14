@@ -157,31 +157,49 @@ export class ReadingTranslationsService {
       passageStatuses.push({
         passageId: partId,
         ordinal: part.ordinal,
+        partNumber: part.ordinal,
         title: part.title,
+        passageTitle: part.title,
         unlocked: unlockInfo.unlocked,
+        eligible: unlockInfo.unlocked,
         sourceAttemptId: unlockInfo.sourceAttemptId,
+        unlockedByAttemptId: unlockInfo.sourceAttemptId,
         status,
+        lockReason: unlockInfo.unlocked ? null : 'Cần đạt từ 70% trở lên cho Passage này để mở khóa dịch.',
+        hasSubmission: Boolean(existingSub),
+        submissionStatus: existingSub?.status || null,
+        updatedAt: existingSub?.updatedAt ? existingSub.updatedAt.toISOString() : null,
+        submittedAt: existingSub?.submittedAt ? existingSub.submittedAt.toISOString() : null,
+        reviewedAt: existingSub?.reviewedAt ? existingSub.reviewedAt.toISOString() : null,
       });
     }
 
+    const fullTestPassed = (passageStatuses.length > 0 && passageStatuses.every((p) => p.unlocked)) || false;
+
     return {
       testId: extractObjectId(test._id),
+      testTitle: test.title,
       exerciseVersion: test.version,
       translationEnabled: test.translationEnabled,
+      passThresholdPercent: test.passScore ?? 70,
+      fullTestPassed,
       passages: passageStatuses,
     };
   }
 
   async getPassageTranslation(
     passageId: string,
-    testId: string,
+    testId: string | undefined,
     studentAssignmentId: string | undefined,
     student: UserDocument,
   ) {
-    if (!Types.ObjectId.isValid(testId)) {
-      throw new NotFoundException('Exam test not found');
+    let test: ExamTestDocument | null = null;
+    if (testId && Types.ObjectId.isValid(testId)) {
+      test = await this.examTestModel.findById(testId).exec();
     }
-    const test = await this.examTestModel.findById(testId).exec();
+    if (!test) {
+      test = await this.examTestModel.findOne({ 'parts._id': passageId }).exec();
+    }
     if (!test) {
       throw new NotFoundException('Exam test not found');
     }
@@ -201,25 +219,43 @@ export class ReadingTranslationsService {
       })
       .exec();
 
+    const id = existing ? extractObjectId(existing._id) : undefined;
+    const status = unlockInfo.unlocked ? (existing ? existing.status.toUpperCase() : 'DRAFT') : 'LOCKED';
+
     return {
+      id,
       testId: extractObjectId(test._id),
+      testTitle: test.title,
       passageId,
+      partNumber: part.ordinal,
       ordinal: part.ordinal,
+      passageTitle: part.title,
       title: part.title,
+      passageHtml: part.contentHtml || '',
       sourceContentHtml: part.contentHtml || '',
       unlocked: unlockInfo.unlocked,
-      status: unlockInfo.unlocked ? (existing ? existing.status.toUpperCase() : 'DRAFT') : 'LOCKED',
+      status,
+      revision: (existing as any)?.version || (existing as any)?.__v || 1,
+      textVi: existing?.translatedText || '',
       translatedText: existing?.translatedText || '',
+      teacherFeedback: existing?.teacherComment || null,
       teacherComment: existing?.teacherComment || null,
-      reviewedAt: existing?.reviewedAt || null,
+      reviewedBy: existing?.reviewedBy ? extractObjectId(existing.reviewedBy) : null,
+      reviewedAt: existing?.reviewedAt ? existing.reviewedAt.toISOString() : null,
+      updatedAt: existing?.updatedAt ? existing.updatedAt.toISOString() : null,
+      submittedAt: existing?.submittedAt ? existing.submittedAt.toISOString() : null,
+      studentAssignmentId: studentAssignmentId || null,
     };
   }
 
   async saveDraft(passageId: string, dto: SaveTranslationDraftDto, student: UserDocument) {
-    if (!Types.ObjectId.isValid(dto.testId)) {
-      throw new NotFoundException('Exam test not found');
+    let test: ExamTestDocument | null = null;
+    if (dto.testId && Types.ObjectId.isValid(dto.testId)) {
+      test = await this.examTestModel.findById(dto.testId).exec();
     }
-    const test = await this.examTestModel.findById(dto.testId).exec();
+    if (!test) {
+      test = await this.examTestModel.findOne({ 'parts._id': passageId }).exec();
+    }
     if (!test) {
       throw new NotFoundException('Exam test not found');
     }
@@ -271,20 +307,26 @@ export class ReadingTranslationsService {
       await sub.save();
     }
 
+    const id = extractObjectId(sub._id);
     return {
-      id: extractObjectId(sub._id),
+      id,
       passageId,
       status: sub.status.toUpperCase(),
+      textVi: sub.translatedText,
       translatedText: sub.translatedText,
-      updatedAt: sub.updatedAt,
+      updatedAt: sub.updatedAt ? sub.updatedAt.toISOString() : new Date().toISOString(),
+      revision: (sub as any).version || (sub as any).__v || 1,
     };
   }
 
   async submitTranslation(passageId: string, dto: SubmitReadingTranslationDto, student: UserDocument) {
-    if (!Types.ObjectId.isValid(dto.testId)) {
-      throw new NotFoundException('Exam test not found');
+    let test: ExamTestDocument | null = null;
+    if (dto.testId && Types.ObjectId.isValid(dto.testId)) {
+      test = await this.examTestModel.findById(dto.testId).exec();
     }
-    const test = await this.examTestModel.findById(dto.testId).exec();
+    if (!test) {
+      test = await this.examTestModel.findOne({ 'parts._id': passageId }).exec();
+    }
     if (!test) {
       throw new NotFoundException('Exam test not found');
     }
@@ -345,12 +387,15 @@ export class ReadingTranslationsService {
       await sub.save();
     }
 
+    const id = extractObjectId(sub._id);
     return {
-      id: extractObjectId(sub._id),
+      id,
       passageId,
       status: sub.status.toUpperCase(),
+      textVi: sub.translatedText,
       translatedText: sub.translatedText,
-      submittedAt: sub.submittedAt,
+      submittedAt: sub.submittedAt ? sub.submittedAt.toISOString() : new Date().toISOString(),
+      revision: (sub as any).version || (sub as any).__v || 1,
     };
   }
 
@@ -382,6 +427,7 @@ export class ReadingTranslationsService {
     return {
       items: docs.map((d: any) => ({
         id: extractObjectId(d._id),
+        translationId: extractObjectId(d._id),
         studentId: d.studentId ? extractObjectId(d.studentId._id || d.studentId) : null,
         studentName: d.studentId?.fullName || null,
         studentEmail: d.studentId?.email || null,
@@ -389,8 +435,10 @@ export class ReadingTranslationsService {
         testTitle: d.testId?.title || null,
         passageId: d.passageId || null,
         status: (d.status || '').toUpperCase(),
+        textVi: d.translatedText,
         translatedText: d.translatedText,
         submittedAt: d.submittedAt,
+        teacherFeedback: d.teacherComment,
         teacherComment: d.teacherComment,
         reviewedAt: d.reviewedAt,
       })),

@@ -84,5 +84,22 @@ export class TranslationsController {
   ) {
     return this.translationsService.review(id, dto, actor);
   }
+
+  @Post('translations/:id/review')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({
+    summary: 'Review translation via POST (Frontend alias)',
+  })
+  @ApiParam({ name: 'id', description: 'TranslationSubmission ObjectId' })
+  reviewPost(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @CurrentUser() actor: UserDocument,
+  ) {
+    const reviewDto: ReviewTranslationDto = {
+      teacherComment: dto.teacherComment || dto.feedback || '',
+    };
+    return this.translationsService.review(id, reviewDto, actor);
+  }
 }
 

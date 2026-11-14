@@ -30,6 +30,31 @@ import { UserRole } from 'src/database/schemas/enums';
 export class LessonsController {
   constructor(private readonly lessonsService: LessonsService) {}
 
+  // ── POST /lessons (alias with courseId in body) ────────────────────────
+  @Post('lessons')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Create a lesson (with courseId in body)' })
+  createDirect(
+    @Body() dto: CreateLessonDto & { courseId?: string },
+    @CurrentUser() actor: UserDocument,
+  ) {
+    const courseId = dto.courseId || '';
+    return this.lessonsService.create(courseId, dto, actor);
+  }
+
+  // ── GET /lessons (alias listing lessons) ───────────────────────────────
+  @Get('lessons')
+  @ApiOperation({ summary: 'List lessons (mine or filtered by courseId)' })
+  listDirect(
+    @CurrentUser() actor: UserDocument,
+    @Query() query: LessonQueryDto & { courseId?: string },
+  ) {
+    if (query.courseId) {
+      return this.lessonsService.findByCourse(query.courseId, actor, query);
+    }
+    return this.lessonsService.findMine(actor, query);
+  }
+
   // ── POST /courses/:courseId/lessons ───────────────────────────────────
   @Post('courses/:courseId/lessons')
   @Roles(UserRole.ADMIN, UserRole.TEACHER)

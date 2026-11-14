@@ -25,10 +25,10 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { UserDocument } from 'src/database/schemas/user.schema';
-import { UserRole } from 'src/database/schemas/enums';
+import { UserRole, ExtensionRequestStatus } from 'src/database/schemas/enums';
 
 @ApiTags('Extension Requests')
-@Controller('extension-requests')
+@Controller(['extension-requests', 'extensions'])
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @ApiBearerAuth()
 export class ExtensionsController {
@@ -79,6 +79,17 @@ export class ExtensionsController {
     return this.extensionsService.cancel(id, student);
   }
 
+  @Get('pending')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'List pending extension requests' })
+  findPending(
+    @CurrentUser() actor: UserDocument,
+    @Query() query: ExtensionQueryDto,
+  ) {
+    query.status = ExtensionRequestStatus.PENDING;
+    return this.extensionsService.findAll(actor, query);
+  }
+
   @Get()
   @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({
@@ -99,6 +110,22 @@ export class ExtensionsController {
   @ApiParam({ name: 'id', description: 'ExtensionRequest ObjectId' })
   findOne(@Param('id') id: string, @CurrentUser() actor: UserDocument) {
     return this.extensionsService.findById(id, actor);
+  }
+
+  @Post(':id/decision')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Decide on extension request (alias for :id/review)' })
+  decide(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @CurrentUser() actor: UserDocument,
+  ) {
+    const reviewDto: ReviewExtensionRequestDto = {
+      status: (dto.status || dto.decision || 'approved').toLowerCase(),
+      reviewNote: dto.reviewNote || dto.note || dto.reason || '',
+    };
+    return this.extensionsService.review(id, reviewDto, actor);
   }
 
   @Patch(':id/review')

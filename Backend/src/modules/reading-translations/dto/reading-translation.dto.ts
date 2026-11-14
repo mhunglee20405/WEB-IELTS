@@ -23,9 +23,10 @@ export class TranslationEligibilityQueryDto {
 }
 
 export class SaveTranslationDraftDto {
-  @ApiProperty({ description: 'ExamTest ObjectId' })
+  @ApiPropertyOptional({ description: 'ExamTest ObjectId' })
+  @IsOptional()
   @IsMongoId()
-  testId: string;
+  testId?: string;
 
   @ApiPropertyOptional({ description: 'Optional StudentAssignment ObjectId' })
   @IsOptional()
@@ -48,9 +49,10 @@ export class SaveTranslationDraftDto {
 }
 
 export class SubmitReadingTranslationDto {
-  @ApiProperty({ description: 'ExamTest ObjectId' })
+  @ApiPropertyOptional({ description: 'ExamTest ObjectId' })
+  @IsOptional()
   @IsMongoId()
-  testId: string;
+  testId?: string;
 
   @ApiPropertyOptional({ description: 'Optional StudentAssignment ObjectId' })
   @IsOptional()

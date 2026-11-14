@@ -31,16 +31,24 @@ export function createIdempotencyKey(): string {
 
 async function parseErrorResponse(response: Response): Promise<ApiError> {
   try {
-    const json = (await response.json()) as Partial<ApiErrorPayload> & { error?: string };
-    const rawMessage = json.message ?? json.error ?? response.statusText ?? "Yêu cầu thất bại.";
-    const message = Array.isArray(rawMessage) ? rawMessage.join("; ") : String(rawMessage);
+    const json = (await response.json()) as Partial<ApiErrorPayload> & {
+      correlationId?: string;
+      errors?: unknown;
+    };
+    const rawMsg = json.message;
+    const message = Array.isArray(rawMsg)
+      ? rawMsg.join("; ")
+      : typeof rawMsg === "string"
+        ? rawMsg
+        : response.statusText ?? "Yêu cầu thất bại.";
+
     return new ApiError({
       statusCode: json.statusCode ?? response.status,
-      code: json.code ?? (typeof json.error === "string" ? json.error : `HTTP_${response.status}`),
+      code: json.code ?? `HTTP_${response.status}`,
       message,
-      requestId: json.requestId,
+      requestId: json.requestId ?? json.correlationId,
       timestamp: json.timestamp,
-      details: json.details,
+      details: json.details ?? json.errors,
     });
   } catch {
     return new ApiError({
@@ -74,13 +82,8 @@ async function attemptTokenRefresh(): Promise<string | null> {
         return null;
       }
 
-      const rawRes = await response.json();
-      const tokens = (
-        rawRes && typeof rawRes === "object" && "statusCode" in rawRes && "data" in rawRes
-          ? (rawRes as { data: AuthTokens }).data
-          : rawRes
-      ) as AuthTokens;
-
+      const raw = await response.json();
+      const tokens = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as AuthTokens;
       if (existingSession) {
         tokenStore.setSession({
           user: existingSession.user,
@@ -197,17 +200,17 @@ export async function apiRequest<TResponse, TBody = unknown>(
 
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes("application/json")) {
-        const json = await response.json();
+        const payload = await response.json();
         if (
-          json !== null &&
-          typeof json === "object" &&
-          "statusCode" in json &&
-          "data" in json &&
-          typeof (json as Record<string, unknown>).statusCode === "number"
+          payload !== null &&
+          typeof payload === "object" &&
+          "statusCode" in payload &&
+          "data" in payload &&
+          typeof (payload as { statusCode: unknown }).statusCode === "number"
         ) {
-          return (json as { data: TResponse }).data;
+          return (payload as { data: TResponse }).data;
         }
-        return json as TResponse;
+        return payload as TResponse;
       }
       return (await response.text()) as TResponse;
     } catch (error) {

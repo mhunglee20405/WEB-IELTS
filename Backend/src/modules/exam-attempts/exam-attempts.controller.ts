@@ -5,6 +5,7 @@ import {
   Put,
   Param,
   Body,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -32,6 +33,18 @@ import { UserDocument } from 'src/database/schemas/user.schema';
 @ApiBearerAuth()
 export class ExamAttemptsController {
   constructor(private readonly examAttemptsService: ExamAttemptsService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List attempts of the current student' })
+  findAll(
+    @CurrentUser() actor: UserDocument,
+    @Query('testId') testId?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.examAttemptsService.findAllForStudent(actor, { testId, status, page, limit });
+  }
 
   @Post()
   @ApiOperation({ summary: 'Start a new exam attempt (PART or FULL mode)' })

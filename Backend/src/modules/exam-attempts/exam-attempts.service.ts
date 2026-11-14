@@ -371,15 +371,24 @@ export class ExamAttemptsService {
     const validScope = new Set(attempt.scopeQuestionIds);
     const savedKeys: string[] = [];
 
-    const currentMap = attempt.savedAnswers instanceof Map
-      ? attempt.savedAnswers
-      : new Map(Object.entries(attempt.savedAnswers || {}));
+    const currentMap =
+      attempt.savedAnswers instanceof Map
+        ? attempt.savedAnswers
+        : new Map(Object.entries(attempt.savedAnswers || {}));
 
-    for (const ans of dto.answers) {
-      if (validScope.has(ans.questionId.toString())) {
+    const answersList: { questionId: string; value: any }[] = Array.isArray(dto.answers)
+      ? dto.answers
+      : Object.entries(dto.answers || {}).map(([questionId, value]) => ({ questionId, value }));
+
+    for (const ans of answersList) {
+      if (ans && ans.questionId && validScope.has(ans.questionId.toString())) {
         currentMap.set(ans.questionId.toString(), ans.value);
         savedKeys.push(ans.questionId.toString());
       }
+    }
+
+    if (dto.flaggedQuestionIds && Array.isArray(dto.flaggedQuestionIds)) {
+      attempt.flaggedQuestionIds = dto.flaggedQuestionIds;
     }
 
     attempt.savedAnswers = currentMap;
@@ -388,11 +397,23 @@ export class ExamAttemptsService {
 
     await attempt.save();
 
+    const remainingSeconds = attempt.expiresAt
+      ? Math.max(0, Math.floor((new Date(attempt.expiresAt).getTime() - Date.now()) / 1000))
+      : 0;
+    const answeredCount = Array.from(currentMap.values()).filter((v) =>
+      Array.isArray(v) ? v.length > 0 : String(v ?? '').trim().length > 0,
+    ).length;
+
     return {
       attemptId: extractObjectId(attempt._id),
       answersRevision: attempt.answersRevision,
+      revision: attempt.answersRevision,
       savedQuestionIds: Array.from(currentMap.keys()),
       lastSavedAt: attempt.lastSavedAt,
+      savedAt: attempt.lastSavedAt ? attempt.lastSavedAt.toISOString() : new Date().toISOString(),
+      serverTime: new Date().toISOString(),
+      remainingSeconds,
+      answeredCount,
     };
   }
 
@@ -711,26 +732,238 @@ export class ExamAttemptsService {
       }
     }
 
+    // Compute partBreakdown and questionTypeBreakdown
+    const partStatsMap = new Map<string, { partId: string; partNumber: number; title: string; correctCount: number; totalCount: number }>();
+    const typeStatsMap = new Map<string, { correctCount: number; totalCount: number }>();
+
+    for (const part of test.parts || []) {
+      const partId = extractObjectId((part as any)._id);
+      if (attempt.mode === ExamMode.PART && attempt.partId && partId !== attempt.partId) {
+        continue;
+      }
+      partStatsMap.set(partId, {
+        partId,
+        partNumber: part.ordinal || 1,
+        title: part.title,
+        correctCount: 0,
+        totalCount: 0,
+      });
+    }
+
+    const studentAnswersMap = attempt.savedAnswers instanceof Map
+      ? attempt.savedAnswers
+      : new Map(Object.entries(attempt.savedAnswers || {}));
+
+    for (const part of test.parts || []) {
+      const partId = extractObjectId((part as any)._id);
+      const partEntry = partStatsMap.get(partId);
+      for (const group of part.questionGroups || []) {
+        for (const q of group.questions || []) {
+          const qNum = q.number.toString();
+          if (attempt.scopeQuestionIds.includes(qNum)) {
+            const qType = q.type || group.type || 'MULTIPLE_CHOICE';
+            if (!typeStatsMap.has(qType)) {
+              typeStatsMap.set(qType, { correctCount: 0, totalCount: 0 });
+            }
+            const typeEntry = typeStatsMap.get(qType)!;
+            typeEntry.totalCount++;
+            if (partEntry) partEntry.totalCount++;
+
+            const val = studentAnswersMap.get(qNum);
+            const gradeRes = gradeQuestion(qType, val, q.grading, q.points ?? 1);
+            if (gradeRes.isCorrect) {
+              typeEntry.correctCount++;
+              if (partEntry) partEntry.correctCount++;
+            }
+          }
+        }
+      }
+    }
+
+    const partBreakdown = Array.from(partStatsMap.values()).map((p) => ({
+      partId: p.partId,
+      partNumber: p.partNumber,
+      title: p.title,
+      correctCount: p.correctCount,
+      totalCount: p.totalCount,
+      percentage: p.totalCount > 0 ? Math.round((p.correctCount / p.totalCount) * 100) : 0,
+    }));
+
+    const questionTypeBreakdown = Array.from(typeStatsMap.entries()).map(([qType, stats]) => ({
+      questionType: qType,
+      label: qType,
+      correctCount: stats.correctCount,
+      totalCount: stats.totalCount,
+    }));
+
+    let ieltsBandEstimate: number | null = null;
+    if (scorePercent >= 90) ieltsBandEstimate = 9.0;
+    else if (scorePercent >= 82) ieltsBandEstimate = 8.5;
+    else if (scorePercent >= 75) ieltsBandEstimate = 8.0;
+    else if (scorePercent >= 68) ieltsBandEstimate = 7.5;
+    else if (scorePercent >= 60) ieltsBandEstimate = 7.0;
+    else if (scorePercent >= 52) ieltsBandEstimate = 6.5;
+    else if (scorePercent >= 45) ieltsBandEstimate = 6.0;
+    else if (scorePercent >= 38) ieltsBandEstimate = 5.5;
+    else if (scorePercent >= 30) ieltsBandEstimate = 5.0;
+    else ieltsBandEstimate = 4.5;
+
+    const attemptId = extractObjectId(attempt._id);
+    const testId = extractObjectId(test._id);
+
     return {
-      attemptId: extractObjectId(attempt._id),
+      attemptId,
+      id: attemptId,
+      testId,
+      testTitle: test.title || 'IELTS Exam Test',
       submissionId: submissionId || null,
+      studentAssignmentId: attempt.studentAssignmentId ? extractObjectId(attempt.studentAssignmentId) : null,
       status: attempt.status,
       skill: attempt.skill,
       mode: attempt.mode,
-      partId: attempt.partId,
+      partId: attempt.partId ? extractObjectId(attempt.partId) : null,
       earnedPoints,
       totalPoints,
       scorePercent,
       passScore,
+      passThresholdPercent: passScore,
       passed: Boolean(isPassed),
       correctCount,
       questionCount: attempt.scopeQuestionIds.length,
+      totalQuestions: attempt.scopeQuestionIds.length,
+      ieltsBandEstimate,
       answerReviewAvailable: Boolean(isPassed),
+      answerReviewLockedReason: isPassed ? null : 'Cần đạt từ 70% trở lên để mở khóa xem đáp án và giải thích.',
+      translationEligible: isReading && Boolean(isPassed),
+      translationEligibilityHint: isReading && isPassed ? 'Đã mở khóa dịch bài đọc tiếng Việt' : null,
       translation: {
         available: isReading && Boolean(isPassed),
         unlockedPassageIds,
       },
-      submittedAt: attempt.submittedAt || null,
+      partBreakdown,
+      questionTypeBreakdown,
+      submittedAt: attempt.submittedAt ? attempt.submittedAt.toISOString() : null,
+    };
+  }
+
+  async findAllForStudent(
+    student: UserDocument,
+    query: { testId?: string; status?: string; page?: number; limit?: number },
+  ) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
+
+    const filter: Record<string, any> = {
+      studentId: student._id,
+    };
+    if (query.testId && Types.ObjectId.isValid(query.testId)) {
+      filter['testId'] = new Types.ObjectId(query.testId);
+    }
+    if (query.status) {
+      filter['status'] = query.status;
+    }
+
+    const [docs, total] = await Promise.all([
+      this.examAttemptModel
+        .find(filter)
+        .sort({ startedAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .populate('testId', 'title skill allowedModes parts')
+        .exec(),
+      this.examAttemptModel.countDocuments(filter).exec(),
+    ]);
+
+    const items = docs.map((att: any) => {
+      const test = att.testId;
+      const id = extractObjectId(att._id);
+      return {
+        id,
+        attemptId: id,
+        testId: test ? extractObjectId(test._id || test) : '',
+        testTitle: test?.title || 'IELTS Exam Test',
+        skill: att.skill,
+        mode: att.mode,
+        partId: att.partId ? extractObjectId(att.partId) : null,
+        partTitle: null,
+        status: att.status,
+        scorePercent: att.scorePercent ?? null,
+        passed: att.passed ?? null,
+        startedAt: att.startedAt ? att.startedAt.toISOString() : null,
+        submittedAt: att.submittedAt ? att.submittedAt.toISOString() : null,
+      };
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
+  private stripPartForStudent(part: any) {
+    const partId = extractObjectId(part._id);
+    let qMin = 999999;
+    let qMax = 0;
+    let totalPartQuestions = 0;
+
+    const questionGroups = (part.questionGroups || []).map((g: any, gIdx: number) => {
+      const gQuestions = (g.questions || []).map((q: any) => {
+        const qNum = Number(q.number);
+        if (qNum < qMin) qMin = qNum;
+        if (qNum > qMax) qMax = qNum;
+        totalPartQuestions++;
+        return {
+          id: q.number.toString(),
+          groupId: extractObjectId(g._id || `grp-${gIdx}`),
+          questionNumber: q.number,
+          prompt: q.prompt,
+          questionType: q.type || g.type,
+          options: q.options || [],
+          maxSelections: 1,
+          maxWords: q.grading?.maxWords || g.maxWords || undefined,
+        };
+      });
+
+      return {
+        id: extractObjectId(g._id || `grp-${gIdx}`),
+        partId,
+        groupNumber: g.order || gIdx + 1,
+        title: g.title,
+        instructionHtml: g.instruction || '',
+        instruction: g.instruction || '',
+        questionType: g.type,
+        questionNumberStart: gQuestions.length > 0 ? gQuestions[0].questionNumber : 1,
+        questionNumberEnd: gQuestions.length > 0 ? gQuestions[gQuestions.length - 1].questionNumber : 1,
+        sharedOptions: g.sharedOptions || [],
+        maxWords: g.maxWords,
+        questions: gQuestions,
+      };
+    });
+
+    if (qMin > qMax) {
+      qMin = 1;
+      qMax = Math.max(1, totalPartQuestions);
+    }
+
+    return {
+      id: partId,
+      partNumber: part.ordinal,
+      ordinal: part.ordinal,
+      partType: (part.type || 'PASSAGE').toUpperCase(),
+      type: part.type,
+      title: part.title,
+      passageTitle: part.title,
+      passageHtml: part.contentHtml || '',
+      contentHtml: part.contentHtml || null,
+      audioAsset: part.audioAssetId ? { assetId: extractObjectId(part.audioAssetId) } : undefined,
+      audio: part.audioAssetId ? { assetId: extractObjectId(part.audioAssetId) } : null,
+      durationSeconds: part.durationSeconds || undefined,
+      questionCount: totalPartQuestions,
+      questionNumberRange: { start: qMin, end: qMax },
+      questionGroups,
     };
   }
 
@@ -742,26 +975,30 @@ export class ExamAttemptsService {
       : 0;
 
     let partsSummary: any[] = [];
+    let publicParts: any[] = [];
+
     if (test && test.parts) {
-      partsSummary = test.parts
-        .filter((p: any) => {
-          if (attempt.mode === ExamMode.PART) {
-            return extractObjectId(p._id) === attempt.partId;
-          }
-          return true;
-        })
-        .map((p: any) => {
-          let partQCount = 0;
-          (p.questionGroups || []).forEach((g: any) => {
-            partQCount += (g.questions || []).length;
-          });
-          return {
-            id: extractObjectId(p._id),
-            ordinal: p.ordinal,
-            title: p.title,
-            questionCount: partQCount,
-          };
+      const filteredParts = test.parts.filter((p: any) => {
+        if (attempt.mode === ExamMode.PART && attempt.partId) {
+          return extractObjectId(p._id) === attempt.partId;
+        }
+        return true;
+      });
+
+      partsSummary = filteredParts.map((p: any) => {
+        let partQCount = 0;
+        (p.questionGroups || []).forEach((g: any) => {
+          partQCount += (g.questions || []).length;
         });
+        return {
+          id: extractObjectId(p._id),
+          ordinal: p.ordinal,
+          title: p.title,
+          questionCount: partQCount,
+        };
+      });
+
+      publicParts = filteredParts.map((p: any) => this.stripPartForStudent(p));
     }
 
     const savedAnswersObj: Record<string, any> = {};
@@ -773,21 +1010,48 @@ export class ExamAttemptsService {
       Object.assign(savedAnswersObj, raw.savedAnswers);
     }
 
+    const totalQuestions = (raw.scopeQuestionIds || []).length;
+    const answeredCount = Object.values(savedAnswersObj).filter((v) =>
+      Array.isArray(v) ? v.length > 0 : String(v ?? '').trim().length > 0,
+    ).length;
+
+    const durationSeconds = raw.expiresAt && raw.startedAt
+      ? Math.max(0, Math.floor((new Date(raw.expiresAt).getTime() - new Date(raw.startedAt).getTime()) / 1000))
+      : 3600;
+
+    const id = extractObjectId(raw._id);
+    const testId = extractObjectId(raw.testId);
+
     return {
-      id: extractObjectId(raw._id),
-      testId: extractObjectId(raw.testId),
+      id,
+      attemptId: id,
+      testId,
+      testTitle: test?.title || 'IELTS Exam Test',
       exerciseVersion: raw.exerciseVersion,
       skill: raw.skill,
       mode: raw.mode,
-      partId: raw.partId,
+      partId: raw.partId ? extractObjectId(raw.partId) : null,
+      studentAssignmentId: raw.studentAssignmentId ? extractObjectId(raw.studentAssignmentId) : null,
       status: raw.status,
-      startedAt: raw.startedAt,
-      expiresAt: raw.expiresAt,
+      startedAt: raw.startedAt instanceof Date ? raw.startedAt.toISOString() : new Date(raw.startedAt).toISOString(),
+      expiresAt: raw.expiresAt instanceof Date ? raw.expiresAt.toISOString() : new Date(raw.expiresAt).toISOString(),
+      serverTime: new Date().toISOString(),
       remainingSeconds,
-      answersRevision: raw.answersRevision,
+      durationSeconds,
+      revision: raw.answersRevision ?? 0,
+      answersRevision: raw.answersRevision ?? 0,
+      answers: savedAnswersObj,
       savedAnswers: savedAnswersObj,
-      scopeQuestionIds: raw.scopeQuestionIds,
-      parts: partsSummary,
+      flaggedQuestionIds: raw.flaggedQuestionIds || [],
+      scopeQuestionIds: raw.scopeQuestionIds || [],
+      totalQuestions,
+      answeredCount,
+      submittedAt: raw.submittedAt
+        ? raw.submittedAt instanceof Date
+          ? raw.submittedAt.toISOString()
+          : new Date(raw.submittedAt).toISOString()
+        : null,
+      parts: publicParts.length > 0 ? publicParts : partsSummary,
     };
   }
 }

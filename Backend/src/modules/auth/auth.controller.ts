@@ -53,8 +53,10 @@ export class AuthController {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
+      roles: [user.role],
       status: user.status,
       phone: user.phone,
+      timezone: 'Asia/Ho_Chi_Minh',
     };
   }
 }

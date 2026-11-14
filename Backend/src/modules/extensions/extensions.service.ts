@@ -530,25 +530,36 @@ export class ExtensionsService {
   private formatRequest(doc: ExtensionRequestDocument, sa?: any) {
     const raw = typeof doc.toObject === 'function' ? doc.toObject() : doc;
     const studentAssignment = sa || raw.studentAssignmentId;
+    const assignmentTitle =
+      studentAssignment?.assignmentId?.title ||
+      studentAssignment?.title ||
+      raw.assignmentTitle ||
+      'Assignment';
 
     return {
       id: extractObjectId(raw._id),
       studentId: extractObjectId(raw.studentId),
       student: raw.studentId && typeof raw.studentId === 'object' ? raw.studentId : undefined,
+      studentName: raw.student?.fullName || raw.studentId?.fullName || undefined,
       courseId: extractObjectId(raw.courseId),
       course: raw.courseId && typeof raw.courseId === 'object' ? raw.courseId : undefined,
+      courseTitle: raw.course?.title || raw.courseId?.title || undefined,
       studentAssignmentId: extractObjectId(raw.studentAssignmentId),
+      assignmentTitle,
       studentAssignment:
         studentAssignment && typeof studentAssignment === 'object' ? studentAssignment : undefined,
       reason: raw.reason,
       requestedDeadlineAt: raw.requestedDeadlineAt,
       requestedDeadlineAtVn: formatVnDateTime(raw.requestedDeadlineAt),
+      requestedDueAt: raw.requestedDeadlineAt ? new Date(raw.requestedDeadlineAt).toISOString() : undefined,
+      originalDueAt: studentAssignment?.originalDeadlineAt ? new Date(studentAssignment.originalDeadlineAt).toISOString() : undefined,
+      grantedDueAt: raw.grantedDeadlineAt ? new Date(raw.grantedDeadlineAt).toISOString() : undefined,
       status: raw.status,
       reviewedBy: raw.reviewedBy ? extractObjectId(raw.reviewedBy) : undefined,
-      reviewedAt: raw.reviewedAt,
+      reviewedAt: raw.reviewedAt ? new Date(raw.reviewedAt).toISOString() : undefined,
       reviewedAtVn: raw.reviewedAt ? formatVnDateTime(raw.reviewedAt) : undefined,
       reviewNote: raw.reviewNote,
-      createdAt: raw.createdAt,
+      createdAt: raw.createdAt ? new Date(raw.createdAt).toISOString() : undefined,
       createdAtVn: raw.createdAt ? formatVnDateTime(raw.createdAt) : undefined,
       updatedAt: raw.updatedAt,
     };

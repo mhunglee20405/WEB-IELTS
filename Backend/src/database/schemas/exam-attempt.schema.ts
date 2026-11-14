@@ -83,6 +83,9 @@ export class ExamAttempt {
   @Prop({ type: [String], default: [] })
   scopeQuestionIds: string[];
 
+  @Prop({ type: [String], default: [] })
+  flaggedQuestionIds?: string[];
+
   /**
    * Student's saved answers keyed by question number (string).
    * Value type varies by question type (string | string[]).
