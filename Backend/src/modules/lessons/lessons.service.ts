@@ -15,6 +15,7 @@ import {
   CourseStatus,
   EnrollmentStatus,
   LessonStatus,
+  LessonType,
   UserRole,
 } from 'src/database/schemas/enums';
 import { TIMEZONE_VN } from 'src/common/constants';
@@ -27,14 +28,20 @@ import { LessonQueryDto } from './dto/lesson-query.dto';
 export interface LessonResponse {
   id: string;
   courseId: unknown;
+  courseTitle?: string;
+  teacherName?: string;
   title: string;
   startAt: Date;
   endAt: Date;
+  startTime: string;
+  endTime: string;
   startAtVn: string;
   endAtVn: string;
   timezone: string;
   meetUrl?: string;
   content?: string;
+  description?: string;
+  type: string;
   status: LessonStatus;
   createdAt?: Date;
   updatedAt?: Date;
@@ -74,8 +81,13 @@ export class LessonsService {
       throw new UnprocessableEntityException('Cannot create lessons in an archived course');
     }
 
-    const startAt = new Date(dto.startAt);
-    const endAt = new Date(dto.endAt);
+    const rawStart = dto.startAt || dto.startTime;
+    const rawEnd = dto.endAt || dto.endTime;
+    if (!rawStart || !rawEnd) {
+      throw new BadRequestException('startAt (or startTime) and endAt (or endTime) are required');
+    }
+    const startAt = new Date(rawStart);
+    const endAt = new Date(rawEnd);
     this.validateTimeRange(startAt, endAt);
 
     const lesson = new this.lessonModel({
@@ -84,7 +96,8 @@ export class LessonsService {
       startAt,
       endAt,
       meetUrl: dto.meetUrl,
-      content: dto.content,
+      content: dto.content || dto.description,
+      type: dto.type ?? (dto.meetUrl ? LessonType.LIVE_MEET : LessonType.WORKSHOP),
       status: dto.status ?? LessonStatus.SCHEDULED,
     });
 
@@ -206,13 +219,22 @@ export class LessonsService {
       this.coursesService.assertTeacherOwns(course, (actor._id as Types.ObjectId).toHexString());
     }
 
-    const startAt = dto.startAt ? new Date(dto.startAt) : lesson.startAt;
-    const endAt = dto.endAt ? new Date(dto.endAt) : lesson.endAt;
+    const rawStart = dto.startAt || dto.startTime;
+    const rawEnd = dto.endAt || dto.endTime;
+    const startAt = rawStart ? new Date(rawStart) : lesson.startAt;
+    const endAt = rawEnd ? new Date(rawEnd) : lesson.endAt;
     this.validateTimeRange(startAt, endAt);
 
-    const updatePayload: Record<string, unknown> = { ...dto };
-    if (dto.startAt) updatePayload['startAt'] = startAt;
-    if (dto.endAt) updatePayload['endAt'] = endAt;
+    const updatePayload: Record<string, unknown> = {};
+    if (dto.title !== undefined) updatePayload['title'] = dto.title;
+    if (rawStart) updatePayload['startAt'] = startAt;
+    if (rawEnd) updatePayload['endAt'] = endAt;
+    if (dto.meetUrl !== undefined) updatePayload['meetUrl'] = dto.meetUrl;
+    if (dto.type !== undefined) updatePayload['type'] = dto.type;
+    if (dto.content !== undefined || dto.description !== undefined) {
+      updatePayload['content'] = dto.content ?? dto.description;
+    }
+    if (dto.status !== undefined) updatePayload['status'] = dto.status;
 
     const updated = await this.lessonModel
       .findByIdAndUpdate(id, { $set: updatePayload }, { new: true })
@@ -283,17 +305,51 @@ export class LessonsService {
 
   private mapLesson(lesson: LessonDocument): LessonResponse {
     const obj = lesson.toObject();
+
+    let courseIdVal: unknown = obj.courseId;
+    let courseTitle: string | undefined;
+    let teacherName: string | undefined;
+
+    if (obj.courseId && typeof obj.courseId === 'object') {
+      const popCourse = obj.courseId as Record<string, any>;
+      courseTitle = popCourse.title || popCourse.code;
+      if (popCourse.teacherId && typeof popCourse.teacherId === 'object') {
+        teacherName = popCourse.teacherId.fullName;
+      }
+    }
+
+    const startIso =
+      obj.startAt instanceof Date
+        ? obj.startAt.toISOString()
+        : obj.startAt
+          ? new Date(obj.startAt).toISOString()
+          : '';
+    const endIso =
+      obj.endAt instanceof Date
+        ? obj.endAt.toISOString()
+        : obj.endAt
+          ? new Date(obj.endAt).toISOString()
+          : '';
+
+    const persistedType = obj.type ?? (obj.meetUrl ? LessonType.LIVE_MEET : LessonType.WORKSHOP);
+
     return {
       id: (lesson._id as Types.ObjectId).toHexString(),
-      courseId: obj.courseId,
+      courseId: courseIdVal,
+      courseTitle,
+      teacherName,
       title: obj.title,
       startAt: obj.startAt,
       endAt: obj.endAt,
+      startTime: startIso,
+      endTime: endIso,
       startAtVn: formatVnDateTime(obj.startAt),
       endAtVn: formatVnDateTime(obj.endAt),
       timezone: TIMEZONE_VN,
       meetUrl: obj.meetUrl,
       content: obj.content,
+      description: obj.content,
+      type: persistedType,
       status: obj.status,
       createdAt: obj.createdAt,
       updatedAt: obj.updatedAt,

@@ -64,9 +64,12 @@ export class CoursesController {
 
   // ── GET /courses ──────────────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
-  @ApiOperation({ summary: 'List all courses (Admin: all; Teacher: assigned only)' })
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT)
+  @ApiOperation({ summary: 'List all courses (Admin: all; Teacher: assigned only; Student: enrolled only)' })
   findAll(@CurrentUser() actor: UserDocument, @Query() query: CourseQueryDto) {
+    if (actor.role === UserRole.STUDENT) {
+      return this.coursesService.findMine(actor, query);
+    }
     return this.coursesService.findAll(actor, query);
   }
 

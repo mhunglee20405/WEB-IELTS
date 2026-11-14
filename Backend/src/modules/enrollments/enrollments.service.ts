@@ -66,14 +66,8 @@ export class EnrollmentsService {
     ]);
 
     if (!course) throw new NotFoundException('Course not found');
-    if (course.status === CourseStatus.ARCHIVED) {
-      throw new UnprocessableEntityException('Cannot enroll students into an archived course');
-    }
-    if (!student) {
-      throw new UnprocessableEntityException('Student not found or is not an active student');
-    }
 
-    // Teacher ownership check
+    // Teacher ownership check (Authorization must precede domain state validation)
     if (actor.role === UserRole.TEACHER) {
       if (
         (course.teacherId as Types.ObjectId).toHexString() !==
@@ -81,6 +75,13 @@ export class EnrollmentsService {
       ) {
         throw new ForbiddenException('You can only enroll students into your own courses');
       }
+    }
+
+    if (course.status === CourseStatus.ARCHIVED) {
+      throw new UnprocessableEntityException('Cannot enroll students into an archived course');
+    }
+    if (!student) {
+      throw new UnprocessableEntityException('Student not found or is not an active student');
     }
 
     const isOneToOne = course.type === CourseType.ONE_TO_ONE;

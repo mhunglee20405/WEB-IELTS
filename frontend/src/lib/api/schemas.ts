@@ -19,7 +19,7 @@ export const AuthUserSchema = z.object({
 export const AuthTokensSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string().optional(),
-  expiresIn: z.number().optional(),
+  expiresIn: z.union([z.number(), z.string()]).optional(),
 });
 
 export const LoginResponseSchema = z.object({
@@ -30,42 +30,143 @@ export const LoginResponseSchema = z.object({
 export const CourseStatusSchema = z.enum(["active", "upcoming", "archived"]);
 export const CourseFormatSchema = z.enum(["1:1", "group"]);
 
-export const CourseSchema = z.object({
-  id: z.string(),
-  code: z.string(),
-  title: z.string(),
-  description: z.string().optional(),
-  courseType: CourseFormatSchema.optional(),
-  startBand: z.number().optional(),
-  targetBand: z.number().optional(),
-  enrollmentStatus: z.enum(["active", "withdrawn", "completed"]).optional(),
-  teacherId: z.string(),
-  teacherName: z.string().optional(),
-  status: CourseStatusSchema,
-  timezone: z.string().default("Asia/Ho_Chi_Minh"),
-  studentCount: z.number().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  createdAt: z.string().optional(),
-});
+export const CourseSchema = z
+  .preprocess((raw: unknown) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const val = { ...(raw as Record<string, unknown>) };
+    if (val._id && !val.id) {
+      val.id = String(val._id);
+    }
+    if (val.teacherId && typeof val.teacherId === "object") {
+      const teacherObj = val.teacherId as Record<string, unknown>;
+      if (!val.teacherName && (teacherObj.fullName || teacherObj.name)) {
+        val.teacherName = String(teacherObj.fullName || teacherObj.name);
+      }
+      val.teacherId = String(teacherObj._id || teacherObj.id || "");
+    }
+    if (val.type && !val.courseType) {
+      val.courseType = val.type === "one_to_one" ? "1:1" : "group";
+    }
+    return val;
+  }, z.object({
+    id: z.string(),
+    code: z.string(),
+    title: z.string(),
+    description: z.string().optional(),
+    courseType: CourseFormatSchema.optional(),
+    startBand: z.number().optional(),
+    targetBand: z.number().optional(),
+    enrollmentStatus: z.enum(["active", "withdrawn", "completed"]).optional(),
+    teacherId: z.string(),
+    teacherName: z.string().optional(),
+    status: CourseStatusSchema,
+    timezone: z.string().default("Asia/Ho_Chi_Minh"),
+    studentCount: z.number().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    createdAt: z.string().optional(),
+  }));
 
 export const LessonTypeSchema = z.enum(["live_meet", "workshop", "review"]);
 export const LessonStatusSchema = z.enum(["scheduled", "live", "completed", "cancelled"]);
 
-export const LessonSchema = z.object({
-  id: z.string(),
-  courseId: z.string(),
-  courseTitle: z.string().optional(),
-  teacherName: z.string().optional(),
-  title: z.string(),
-  description: z.string().optional(),
-  type: LessonTypeSchema,
-  status: LessonStatusSchema.optional(),
-  startTime: z.string(),
-  endTime: z.string(),
-  timezone: z.string().default("Asia/Ho_Chi_Minh"),
-  meetUrl: z.string().optional(),
-});
+export const LessonSchema = z
+  .preprocess((raw: unknown) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const val = raw as Record<string, unknown>;
+
+    let courseId = val.courseId;
+    let courseTitle = val.courseTitle as string | undefined;
+    let teacherName = val.teacherName as string | undefined;
+
+    if (courseId && typeof courseId === "object") {
+      const cObj = courseId as Record<string, unknown>;
+      courseId = (cObj._id ?? cObj.id ?? String(cObj)) as string;
+      if (!courseTitle) {
+        courseTitle = (cObj.title ?? cObj.code) as string | undefined;
+      }
+      if (!teacherName && cObj.teacherId && typeof cObj.teacherId === "object") {
+        teacherName = (cObj.teacherId as Record<string, unknown>).fullName as string | undefined;
+      }
+    } else if (typeof courseId !== "string") {
+      courseId = courseId ? String(courseId) : "";
+    }
+
+    const startVal = val.startTime ?? val.startAt;
+    const endVal = val.endTime ?? val.endAt;
+
+    const startTime =
+      startVal instanceof Date
+        ? startVal.toISOString()
+        : typeof startVal === "string"
+          ? startVal.trim()
+          : "";
+
+    const endTime =
+      endVal instanceof Date
+        ? endVal.toISOString()
+        : typeof endVal === "string"
+          ? endVal.trim()
+          : "";
+
+    const description = (val.description ?? val.content) as string | undefined;
+    const content = (val.content ?? val.description) as string | undefined;
+    const meetUrl = (val.meetUrl ?? val.meetingUrl) as string | undefined;
+
+    let type = val.type as string | undefined;
+    if (!type || (type !== "live_meet" && type !== "workshop" && type !== "review")) {
+      type = meetUrl ? "live_meet" : "workshop";
+    }
+
+    let status = val.status as string | undefined;
+    if (!status || (status !== "scheduled" && status !== "live" && status !== "completed" && status !== "cancelled")) {
+      status = "scheduled";
+    }
+
+    return {
+      ...val,
+      id: val.id ? String(val.id) : val._id ? String(val._id) : "",
+      courseId,
+      courseTitle,
+      teacherName,
+      description,
+      content,
+      meetUrl,
+      type,
+      status,
+      startTime,
+      endTime,
+      startAt: startTime || undefined,
+      endAt: endTime || undefined,
+      timezone: (val.timezone as string) || "Asia/Ho_Chi_Minh",
+    };
+  }, z.object({
+    id: z.string().min(1),
+    courseId: z.string().min(1),
+    courseTitle: z.string().optional(),
+    teacherName: z.string().optional(),
+    title: z.string().min(1),
+    description: z.string().optional(),
+    content: z.string().optional(),
+    type: LessonTypeSchema,
+    status: LessonStatusSchema.default("scheduled"),
+    startTime: z.string().refine((val) => val.length > 0 && !Number.isNaN(Date.parse(val)), {
+      message: "startTime must be a valid ISO date string",
+    }),
+    endTime: z.string().refine((val) => val.length > 0 && !Number.isNaN(Date.parse(val)), {
+      message: "endTime must be a valid ISO date string",
+    }),
+    startAt: z.string().optional(),
+    endAt: z.string().optional(),
+    startAtVn: z.string().optional(),
+    endAtVn: z.string().optional(),
+    timezone: z.string().default("Asia/Ho_Chi_Minh"),
+    meetUrl: z.string().optional(),
+  }))
+  .refine((data) => Date.parse(data.startTime) < Date.parse(data.endTime), {
+    path: ["endTime"],
+    message: "endTime must be strictly after startTime",
+  });
 
 export const ExerciseTypeSchema = z.enum(["reading", "listening"]);
 export const ExerciseStatusSchema = z.enum(["draft", "published", "archived"]);
@@ -645,8 +746,8 @@ export const ExamTestSummarySchema = z.object({
   totalQuestions: z.number(),
   totalDurationSeconds: z.number(),
   difficulty: z.string().optional(),
-  tags: z.array(z.string()),
-  allowedModes: z.array(ExamModeSchema),
+  tags: z.array(z.string()).default([]),
+  allowedModes: z.array(ExamModeSchema).default([]),
   createdBy: z
     .object({
       id: z.string(),

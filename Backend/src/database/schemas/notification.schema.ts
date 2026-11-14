@@ -32,6 +32,9 @@ export class Notification {
   @Prop()
   readAt?: Date;
 
+  @Prop()
+  idempotencyKey?: string;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -39,4 +42,5 @@ export class Notification {
 export const NotificationSchema = SchemaFactory.createForClass(Notification);
 NotificationSchema.index({ userId: 1, createdAt: -1 });
 NotificationSchema.index({ userId: 1, isRead: 1 });
+NotificationSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 

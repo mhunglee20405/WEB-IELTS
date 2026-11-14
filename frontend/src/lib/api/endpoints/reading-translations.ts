@@ -25,10 +25,11 @@ export const readingTranslationsApi = {
     });
   },
 
-  getPassage(passageId: string): Promise<ReadingTranslationDetail> {
+  getPassage(passageId: string, testId?: string): Promise<ReadingTranslationDetail> {
+    const qs = testId ? buildQueryString({ testId }) : "";
     return apiRequest<ReadingTranslationDetail>({
       method: "GET",
-      path: `/reading-translations/${encodeURIComponent(passageId)}`,
+      path: `/reading-translations/${encodeURIComponent(passageId)}${qs}`,
     });
   },
 

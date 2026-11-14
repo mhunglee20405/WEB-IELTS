@@ -95,6 +95,16 @@ export function normalizeApiError(error: unknown): ApiError {
     return error;
   }
 
+  if (error instanceof Error && (error.name === "ZodError" || error.constructor.name === "ZodError")) {
+    return new ApiError({
+      statusCode: 422,
+      code: "VALIDATION_ERROR",
+      message: CODE_MESSAGES_VI.VALIDATION_ERROR!,
+      timestamp: new Date().toISOString(),
+      details: error,
+    });
+  }
+
   if (error instanceof Error) {
     return new ApiError({
       statusCode: 0,

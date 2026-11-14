@@ -37,5 +37,6 @@ export class PenaltyTransaction {
 
 export const PenaltyTransactionSchema = SchemaFactory.createForClass(PenaltyTransaction);
 PenaltyTransactionSchema.index({ idempotencyKey: 1 }, { unique: true });
+PenaltyTransactionSchema.index({ reversedTransactionId: 1 }, { unique: true, sparse: true });
 PenaltyTransactionSchema.index({ studentId: 1, createdAt: -1 });
 

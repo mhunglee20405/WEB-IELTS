@@ -23,9 +23,14 @@ export interface LessonModalProps {
   onClose: () => void;
 }
 
-function toHm(iso: string): string {
-  const parts = getZonedDateParts(iso, DEFAULT_TIMEZONE);
-  return `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+function toHm(iso?: string, fallback = "19:30"): string {
+  if (!iso || Number.isNaN(Date.parse(iso))) return fallback;
+  try {
+    const parts = getZonedDateParts(iso, DEFAULT_TIMEZONE);
+    return `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+  } catch {
+    return fallback;
+  }
 }
 
 export function LessonModal({
@@ -38,26 +43,32 @@ export function LessonModal({
   const queryClient = useQueryClient();
   const isEditing = Boolean(initialLesson);
 
+  const initialStart = initialLesson?.startTime || initialLesson?.startAt;
+  const initialEnd = initialLesson?.endTime || initialLesson?.endAt;
+
   const [courseId, setCourseId] = useState(
     () => initialLesson?.courseId ?? courses[0]?.id ?? "",
   );
   const [title, setTitle] = useState(() => initialLesson?.title ?? "");
-  const [description, setDescription] = useState(() => initialLesson?.description ?? "");
+  const [description, setDescription] = useState(
+    () => initialLesson?.description ?? initialLesson?.content ?? "",
+  );
   const [type, setType] = useState<LessonType>(() => initialLesson?.type ?? "live_meet");
   const [status, setStatus] = useState<LessonStatus>(
     () => initialLesson?.status ?? "scheduled",
   );
-  const [dateKey, setDateKey] = useState(() =>
-    initialLesson
-      ? getZonedDateParts(initialLesson.startTime, DEFAULT_TIMEZONE).dateKey
-      : defaultDateKey ?? getZonedDateParts(new Date(), DEFAULT_TIMEZONE).dateKey,
-  );
-  const [startTimeHm, setStartTimeHm] = useState(() =>
-    initialLesson ? toHm(initialLesson.startTime) : "19:30",
-  );
-  const [endTimeHm, setEndTimeHm] = useState(() =>
-    initialLesson ? toHm(initialLesson.endTime) : "21:00",
-  );
+  const [dateKey, setDateKey] = useState(() => {
+    if (initialStart && !Number.isNaN(Date.parse(initialStart))) {
+      try {
+        return getZonedDateParts(initialStart, DEFAULT_TIMEZONE).dateKey;
+      } catch {
+        // Fall back to defaultDateKey
+      }
+    }
+    return defaultDateKey ?? getZonedDateParts(new Date(), DEFAULT_TIMEZONE).dateKey;
+  });
+  const [startTimeHm, setStartTimeHm] = useState(() => toHm(initialStart, "19:30"));
+  const [endTimeHm, setEndTimeHm] = useState(() => toHm(initialEnd, "21:00"));
   const [meetUrl, setMeetUrl] = useState(() => initialLesson?.meetUrl ?? "");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -82,8 +93,11 @@ export function LessonModal({
         return lessonsApi.update(initialLesson.id, {
           title: valid.title,
           description: valid.description,
+          content: valid.description,
           type: valid.type,
           status: valid.status,
+          startAt: startResolved.isoUtc,
+          endAt: endResolved.isoUtc,
           startTime: startResolved.isoUtc,
           endTime: endResolved.isoUtc,
           timezone: DEFAULT_TIMEZONE,
@@ -95,7 +109,10 @@ export function LessonModal({
         courseId: valid.courseId,
         title: valid.title,
         description: valid.description,
+        content: valid.description,
         type: valid.type,
+        startAt: startResolved.isoUtc,
+        endAt: endResolved.isoUtc,
         startTime: startResolved.isoUtc,
         endTime: endResolved.isoUtc,
         timezone: DEFAULT_TIMEZONE,

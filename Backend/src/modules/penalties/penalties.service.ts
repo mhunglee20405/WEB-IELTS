@@ -213,7 +213,7 @@ export class PenaltiesService {
       }
     }
 
-    const idempotencyKey = `reverse:${original._id}:${Date.now()}`;
+    const idempotencyKey = `reverse:${original._id}`;
     let reversalDoc: PenaltyTransactionDocument;
 
     const session = await this.connection.startSession();

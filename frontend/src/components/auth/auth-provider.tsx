@@ -56,6 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrapSession() {
       const existingToken = tokenStore.getAccessToken();
+      const existingRefreshToken = tokenStore.getRefreshToken();
+
+      // If no session tokens exist at all, immediately mark as unauthenticated without network calls
+      if (!existingToken && !existingRefreshToken) {
+        if (!cancelled) {
+          setUser(null);
+          setStatus("unauthenticated");
+        }
+        return;
+      }
 
       if (isMockApiMode() && !existingToken) {
         await Promise.resolve();
@@ -67,11 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        // If we have an existing access token, verify it with /auth/me
+        // If expired, client.ts automatically attempts refresh via existingRefreshToken
         const verifiedUser = await authApi.me();
         if (cancelled) return;
         const currentTokens = {
-          accessToken: tokenStore.getAccessToken() ?? "",
-          refreshToken: tokenStore.getRefreshToken() ?? undefined,
+          accessToken: tokenStore.getAccessToken() ?? existingToken ?? "",
+          refreshToken: tokenStore.getRefreshToken() ?? existingRefreshToken ?? undefined,
         };
         if (currentTokens.accessToken) {
           tokenStore.setSession({ user: verifiedUser, tokens: currentTokens });

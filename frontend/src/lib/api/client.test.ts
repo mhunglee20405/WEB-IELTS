@@ -189,5 +189,24 @@ describe("apiRequest HTTP client invariants", () => {
     expect(unauthorizedHandler).toHaveBeenCalledTimes(1);
     expect(tokenStore.getAccessToken()).toBeNull();
   });
+
+  it("never calls /auth/refresh when 401 occurs and no refresh token exists in store", async () => {
+    tokenStore.clear();
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ statusCode: 401, code: "UNAUTHORIZED", message: "No token" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiRequest({ method: "GET", path: "/auth/me" })).rejects.toMatchObject({
+      statusCode: 401,
+    });
+
+    const refreshCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/auth/refresh"));
+    expect(refreshCalls).toHaveLength(0);
+  });
 });
 

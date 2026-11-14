@@ -65,37 +65,48 @@ async function attemptTokenRefresh(): Promise<string | null> {
     return refreshInFlight;
   }
 
+  const currentRefreshToken = tokenStore.getRefreshToken();
+  if (!currentRefreshToken) {
+    return null;
+  }
+
   refreshInFlight = (async () => {
-    const refreshToken = tokenStore.getRefreshToken();
+    const activeRefreshToken = currentRefreshToken;
     const existingSession = tokenStore.getSession();
     try {
       const response = await fetch(`${env.NEXT_PUBLIC_API_BASE_URL}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+        body: JSON.stringify({ refreshToken: activeRefreshToken }),
         credentials: "include",
       });
 
       if (!response.ok) {
-        tokenStore.clear();
-        onUnauthorizedHandler?.();
+        if (tokenStore.getRefreshToken() === activeRefreshToken) {
+          tokenStore.clear();
+          onUnauthorizedHandler?.();
+        }
         return null;
       }
 
       const raw = await response.json();
       const tokens = (raw && typeof raw === "object" && "data" in raw ? raw.data : raw) as AuthTokens;
-      if (existingSession) {
-        tokenStore.setSession({
-          user: existingSession.user,
-          tokens,
-        });
-      } else {
-        tokenStore.setTokens(tokens);
+      if (tokenStore.getRefreshToken() === activeRefreshToken) {
+        if (existingSession) {
+          tokenStore.setSession({
+            user: existingSession.user,
+            tokens,
+          });
+        } else {
+          tokenStore.setTokens(tokens);
+        }
       }
       return tokens.accessToken;
     } catch {
-      tokenStore.clear();
-      onUnauthorizedHandler?.();
+      if (tokenStore.getRefreshToken() === activeRefreshToken) {
+        tokenStore.clear();
+        onUnauthorizedHandler?.();
+      }
       return null;
     } finally {
       refreshInFlight = null;

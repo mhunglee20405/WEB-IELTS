@@ -57,16 +57,40 @@ export class NotificationsService {
       throw new BadRequestException('Invalid userId');
     }
 
+    if (dto.idempotencyKey) {
+      const existing = await this.notificationModel
+        .findOne({ idempotencyKey: dto.idempotencyKey })
+        .exec();
+      if (existing) {
+        this.logger.debug(
+          `Notification with idempotencyKey "${dto.idempotencyKey}" already exists, returning existing.`,
+        );
+        return existing;
+      }
+    }
+
     const notifDoc = new this.notificationModel({
       userId: new Types.ObjectId(dto.userId),
       type: dto.type,
       title: dto.title,
       body: dto.body,
       payload: dto.payload,
+      idempotencyKey: dto.idempotencyKey,
       isRead: false,
     });
 
-    const savedNotif = await notifDoc.save();
+    let savedNotif: NotificationDocument;
+    try {
+      savedNotif = await notifDoc.save();
+    } catch (err: any) {
+      if (err.code === 11000 && dto.idempotencyKey) {
+        const existing = await this.notificationModel
+          .findOne({ idempotencyKey: dto.idempotencyKey })
+          .exec();
+        if (existing) return existing;
+      }
+      throw err;
+    }
 
     // Optionally enqueue email delivery
     if (dto.sendEmail) {
@@ -74,7 +98,9 @@ export class NotificationsService {
         const user = await this.userModel.findById(dto.userId).select('email').exec();
         if (user && user.email) {
           const templateKey = dto.emailTemplateKey || 'general-notification';
-          const idempotencyKey = `email-${savedNotif._id}`;
+          const idempotencyKey = dto.idempotencyKey
+            ? `email:${dto.idempotencyKey}`
+            : `email-${savedNotif._id}`;
 
           // Check if email delivery already exists
           let delivery = await this.emailDeliveryModel.findOne({ idempotencyKey }).exec();
@@ -90,12 +116,13 @@ export class NotificationsService {
             await delivery.save();
           }
 
-          // Enqueue BullMQ job with deterministic jobId to prevent duplicate worker jobs
+          // Enqueue BullMQ job with deterministic jobId (sanitizing colons for BullMQ key format)
+          const bullJobId = idempotencyKey ? idempotencyKey.replace(/:/g, '_') : undefined;
           await this.emailQueue.add(
             JOB_SEND_EMAIL,
             { deliveryId: delivery._id.toString() },
             {
-              jobId: idempotencyKey,
+              jobId: bullJobId,
               attempts: 3,
               backoff: { type: 'exponential', delay: 1000 },
             },
@@ -117,8 +144,9 @@ export class NotificationsService {
     const limit = Math.min(100, Math.max(1, query.limit || 20));
 
     const filter: Record<string, any> = { userId: user._id };
-    if (typeof query.isRead === 'boolean') {
-      filter.isRead = query.isRead;
+    const isReadFilter = typeof query.isRead === 'boolean' ? query.isRead : (typeof query.read === 'boolean' ? query.read : undefined);
+    if (typeof isReadFilter === 'boolean') {
+      filter.isRead = isReadFilter;
     }
     if (query.type) {
       filter.type = query.type;

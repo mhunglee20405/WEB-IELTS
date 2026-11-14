@@ -5,11 +5,18 @@ export interface ListNotificationsQuery {
   page?: number;
   limit?: number;
   read?: boolean;
+  isRead?: boolean;
 }
 
 export const notificationsApi = {
   list(query: ListNotificationsQuery = {}): Promise<PaginatedResponse<NotificationItem>> {
-    const qs = buildQueryString({ ...query });
+    const isRead = query.isRead !== undefined ? query.isRead : query.read;
+    const params: Record<string, string | number | boolean | undefined> = { ...query };
+    if (isRead !== undefined) {
+      params.isRead = isRead;
+      params.read = isRead;
+    }
+    const qs = buildQueryString(params);
     return apiRequest<PaginatedResponse<NotificationItem>>({
       method: "GET",
       path: `/notifications${qs}`,
