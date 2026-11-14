@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, AlertCircle } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LessonCard } from "@/components/student/lesson-card";
@@ -28,19 +28,48 @@ const MODE_TABS: readonly TabItem<CalendarMode>[] = [
   { id: "month", label: "Lịch tháng" },
 ];
 
-function groupLessonsByDateKey(lessons: Lesson[]): Map<string, Lesson[]> {
+function groupLessonsByDateKey(lessons: Lesson[]): {
+  grouped: Map<string, Lesson[]>;
+  invalidCount: number;
+} {
   const grouped = new Map<string, Lesson[]>();
-  const sorted = [...lessons].sort(
-    (a, b) => Date.parse(a.startTime) - Date.parse(b.startTime),
-  );
+  let invalidCount = 0;
+
+  const validLessons: Lesson[] = [];
+
+  for (const lesson of lessons) {
+    const rawTime = lesson.startTime || lesson.startAt;
+    if (!rawTime || typeof rawTime !== "string" || rawTime.trim() === "") {
+      invalidCount += 1;
+      continue;
+    }
+    const ms = Date.parse(rawTime);
+    if (Number.isNaN(ms)) {
+      invalidCount += 1;
+      continue;
+    }
+    validLessons.push(lesson);
+  }
+
+  const sorted = [...validLessons].sort((a, b) => {
+    const timeA = Date.parse(a.startTime || a.startAt || "");
+    const timeB = Date.parse(b.startTime || b.startAt || "");
+    return timeA - timeB;
+  });
 
   for (const lesson of sorted) {
-    const key = getZonedDateParts(lesson.startTime, DEFAULT_TIMEZONE).dateKey;
-    const list = grouped.get(key) ?? [];
-    list.push(lesson);
-    grouped.set(key, list);
+    const rawTime = lesson.startTime || lesson.startAt || "";
+    try {
+      const key = getZonedDateParts(rawTime, DEFAULT_TIMEZONE).dateKey;
+      const list = grouped.get(key) ?? [];
+      list.push(lesson);
+      grouped.set(key, list);
+    } catch {
+      invalidCount += 1;
+    }
   }
-  return grouped;
+
+  return { grouped, invalidCount };
 }
 
 export default function StudentCalendarPage() {
@@ -72,7 +101,10 @@ export default function StudentCalendarPage() {
   });
 
   const lessons = useMemo(() => lessonsQuery.data?.items ?? [], [lessonsQuery.data]);
-  const lessonsByDate = useMemo(() => groupLessonsByDateKey(lessons), [lessons]);
+  const { grouped: lessonsByDate, invalidCount } = useMemo(
+    () => groupLessonsByDateKey(lessons),
+    [lessons],
+  );
 
   const handleNavigate = (direction: -1 | 1) => {
     if (mode === "week") {
@@ -108,6 +140,18 @@ export default function StudentCalendarPage() {
         title="Lịch học trực tuyến"
         subtitle="Hiển thị cố định theo múi giờ Việt Nam (Asia/Ho_Chi_Minh · GMT+7)."
       />
+
+      {invalidCount > 0 ? (
+        <div
+          role="alert"
+          className="flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-medium text-amber-800"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" aria-hidden={true} />
+          <span>
+            Đã ẩn {invalidCount} buổi học có định dạng thời gian không hợp lệ từ máy chủ để bảo đảm tính chính xác của lịch học.
+          </span>
+        </div>
+      ) : null}
 
       <Toolbar
         tabs={

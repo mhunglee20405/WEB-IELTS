@@ -29,5 +29,9 @@ export class CreateNotificationDto {
   @IsOptional()
   @IsString()
   emailTemplateKey?: string;
+
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
 }
 

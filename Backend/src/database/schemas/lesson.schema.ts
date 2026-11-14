@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { LessonStatus } from './enums';
+import { LessonStatus, LessonType } from './enums';
 
 export type LessonDocument = Lesson & Document;
 
@@ -23,6 +23,13 @@ export class Lesson {
 
   @Prop()
   content?: string;
+
+  @Prop({
+    type: String,
+    enum: Object.values(LessonType),
+    default: LessonType.LIVE_MEET,
+  })
+  type: LessonType;
 
   @Prop({
     type: String,

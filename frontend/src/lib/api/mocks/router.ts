@@ -295,7 +295,7 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
   }
 
   // Courses & Course Students
-  if (method === "GET" && pathname === "/courses") {
+  if (method === "GET" && (pathname === "/courses" || pathname === "/courses/mine")) {
     const status = sp.get("status");
     const search = sp.get("search")?.trim().toLowerCase();
     let list = mockState.courses;
@@ -437,7 +437,9 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
   }
   if (method === "POST" && pathname === "/lessons") {
     const body = options.body as CreateLessonRequest;
-    if (Date.parse(body.startTime) >= Date.parse(body.endTime)) {
+    const startStr = body.startTime || body.startAt || "";
+    const endStr = body.endTime || body.endAt || "";
+    if (!startStr || !endStr || Date.parse(startStr) >= Date.parse(endStr)) {
       throw new ApiError({
         statusCode: 400,
         code: "INVALID_LESSON_TIME",
@@ -449,6 +451,12 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
     const created = {
       id: `les-${Date.now()}`,
       ...body,
+      startTime: startStr,
+      endTime: endStr,
+      startAt: startStr,
+      endAt: endStr,
+      description: body.description ?? body.content,
+      type: body.type ?? (body.meetUrl ? "live_meet" : "workshop"),
       status: "scheduled" as const,
       timezone: body.timezone ?? "Asia/Ho_Chi_Minh",
       courseTitle: course?.title,
@@ -462,8 +470,8 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
     const lesson = mockState.lessons.find((l) => l.id === lessonMatch[1]);
     if (!lesson) notFound("Không tìm thấy buổi học.");
     const patch = options.body as UpdateLessonRequest;
-    const nextStart = patch.startTime ?? lesson.startTime;
-    const nextEnd = patch.endTime ?? lesson.endTime;
+    const nextStart = patch.startTime ?? patch.startAt ?? lesson.startTime;
+    const nextEnd = patch.endTime ?? patch.endAt ?? lesson.endTime;
     if (Date.parse(nextStart) >= Date.parse(nextEnd)) {
       throw new ApiError({
         statusCode: 400,
@@ -472,7 +480,13 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
         requestId: `mock-${Date.now()}`,
       });
     }
-    Object.assign(lesson, patch);
+    Object.assign(lesson, patch, {
+      startTime: nextStart,
+      endTime: nextEnd,
+      startAt: nextStart,
+      endAt: nextEnd,
+      description: patch.description ?? patch.content ?? lesson.description,
+    });
     return lesson as T;
   }
 

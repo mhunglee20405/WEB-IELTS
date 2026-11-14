@@ -71,11 +71,12 @@ export class DeadlineProcessor extends WorkerHost {
       let count = 0;
       for (const delivery of pending) {
         try {
+          const bullJobId = delivery.idempotencyKey ? delivery.idempotencyKey.replace(/:/g, '_') : undefined;
           await this.emailQueue.add(
             JOB_SEND_EMAIL,
             { deliveryId: delivery._id.toString() },
             {
-              jobId: delivery.idempotencyKey,
+              jobId: bullJobId,
               attempts: 3,
               backoff: { type: 'exponential', delay: 1000 },
             },

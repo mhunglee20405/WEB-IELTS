@@ -161,15 +161,15 @@ export default function StudentPracticeLibraryPage() {
                       <Clock className="h-3.5 w-3.5" />
                       {minutes} phút
                     </span>
-                    {test.allowedModes.includes("PART") && (
+                    {test.allowedModes?.includes("PART") && (
                       <Badge variant="info">Part Practice</Badge>
                     )}
-                    {test.allowedModes.includes("FULL") && (
+                    {test.allowedModes?.includes("FULL") && (
                       <Badge variant="success">Full Test</Badge>
                     )}
                   </div>
 
-                  {test.tags.length > 0 && (
+                  {test.tags && test.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {test.tags.slice(0, 4).map((tag) => (
                         <span

@@ -351,7 +351,7 @@ export default function AdminUsersPage() {
       header: "Vai trò",
       renderCell: (row) => (
         <div className="flex flex-wrap gap-1.5">
-          {row.roles.map((r) => (
+          {(row.roles ?? ((row as { role?: UserRole }).role ? [(row as { role?: UserRole }).role!] : [])).map((r) => (
             <MetaTag key={r} variant="neutral">
               {getRoleLabelVi(r)}
             </MetaTag>

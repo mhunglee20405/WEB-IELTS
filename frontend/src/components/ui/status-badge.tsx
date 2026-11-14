@@ -22,7 +22,13 @@ export type BadgeStatus =
   | "scheduled"
   | "live"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "available"
+  | "expired"
+  | "closed"
+  | "reviewed"
+  | "excused"
+  | string;
 
 interface StatusConfig {
   label: string;
@@ -30,7 +36,13 @@ interface StatusConfig {
   dot: string;
 }
 
-const STATUS_MAP: Record<BadgeStatus, StatusConfig> = {
+const DEFAULT_STATUS_CONFIG: StatusConfig = {
+  label: "Không xác định",
+  classes: "border-slate-300 bg-slate-100 text-slate-800",
+  dot: "bg-slate-600",
+};
+
+const STATUS_MAP: Record<string, StatusConfig> = {
   not_started: {
     label: "Chưa làm",
     classes: "border-slate-300 bg-slate-100 text-slate-800",
@@ -106,6 +118,31 @@ const STATUS_MAP: Record<BadgeStatus, StatusConfig> = {
     classes: "border-blue-300 bg-blue-50 text-blue-900",
     dot: "bg-blue-700",
   },
+  available: {
+    label: "Đang mở",
+    classes: "border-emerald-300 bg-emerald-50 text-emerald-900",
+    dot: "bg-emerald-700",
+  },
+  expired: {
+    label: "Đã hết hạn",
+    classes: "border-red-300 bg-red-50 text-red-900",
+    dot: "bg-red-700",
+  },
+  closed: {
+    label: "Đã đóng",
+    classes: "border-slate-300 bg-slate-100 text-slate-800",
+    dot: "bg-slate-600",
+  },
+  reviewed: {
+    label: "Đã chấm",
+    classes: "border-emerald-300 bg-emerald-50 text-emerald-900",
+    dot: "bg-emerald-700",
+  },
+  excused: {
+    label: "Được miễn",
+    classes: "border-teal-300 bg-teal-50 text-teal-900",
+    dot: "bg-teal-700",
+  },
   inactive: {
     label: "Tạm ngưng",
     classes: "border-slate-300 bg-slate-100 text-slate-800",
@@ -154,7 +191,10 @@ export interface StatusBadgeProps {
  * and unambiguous Vietnamese text label (WCAG 1.4.1 / AA contrast >= 4.5:1).
  */
 export function StatusBadge({ status, labelOverride, className }: StatusBadgeProps) {
-  const config = STATUS_MAP[status];
+  const config = STATUS_MAP[status] ?? {
+    ...DEFAULT_STATUS_CONFIG,
+    label: labelOverride ?? status ?? "Không xác định",
+  };
 
   return (
     <span

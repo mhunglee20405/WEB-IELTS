@@ -9,6 +9,7 @@ import {
   UseGuards,
   ParseIntPipe,
   DefaultValuePipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -43,19 +44,23 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'List all users (Admin only)' })
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'List all users (Admin: all; Teacher: students only)' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'role', required: false, enum: UserRole })
   @ApiQuery({ name: 'status', required: false, enum: UserStatus })
+  @ApiQuery({ name: 'search', required: false, type: String })
   async findAll(
+    @CurrentUser() actor: UserDocument,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('role') role?: UserRole,
     @Query('status') status?: UserStatus,
+    @Query('search') search?: string,
   ) {
-    return this.usersService.findAll(page, limit, role, status);
+    const effectiveRole = actor.role === UserRole.TEACHER ? UserRole.STUDENT : role;
+    return this.usersService.findAll(page, limit, effectiveRole, status, search);
   }
 
   @Get('me')
@@ -77,14 +82,16 @@ export class UsersController {
   @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({ summary: 'Get user by ID (Admin/Teacher)' })
   async findOne(@Param('id') id: string, @CurrentUser() currentUser: UserDocument) {
-    // Students can only see their own profile
+    const user = await this.usersService.findById(id);
     if (
       currentUser.role === UserRole.TEACHER &&
       (currentUser._id as Types.ObjectId).toHexString() !== id
     ) {
-      // Teachers can look up students only — service layer enforces
+      if (user.role !== UserRole.STUDENT) {
+        throw new ForbiddenException('Teachers are not authorized to view non-student accounts');
+      }
     }
-    return this.usersService.findById(id);
+    return this.usersService.sanitize(user);
   }
 
   @Patch(':id')

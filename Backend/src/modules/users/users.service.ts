@@ -68,10 +68,18 @@ export class UsersService {
     limit = 20,
     role?: UserRole,
     status?: UserStatus,
+    search?: string,
   ): Promise<PaginatedUsers> {
     const filter: Record<string, unknown> = {};
     if (role) filter['role'] = role;
     if (status) filter['status'] = status;
+    if (search && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter['$or'] = [
+        { fullName: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } },
+      ];
+    }
 
     const [items, total] = await Promise.all([
       this.userModel
@@ -84,7 +92,15 @@ export class UsersService {
       this.userModel.countDocuments(filter).exec(),
     ]);
 
-    return { items, total, page, limit };
+    const sanitizedItems = items.map((u) => {
+      const obj = u.toObject() as unknown as Record<string, unknown>;
+      delete obj['passwordHash'];
+      obj['id'] = (u._id as Types.ObjectId).toHexString();
+      obj['roles'] = [obj['role']];
+      return obj;
+    });
+
+    return { items: sanitizedItems as any, total, page, limit };
   }
 
   async findById(id: string): Promise<UserDocument> {
@@ -131,9 +147,11 @@ export class UsersService {
   }
 
   sanitize(user: UserDocument): Partial<UserDocument> {
-    const obj = user.toObject();
-    delete (obj as Record<string, unknown>)['passwordHash'];
-    return obj;
+    const obj = user.toObject() as unknown as Record<string, unknown>;
+    delete obj['passwordHash'];
+    obj['id'] = (user._id as Types.ObjectId).toHexString();
+    obj['roles'] = [obj['role']];
+    return obj as unknown as Partial<UserDocument>;
   }
 }
 

@@ -35,10 +35,11 @@ export const authApi = {
   },
 
   refresh(payload?: RefreshTokenRequest): Promise<AuthTokens> {
+    const refreshToken = payload?.refreshToken ?? tokenStore.getRefreshToken() ?? undefined;
     return apiRequest<AuthTokens, RefreshTokenRequest | undefined>({
       method: "POST",
       path: "/auth/refresh",
-      body: payload,
+      body: refreshToken ? { refreshToken } : payload,
       skipAuth: true,
     });
   },

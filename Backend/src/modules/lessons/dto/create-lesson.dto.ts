@@ -8,7 +8,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { LessonStatus } from 'src/database/schemas/enums';
+import { LessonStatus, LessonType } from 'src/database/schemas/enums';
 
 export class CreateLessonDto {
   @ApiProperty({ example: 'Reading Passage 1 — Skimming & Scanning' })
@@ -17,13 +17,25 @@ export class CreateLessonDto {
   @MaxLength(200)
   title: string;
 
-  @ApiProperty({ example: '2026-11-15T12:00:00.000Z', description: 'UTC ISO timestamp' })
+  @ApiPropertyOptional({ example: '2026-11-15T12:00:00.000Z', description: 'UTC ISO timestamp (canonical)' })
+  @IsOptional()
   @IsDateString()
-  startAt: string;
+  startAt?: string;
 
-  @ApiProperty({ example: '2026-11-15T13:30:00.000Z', description: 'UTC ISO timestamp' })
+  @ApiPropertyOptional({ example: '2026-11-15T12:00:00.000Z', description: 'UTC ISO timestamp (frontend alias)' })
+  @IsOptional()
   @IsDateString()
-  endAt: string;
+  startTime?: string;
+
+  @ApiPropertyOptional({ example: '2026-11-15T13:30:00.000Z', description: 'UTC ISO timestamp (canonical)' })
+  @IsOptional()
+  @IsDateString()
+  endAt?: string;
+
+  @ApiPropertyOptional({ example: '2026-11-15T13:30:00.000Z', description: 'UTC ISO timestamp (frontend alias)' })
+  @IsOptional()
+  @IsDateString()
+  endTime?: string;
 
   @ApiPropertyOptional({
     example: 'https://meet.google.com/abc-defg-hij',
@@ -39,9 +51,25 @@ export class CreateLessonDto {
   @MaxLength(5000)
   content?: string;
 
+  @ApiPropertyOptional({ example: 'Bring Cambridge IELTS 18 Reading Test 1.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  description?: string;
+
   @ApiPropertyOptional({ enum: LessonStatus, default: LessonStatus.SCHEDULED })
   @IsOptional()
   @IsEnum(LessonStatus)
   status?: LessonStatus;
+
+  @ApiPropertyOptional({ enum: LessonType, example: LessonType.LIVE_MEET })
+  @IsOptional()
+  @IsEnum(LessonType)
+  type?: LessonType;
+
+  @ApiPropertyOptional({ example: 'Asia/Ho_Chi_Minh' })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 }
 

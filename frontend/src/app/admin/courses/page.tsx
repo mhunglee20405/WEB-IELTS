@@ -67,14 +67,28 @@ export default function AdminCoursesPage() {
     {
       key: "teacher",
       header: "Giảng viên phụ trách",
-      renderCell: (row) => (
-        <div>
-          <p className="text-sm font-medium text-slate-900">
-            {row.teacherName ?? row.teacherId}
-          </p>
-          <p className="font-mono text-xs text-slate-700">{row.teacherId}</p>
-        </div>
-      ),
+      renderCell: (row) => {
+        const teacherObj =
+          typeof row.teacherId === "object" && row.teacherId !== null
+            ? (row.teacherId as Record<string, unknown>)
+            : null;
+        const displayName =
+          row.teacherName ||
+          (teacherObj?.fullName as string | undefined) ||
+          (typeof row.teacherId === "string" ? row.teacherId : "—");
+        const displayId =
+          (teacherObj?._id as string | undefined) ||
+          (teacherObj?.id as string | undefined) ||
+          (typeof row.teacherId === "string" ? row.teacherId : "");
+        return (
+          <div>
+            <p className="text-sm font-medium text-slate-900">{displayName}</p>
+            {displayId ? (
+              <p className="font-mono text-xs text-slate-700">{displayId}</p>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       key: "type",

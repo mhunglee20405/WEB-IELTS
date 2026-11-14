@@ -146,10 +146,15 @@ export interface Lesson {
   teacherName?: string;
   title: string;
   description?: string;
+  content?: string;
   type: LessonType;
   status?: LessonStatus;
+  startAt?: string;
+  endAt?: string;
   startTime: string;
   endTime: string;
+  startAtVn?: string;
+  endAtVn?: string;
   timezone: string;
   meetUrl?: string;
 }
@@ -158,18 +163,25 @@ export interface CreateLessonRequest {
   courseId: string;
   title: string;
   description?: string;
-  type: LessonType;
-  startTime: string;
-  endTime: string;
+  content?: string;
+  type?: LessonType;
+  startAt?: string;
+  endAt?: string;
+  startTime?: string;
+  endTime?: string;
   timezone?: string;
   meetUrl?: string;
+  status?: LessonStatus;
 }
 
 export interface UpdateLessonRequest {
   title?: string;
   description?: string;
+  content?: string;
   type?: LessonType;
   status?: LessonStatus;
+  startAt?: string;
+  endAt?: string;
   startTime?: string;
   endTime?: string;
   timezone?: string;

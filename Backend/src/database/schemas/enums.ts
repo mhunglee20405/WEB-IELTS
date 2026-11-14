@@ -29,6 +29,12 @@ export enum LessonStatus {
   COMPLETED = 'completed',
 }
 
+export enum LessonType {
+  LIVE_MEET = 'live_meet',
+  WORKSHOP = 'workshop',
+  REVIEW = 'review',
+}
+
 export enum ExerciseType {
   READING = 'reading',
   LISTENING = 'listening',

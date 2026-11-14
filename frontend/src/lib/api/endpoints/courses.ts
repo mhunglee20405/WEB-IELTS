@@ -24,6 +24,14 @@ export const coursesApi = {
     });
   },
 
+  listMine(query: ListCoursesQuery = {}): Promise<PaginatedResponse<Course>> {
+    const qs = buildQueryString({ ...query });
+    return apiRequest<PaginatedResponse<Course>>({
+      method: "GET",
+      path: `/courses/mine${qs}`,
+    });
+  },
+
   create(payload: CreateCourseRequest): Promise<Course> {
     return apiRequest<Course, CreateCourseRequest>({
       method: "POST",

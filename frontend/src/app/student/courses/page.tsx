@@ -38,7 +38,7 @@ export default function StudentCoursesPage() {
   const coursesQuery = useQuery({
     queryKey: studentKeys.courses(filter, 1),
     queryFn: () =>
-      coursesApi.list({
+      coursesApi.listMine({
         status: filter === "all" ? undefined : filter,
         page: 1,
         limit: 50,

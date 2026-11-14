@@ -157,12 +157,15 @@ export class DashboardService {
       id: extractObjectId(l._id),
       courseId: extractObjectId(l.courseId),
       title: l.title,
-      description: l.description || '',
+      description: l.content || l.description || '',
+      content: l.content || '',
+      meetUrl: l.meetUrl,
       meetingUrl: l.meetUrl,
       startAt: l.startAt ? l.startAt.toISOString() : undefined,
       endAt: l.endAt ? l.endAt.toISOString() : undefined,
       startTime: l.startAt ? l.startAt.toISOString() : '',
       endTime: l.endAt ? l.endAt.toISOString() : '',
+      type: l.meetUrl ? 'live_meet' : 'workshop',
       status: l.status,
     }));
 
@@ -184,6 +187,7 @@ export class DashboardService {
       await Promise.all([
         this.penaltyModel.countDocuments({
           studentId: student._id,
+          deltaPoints: { $gt: 0 },
           isReversed: false,
         }),
         this.extensionModel.countDocuments({
@@ -262,12 +266,15 @@ export class DashboardService {
       id: extractObjectId(l._id),
       courseId: extractObjectId(l.courseId),
       title: l.title,
-      description: l.description || '',
+      description: l.content || l.description || '',
+      content: l.content || '',
+      meetUrl: l.meetUrl,
       meetingUrl: l.meetUrl,
       startAt: l.startAt ? l.startAt.toISOString() : undefined,
       endAt: l.endAt ? l.endAt.toISOString() : undefined,
       startTime: l.startAt ? l.startAt.toISOString() : '',
       endTime: l.endAt ? l.endAt.toISOString() : '',
+      type: l.meetUrl ? 'live_meet' : 'workshop',
       status: l.status,
     }));
 
@@ -294,6 +301,7 @@ export class DashboardService {
         }),
         this.penaltyModel.countDocuments({
           studentId: student._id,
+          deltaPoints: { $gt: 0 },
           isReversed: false,
         }),
         this.extensionModel.countDocuments({
@@ -359,8 +367,8 @@ export class DashboardService {
       .sort({ createdAt: -1 })
       .exec();
 
-    const active = penalties.filter((p) => !p.isReversed);
-    const totalPoints = active.reduce((sum, p) => sum + p.deltaPoints, 0);
+    const active = penalties.filter((p) => !p.isReversed && p.deltaPoints > 0);
+    const totalPoints = Math.max(0, penalties.reduce((sum, p) => sum + p.deltaPoints, 0));
 
     return {
       totalPoints,

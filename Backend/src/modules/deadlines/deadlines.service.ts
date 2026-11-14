@@ -195,6 +195,7 @@ export class DeadlinesService {
                   },
                   sendEmail: true,
                   emailTemplateKey: 'assignment-overdue',
+                  idempotencyKey: `notif:overdue:${sa._id}`,
                 })
                 .catch((err) => this.logger.warn(`Failed to notify overdue assignment: ${err.message}`));
             }

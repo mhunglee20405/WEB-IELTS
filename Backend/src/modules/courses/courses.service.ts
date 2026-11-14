@@ -124,7 +124,7 @@ export class CoursesService {
     if (actor.role === UserRole.TEACHER) {
       filter['teacherId'] = actor._id;
     } else if (actor.role === UserRole.STUDENT) {
-      throw new ForbiddenException('Students must use GET /courses/mine');
+      return this.findMine(actor, query);
     }
 
     if (query.status) filter['status'] = query.status;
@@ -145,7 +145,24 @@ export class CoursesService {
       this.courseModel.countDocuments(filter).exec(),
     ]);
 
-    return { items, total, page, limit };
+    const formattedItems = items.map((c: any) => {
+      const raw = typeof c.toObject === 'function' ? c.toObject() : c;
+      const teacher = raw.teacherId;
+      const teacherIdStr =
+        teacher && typeof teacher === 'object'
+          ? (teacher._id || teacher.id)?.toString()
+          : teacher?.toString() || '';
+      const teacherNameStr =
+        teacher && typeof teacher === 'object' ? teacher.fullName : undefined;
+      return {
+        ...raw,
+        id: (raw._id || raw.id)?.toString(),
+        teacherId: teacherIdStr,
+        teacherName: teacherNameStr,
+      };
+    });
+
+    return { items: formattedItems as any, total, page, limit };
   }
 
   async findMine(student: UserDocument, query: CourseQueryDto): Promise<PaginatedCourses> {
@@ -178,7 +195,24 @@ export class CoursesService {
       this.courseModel.countDocuments(filter).exec(),
     ]);
 
-    return { items, total, page, limit };
+    const formattedItems = items.map((c: any) => {
+      const raw = typeof c.toObject === 'function' ? c.toObject() : c;
+      const teacher = raw.teacherId;
+      const teacherIdStr =
+        teacher && typeof teacher === 'object'
+          ? (teacher._id || teacher.id)?.toString()
+          : teacher?.toString() || '';
+      const teacherNameStr =
+        teacher && typeof teacher === 'object' ? teacher.fullName : undefined;
+      return {
+        ...raw,
+        id: (raw._id || raw.id)?.toString(),
+        teacherId: teacherIdStr,
+        teacherName: teacherNameStr,
+      };
+    });
+
+    return { items: formattedItems as any, total, page, limit };
   }
 
   async findById(id: string, actor: UserDocument): Promise<CourseDocument> {
