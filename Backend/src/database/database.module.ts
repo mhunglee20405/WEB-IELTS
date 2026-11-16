@@ -7,12 +7,26 @@ import { Connection } from 'mongoose';
   imports: [
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('mongodb.uri'),
-        // For transactions, MongoDB must run as a replica set
-        // See README for local dev replica set setup
-      }),
       inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const uri = configService.get<string>('mongodb.uri') || '';
+        const nodeEnv = (configService.get<string>('nodeEnv') || process.env.NODE_ENV || 'development').toLowerCase();
+        const isTestEnv = nodeEnv === 'test' || process.env.JEST_WORKER_ID !== undefined;
+
+        const dbMatch = uri.match(/\/([^/?]+)(\?|$)/);
+        const dbName = dbMatch ? dbMatch[1].toLowerCase() : '';
+
+        // 🛡️ Strict environment guard: automated test suites must NEVER target the customer database
+        if (isTestEnv && (dbName === 'ielts_lms_customer' || dbName.includes('customer') || dbName.includes('prod'))) {
+          throw new Error(
+            `[FATAL ENVIRONMENT GUARD] Automated test execution is strictly forbidden against customer or production database "${dbName}". Automated tests must run against "ielts_lms_test".`,
+          );
+        }
+
+        return {
+          uri,
+        };
+      },
     }),
   ],
 })
@@ -22,7 +36,7 @@ export class DatabaseModule implements OnApplicationBootstrap {
   constructor(
     @InjectConnection() private readonly connection: Connection,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async onApplicationBootstrap(): Promise<void> {
     const isProduction = this.configService.get<string>('nodeEnv') === 'production';

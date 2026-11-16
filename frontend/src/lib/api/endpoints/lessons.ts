@@ -1,4 +1,3 @@
-import { isMockApiMode } from "../../env";
 import { apiRequest, buildQueryString } from "../client";
 import { LessonSchema } from "../schemas";
 import type {

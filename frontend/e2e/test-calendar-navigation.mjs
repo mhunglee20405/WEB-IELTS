@@ -73,15 +73,15 @@ async function testCalendarForRole({ role, email, password, calendarUrl }) {
 async function main() {
   await testCalendarForRole({
     role: 'Student',
-    email: 'student@ielts-lms.local',
-    password: 'Student@123456',
+    email: 'student@academy.edu.vn',
+    password: 'Student@Academy2026!',
     calendarUrl: 'http://localhost:3000/student/calendar',
   });
 
   await testCalendarForRole({
     role: 'Teacher',
-    email: 'teacher@ielts-lms.local',
-    password: 'Teacher@123456',
+    email: 'teacher@academy.edu.vn',
+    password: 'Teacher@Academy2026!',
     calendarUrl: 'http://localhost:3000/teacher/calendar',
   });
 

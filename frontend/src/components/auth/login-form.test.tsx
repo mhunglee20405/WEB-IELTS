@@ -1,8 +1,10 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/error";
-import { authApi } from "@/lib/api/endpoints";
+import { authApi, systemApi } from "@/lib/api/endpoints";
 import type { AuthContextValue } from "./auth-provider";
 import { LoginForm } from "./login-form";
 
@@ -17,6 +19,17 @@ let mockAuthState: AuthContextValue = {
   logout: vi.fn(),
   refreshUser: vi.fn(),
 };
+
+function renderWithClient(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace }),
@@ -45,7 +58,7 @@ describe("LoginForm", () => {
 
   it("renders accessible autofill attributes and toggles password visibility cleanly", async () => {
     const user = userEvent.setup();
-    render(<LoginForm />);
+    renderWithClient(<LoginForm />);
 
     const emailInput = screen.getByLabelText(/Email đăng nhập/i);
     const passwordInput = screen.getByLabelText(/^Mật khẩu/i);
@@ -71,7 +84,7 @@ describe("LoginForm", () => {
 
   it("validates email after blur and links error into aria-describedby only when invalid", async () => {
     const user = userEvent.setup();
-    render(<LoginForm />);
+    renderWithClient(<LoginForm />);
 
     const emailInput = screen.getByLabelText(/Email đăng nhập/i);
     expect(emailInput).toHaveAttribute("aria-describedby", "email-hint");
@@ -97,7 +110,7 @@ describe("LoginForm", () => {
       }),
     );
 
-    render(<LoginForm />);
+    renderWithClient(<LoginForm />);
 
     await user.type(screen.getByLabelText(/Email đăng nhập/i), "student@ielts.vn");
     await user.type(screen.getByLabelText(/^Mật khẩu/i), "wrongpass");
@@ -133,7 +146,7 @@ describe("LoginForm", () => {
       timezone: "Asia/Ho_Chi_Minh",
     });
 
-    render(<LoginForm />);
+    renderWithClient(<LoginForm />);
 
     await user.type(screen.getByLabelText(/Email đăng nhập/i), "teacher@ielts.vn");
     await user.type(screen.getByLabelText(/^Mật khẩu/i), "secret123");
@@ -148,7 +161,7 @@ describe("LoginForm", () => {
     const user = userEvent.setup();
     const forgotSpy = vi.spyOn(authApi, "forgotPassword").mockResolvedValueOnce({ ok: true });
 
-    render(<LoginForm />);
+    renderWithClient(<LoginForm />);
     await user.click(screen.getByRole("button", { name: "Quên mật khẩu?" }));
 
     expect(screen.getByRole("heading", { name: "Khôi phục mật khẩu" })).toBeInTheDocument();
@@ -162,6 +175,22 @@ describe("LoginForm", () => {
     });
     expect(await screen.findByRole("status")).toHaveTextContent("hướng dẫn đặt lại mật khẩu");
     forgotSpy.mockRestore();
+  });
+
+  it("displays setup banner when system has not been initialized with any administrator", async () => {
+    const setupSpy = vi.spyOn(systemApi, "getSetupStatus").mockResolvedValueOnce({
+      isInitialized: false,
+      adminCount: 0,
+      totalUsers: 0,
+    });
+
+    renderWithClient(<LoginForm />);
+
+    const setupBanner = await screen.findByText(/Hệ thống chưa có Quản trị viên ban đầu/i);
+    expect(setupBanner).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Khởi tạo Quản trị viên/i })).toHaveAttribute("href", "/setup");
+
+    setupSpy.mockRestore();
   });
 });
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Pencil } from "lucide-react";
+import { CheckCircle2, Pencil, Plus } from "lucide-react";
 import { CourseForm } from "@/components/teacher/course-form";
 import {
   buttonVariants,
@@ -26,6 +26,7 @@ export default function AdminCoursesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [isCreatingCourse, setIsCreatingCourse] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const query = useQuery({
@@ -38,6 +39,17 @@ export default function AdminCoursesPage() {
         limit: 15,
       }),
     placeholderData: keepPreviousData,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof coursesApi.create>[0]) =>
+      coursesApi.create(payload),
+    onSuccess: async (created) => {
+      setFeedback(`Đã tạo khóa học mới "${created.title}".`);
+      setIsCreatingCourse(false);
+      await queryClient.invalidateQueries({ queryKey: adminKeys.coursesRoot });
+      await queryClient.invalidateQueries({ queryKey: teacherKeys.coursesRoot });
+    },
   });
 
   const updateMutation = useMutation({
@@ -141,6 +153,16 @@ export default function AdminCoursesPage() {
       <PageHeader
         title="Giám sát khóa học toàn hệ thống"
         subtitle="Theo dõi phân công giảng viên, sĩ số lớp 1:1 / nhóm và trạng thái vận hành."
+        actions={
+          <button
+            type="button"
+            onClick={() => setIsCreatingCourse(true)}
+            className={buttonVariants({ variant: "primary" })}
+          >
+            <Plus className="h-4 w-4" aria-hidden={true} />
+            Tạo khóa học mới
+          </button>
+        }
       />
 
       {feedback ? (
@@ -194,8 +216,8 @@ export default function AdminCoursesPage() {
           columns={columns}
           rows={courses}
           getRowKey={(row) => row.id}
-          emptyTitle="Không có khóa học nào"
-          emptyDescription="Thử điều chỉnh bộ lọc trạng thái hoặc từ khóa."
+          emptyTitle="Chưa có khóa học nào được tạo"
+          emptyDescription="Bắt đầu vận hành học tập bằng cách tạo khóa học mới và phân công giảng viên phụ trách."
         />
 
         {query.data ? (
@@ -207,6 +229,35 @@ export default function AdminCoursesPage() {
           />
         ) : null}
       </QueryState>
+
+      <ModalDialog
+        open={isCreatingCourse}
+        onClose={() => setIsCreatingCourse(false)}
+        size="lg"
+        title="Tạo khóa học mới"
+      >
+        <CourseForm
+          mode="create"
+          isPending={createMutation.isPending}
+          serverError={createMutation.error}
+          submitLabel="Tạo khóa học"
+          onCancel={() => setIsCreatingCourse(false)}
+          onSubmit={async (values) => {
+            await createMutation.mutateAsync({
+              title: values.title,
+              code: values.code || `CRS-${Date.now().toString(36).toUpperCase()}`,
+              description: values.description,
+              courseType: values.courseType,
+              startBand: values.startBand,
+              targetBand: values.targetBand,
+              teacherId: values.teacherId,
+              timezone: values.timezone,
+              startDate: values.startDate,
+              endDate: values.endDate,
+            });
+          }}
+        />
+      </ModalDialog>
 
       <ModalDialog
         open={Boolean(editingCourse)}

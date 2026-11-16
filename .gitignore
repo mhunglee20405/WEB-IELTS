@@ -19,9 +19,19 @@ coverage/
 playwright-report/
 test-results/
 
+# Backups & Security Tokens
+backups/
+Backend/backups/
+*.backup.json
+.bootstrap-token
+Backend/.bootstrap-token
+
 # Misc
 .DS_Store
 Thumbs.db
 *.log
+.env
+.env*.local
+AGENTS.md
 
 

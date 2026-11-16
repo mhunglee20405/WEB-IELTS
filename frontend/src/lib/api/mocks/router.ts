@@ -1,5 +1,6 @@
 import { getMonthKeyInTimezone, getVnDailyWindowSync, getZonedDateParts } from "@/lib/time/vn-time";
 import { ApiError } from "../error";
+import type { BootstrapAdminPayload } from "../endpoints/system";
 import {
   MAX_EXTENSIONS_PER_MONTH,
   PASS_SCORE_THRESHOLD,
@@ -121,6 +122,45 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
 
   if (method === "POST" && (pathname === "/auth/forgot-password" || pathname === "/auth/reset-password")) {
     return { ok: true } as T;
+  }
+
+  // System setup & bootstrap
+  if (method === "GET" && pathname === "/system/setup-status") {
+    const adminCount = mockState.users.filter((u) => u.roles.includes("admin")).length;
+    return {
+      isInitialized: adminCount > 0,
+      adminCount,
+      totalUsers: mockState.users.length,
+    } as T;
+  }
+
+  if (method === "POST" && pathname === "/system/bootstrap-admin") {
+    const adminCount = mockState.users.filter((u) => u.roles.includes("admin")).length;
+    if (adminCount > 0) {
+      throw new ApiError({
+        statusCode: 409,
+        code: "CONFLICT",
+        message: "Hệ thống đã có quản trị viên. Chức năng khởi tạo ban đầu bị khóa vĩnh viễn.",
+      });
+    }
+    const body = options.body as BootstrapAdminPayload;
+    const newAdmin = {
+      id: `usr-admin-${Date.now()}`,
+      email: body.email,
+      fullName: body.fullName,
+      roles: ["admin" as const],
+      status: "active" as const,
+      phone: body.phone,
+      timezone: "Asia/Ho_Chi_Minh",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    mockState.users.push(newAdmin);
+    return {
+      success: true,
+      message: "Khởi tạo Quản trị viên ban đầu thành công.",
+      user: newAdmin,
+    } as T;
   }
 
   if (method === "GET" && pathname === "/auth/me") {
@@ -421,7 +461,7 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
   }
 
   // Lessons
-  if (method === "GET" && pathname === "/lessons") {
+  if (method === "GET" && (pathname === "/lessons" || pathname === "/lessons/mine")) {
     const courseId = sp.get("courseId");
     const fromParam = sp.get("from");
     const toParam = sp.get("to");

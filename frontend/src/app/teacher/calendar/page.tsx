@@ -18,9 +18,8 @@ import {
   getWeekRangeForDateKey,
   getZonedDateParts,
 } from "@/lib/time/vn-time";
+import { useCalendarMode, type CalendarMode } from "@/lib/hooks/use-calendar-mode";
 import { cn } from "@/lib/utils/cn";
-
-type CalendarMode = "week" | "month";
 
 const WEEKDAY_SHORT = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"] as const;
 
@@ -78,7 +77,10 @@ export default function TeacherCalendarPage() {
   const [todayKey] = useState<string>(
     () => getZonedDateParts(new Date(), DEFAULT_TIMEZONE).dateKey,
   );
-  const [mode, setMode] = useState<CalendarMode>("week");
+  const [mode, setMode] = useCalendarMode("ielts_teacher_calendar_mode", "week");
+  const handleModeChange = (newMode: CalendarMode) => {
+    setMode(newMode);
+  };
   const [anchorDateKey, setAnchorDateKey] = useState<string>(() => todayKey);
   const [selectedDayKey, setSelectedDayKey] = useState<string>(() => todayKey);
   const [courseFilter, setCourseFilter] = useState<string>("");
@@ -194,7 +196,7 @@ export default function TeacherCalendarPage() {
             ariaLabel="Chế độ xem lịch dạy"
             items={MODE_TABS}
             value={mode}
-            onChange={setMode}
+            onChange={handleModeChange}
           />
         }
       >

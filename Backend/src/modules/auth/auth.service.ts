@@ -57,12 +57,14 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     const host = this.configService.get<string>('redis.host', 'localhost');
     const port = this.configService.get<number>('redis.port', 6379);
     const password = this.configService.get<string>('redis.password', '') || undefined;
+    const keyPrefix = this.configService.get<string>('redis.keyPrefix', 'ielts:customer:');
 
     try {
       const client = new Redis({
         host,
         port,
         password,
+        keyPrefix,
         lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
