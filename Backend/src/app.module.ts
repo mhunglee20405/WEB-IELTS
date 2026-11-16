@@ -26,6 +26,7 @@ import { ExamAttemptsModule } from 'src/modules/exam-attempts/exam-attempts.modu
 import { ReadingTranslationsModule } from 'src/modules/reading-translations/reading-translations.module';
 import { MediaModule } from 'src/modules/media/media.module';
 import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
+import { SystemModule } from 'src/modules/system/system.module';
 
 @Module({
   imports: [
@@ -41,23 +42,27 @@ import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          host: configService.get<string>('redis.host', 'localhost'),
-          port: configService.get<number>('redis.port', 6379),
-          password: configService.get<string>('redis.password', '') || undefined,
-          maxRetriesPerRequest: null,
-        },
-        defaultJobOptions: {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
+      useFactory: (configService: ConfigService) => {
+        const keyPrefix = configService.get<string>('redis.keyPrefix', 'ielts:customer:');
+        return {
+          prefix: `${keyPrefix}bull`,
+          connection: {
+            host: configService.get<string>('redis.host', 'localhost'),
+            port: configService.get<number>('redis.port', 6379),
+            password: configService.get<string>('redis.password', '') || undefined,
+            maxRetriesPerRequest: null,
           },
-          removeOnComplete: 100,
-          removeOnFail: 500,
-        },
-      }),
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+            removeOnComplete: 100,
+            removeOnFail: 500,
+          },
+        };
+      },
     }),
 
     // Rate limiting
@@ -100,6 +105,7 @@ import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
     ReadingTranslationsModule,
     MediaModule,
     DashboardModule,
+    SystemModule,
   ],
 })
 export class AppModule { }

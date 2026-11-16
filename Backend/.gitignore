@@ -4,4 +4,6 @@ node_modules/
 uploads/
 coverage/
 *.js.map
+backups/
+.bootstrap-token
 

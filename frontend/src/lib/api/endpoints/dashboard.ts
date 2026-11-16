@@ -106,7 +106,7 @@ export const dashboardApi = {
     try {
       const res = await apiRequest<{ total?: number; items?: unknown[] }>({
         method: "GET",
-        path: "/extension-requests?status=PENDING",
+        path: "/extension-requests?status=pending",
       });
       pendingExtensionsCount = res.total ?? (res.items ? res.items.length : 0);
     } catch {
@@ -117,7 +117,7 @@ export const dashboardApi = {
     try {
       const res = await apiRequest<{ total?: number; items?: unknown[] }>({
         method: "GET",
-        path: "/teacher/reading-translations?status=SUBMITTED",
+        path: "/teacher/reading-translations?status=submitted",
       });
       pendingTranslationsCount = res.total ?? (res.items ? res.items.length : 0);
     } catch {

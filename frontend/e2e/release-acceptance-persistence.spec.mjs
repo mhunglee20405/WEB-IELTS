@@ -2,15 +2,31 @@ import { chromium } from 'playwright';
 import assert from 'node:assert';
 
 const BASE_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
-async function loginViaUi(page, email, password) {
-  await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-  await page.fill('input[type="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 15000 });
-  console.log(`  🔑 Authenticated ${email} -> ${page.url()}`);
+async function loginViaUi(page, defaultEmail, defaultPassword) {
+  const candidates = [
+    { email: defaultEmail, password: defaultPassword },
+    { email: defaultEmail.replace('@ielts-lms.local', '@academy.edu.vn'), password: defaultPassword.replace('@123456', '@Academy2026!') },
+    { email: 'admin@academy.edu.vn', password: 'Admin@Academy2026!' },
+    { email: 'teacher@academy.edu.vn', password: 'Teacher@Academy2026!' },
+    { email: 'student@academy.edu.vn', password: 'Student@Academy2026!' },
+  ];
+
+  for (const cred of candidates) {
+    if (!cred.email.includes(defaultEmail.split('@')[0])) continue;
+    try {
+      await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
+      await page.fill('input[type="email"]', cred.email);
+      await page.fill('input[type="password"]', cred.password);
+      await page.click('button[type="submit"]');
+      await page.waitForURL((u) => !u.pathname.includes('/login'), { timeout: 7000 });
+      console.log(`  🔑 Authenticated ${cred.email} -> ${page.url()}`);
+      return;
+    } catch {
+      // try next candidate
+    }
+  }
+  throw new Error(`Failed to login with candidates for ${defaultEmail}`);
 }
 
 async function main() {
@@ -69,8 +85,8 @@ async function main() {
     checks++; passed++;
     console.log('  ✅ [PASS] Student calendar loaded initial view');
 
-    // Switch view mode (e.g. Month or List)
-    const monthTab = page.getByRole('tab', { name: /Tháng/i }).or(page.locator('button:has-text("Tháng")'));
+    // Switch view mode to Month
+    const monthTab = page.getByRole('tab', { name: /Lịch tháng|Tháng/i }).or(page.locator('button:has-text("Lịch tháng")'));
     if (await monthTab.isVisible()) {
       await monthTab.click();
       await page.waitForTimeout(500);
@@ -85,6 +101,17 @@ async function main() {
     assert(calReloaded?.includes('Lịch học'), 'Calendar heading visible after reload');
     checks++; passed++;
     console.log('  ✅ [PASS] Student calendar rendered without any RangeError or crash after reload');
+
+    // Assert that Month view selection persisted after reload
+    const savedStudentMode = await page.evaluate(() => localStorage.getItem('ielts_student_calendar_mode'));
+    assert(savedStudentMode === 'month', 'Student calendar mode persisted as "month" in localStorage');
+    checks++; passed++;
+    console.log('  ✅ [PASS] Student calendar localStorage persisted "month" mode');
+
+    const studentToolbar = await page.textContent('main');
+    assert(studentToolbar?.includes('Tháng'), 'Calendar month heading active in toolbar after reload');
+    checks++; passed++;
+    console.log('  ✅ [PASS] Student calendar UI view selection verified active after reload');
 
     // ─────────────────────────────────────────────────────────────
     // TEST 3: TEACHER LESSON VIEWING & STATE PERSISTENCE ACROSS RELOAD
@@ -101,6 +128,14 @@ async function main() {
     checks++; passed++;
     console.log('  ✅ [PASS] Teacher calendar loaded');
 
+    // Switch teacher calendar to Month view
+    const teacherMonthTab = teacherPage.getByRole('tab', { name: /Lịch tháng|Tháng/i }).or(teacherPage.locator('button:has-text("Lịch tháng")'));
+    if (await teacherMonthTab.isVisible()) {
+      await teacherMonthTab.click();
+      await teacherPage.waitForTimeout(500);
+      console.log('  ✅ Teacher switched to Month view');
+    }
+
     console.log('  🔄 Reloading teacher calendar...');
     await teacherPage.reload({ waitUntil: 'networkidle' });
     await teacherPage.waitForTimeout(1000);
@@ -108,6 +143,17 @@ async function main() {
     assert(teacherCalReloaded?.includes('Lịch giảng dạy'), 'Teacher calendar persists after reload');
     checks++; passed++;
     console.log('  ✅ [PASS] Teacher calendar persisted after reload');
+
+    // Assert that Month view selection persisted after reload
+    const savedTeacherMode = await teacherPage.evaluate(() => localStorage.getItem('ielts_teacher_calendar_mode'));
+    assert(savedTeacherMode === 'month', 'Teacher calendar mode persisted as "month" in localStorage');
+    checks++; passed++;
+    console.log('  ✅ [PASS] Teacher calendar localStorage persisted "month" mode');
+
+    const teacherToolbar = await teacherPage.textContent('main');
+    assert(teacherToolbar?.includes('Tháng'), 'Teacher calendar month heading active after reload');
+    checks++; passed++;
+    console.log('  ✅ [PASS] Teacher calendar UI view selection verified active after reload');
 
     // ─────────────────────────────────────────────────────────────
     // TEST 4: ADMIN AUDIT LOG & FILTERING ACROSS RELOAD

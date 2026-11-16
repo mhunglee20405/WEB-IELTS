@@ -51,6 +51,13 @@ async function seed() {
   await mongoose.connect(MONGODB_URI);
   console.log('✅ Connected to MongoDB at', MONGODB_URI);
 
+  const connectedDbName = (mongoose.connection.name || '').toLowerCase();
+  if (connectedDbName === 'ielts_lms_customer' || connectedDbName.includes('customer') || connectedDbName.includes('prod')) {
+    console.error(`⛔ FATAL SAFETY GUARD: Seeding demo data into customer or production database "${connectedDbName}" is strictly prohibited! Aborting.`);
+    await mongoose.disconnect();
+    process.exit(1);
+  }
+
   // Models
   const UserModel = mongoose.model('User', UserSchema, 'users');
   const StudentProfileModel = mongoose.model('StudentProfile', StudentProfileSchema, 'student_profiles');
@@ -74,22 +81,43 @@ async function seed() {
   const teacherHash = await argon2.hash('Teacher@123456', { type: argon2.argon2id });
   const studentHash = await argon2.hash('Student@123456', { type: argon2.argon2id });
 
+  // 🛡️ Explicit Allowlist of Databases Permitted for Destructive Seeding
+  const ALLOWED_DESTRUCTIVE_DB_NAMES = new Set([
+    'ielts_lms',
+    'ielts_lms_dev',
+    'ielts_lms_development',
+    'ielts_lms_test',
+    'ielts_lms_e2e',
+    'ielts_lms_local',
+  ]);
+
   // Optional fresh wipe for clean deterministic demo baseline
   const isFresh = process.argv.includes('--fresh') || process.argv.includes('--clean');
   if (isFresh) {
-    // 🛡️ Safety Guards: Disallow destructive wipe in production or on non-development databases
+    // 🛡️ Multi-Tier Safety Guard System: Prevent any accidental deletion of production/staging/live data
     const nodeEnv = (process.env.NODE_ENV || 'development').toLowerCase();
     if (nodeEnv === 'production') {
       console.error('⛔ FATAL SAFETY GUARD: Destructive --fresh seed cannot be executed in production (NODE_ENV=production). Aborting.');
       process.exit(1);
     }
 
-    const dbName = mongoose.connection.name || '';
-    if (/prod/i.test(dbName)) {
-      console.error(`⛔ FATAL SAFETY GUARD: Target database "${dbName}" appears to be a production database. Aborting.`);
+    const dbName = (mongoose.connection.name || '').toLowerCase();
+    
+    // Check 1: Deny any database name with sensitive environment keywords
+    if (/(prod|production|live|staging|uat|release)/i.test(dbName)) {
+      console.error(`⛔ FATAL SAFETY GUARD: Target database "${dbName}" matches protected environment keywords (prod/staging/live/uat/release). Destructive wipe forbidden. Aborting.`);
       process.exit(1);
     }
 
+    // Check 2: Strict Allowlist Verification - dbName MUST be in ALLOWED_DESTRUCTIVE_DB_NAMES
+    const customAllowed = process.env.CUSTOM_ALLOWED_DESTRUCTIVE_DB ? process.env.CUSTOM_ALLOWED_DESTRUCTIVE_DB.toLowerCase() : null;
+    const isExplicitlyAllowlisted = ALLOWED_DESTRUCTIVE_DB_NAMES.has(dbName) || (customAllowed && customAllowed === dbName);
+    if (!isExplicitlyAllowlisted) {
+      console.error(`⛔ FATAL SAFETY GUARD: Target database "${dbName}" is NOT in the explicit allowlist of authorized development/test databases: [${Array.from(ALLOWED_DESTRUCTIVE_DB_NAMES).join(', ')}]. Destructive wipe blocked. Aborting.`);
+      process.exit(1);
+    }
+
+    // Check 3: Host restriction - must be local loopback unless explicitly overridden
     const host = mongoose.connection.host || '';
     const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === 'mongodb';
     if (!isLocalhost && !process.env.ALLOW_REMOTE_DESTRUCTIVE_SEED) {
@@ -97,7 +125,7 @@ async function seed() {
       process.exit(1);
     }
 
-    console.log(`🧹 --fresh flag detected on safe dev database "${dbName}" (${host}): Wiping development collections...`);
+    console.log(`🧹 --fresh flag verified on allowlisted development database "${dbName}" (${host}): Wiping development collections...`);
     await Promise.all([
       UserModel.deleteMany({}),
       StudentProfileModel.deleteMany({}),

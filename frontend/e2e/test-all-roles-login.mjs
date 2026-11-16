@@ -36,9 +36,9 @@ async function testRole(email, password, expectedPathSnippet) {
 }
 
 async function main() {
-  await testRole('student@ielts-lms.local', 'Student@123456', '/student');
-  await testRole('teacher@ielts-lms.local', 'Teacher@123456', '/teacher');
-  await testRole('admin@ielts-lms.local', 'Admin@123456', '/admin');
+  await testRole('student@academy.edu.vn', 'Student@Academy2026!', '/student');
+  await testRole('teacher@academy.edu.vn', 'Teacher@Academy2026!', '/teacher');
+  await testRole('admin@academy.edu.vn', 'Admin@Academy2026!', '/admin');
   console.log('\n=======================================');
   console.log('ALL THREE ROLES LOGGED IN SUCCESSFULLY!');
   console.log('=======================================');

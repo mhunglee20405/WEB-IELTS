@@ -1,13 +1,15 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, BookOpen, CheckCircle2, Eye, EyeOff, KeyRound, LogIn } from "lucide-react";
+import { AlertCircle, BookOpen, CheckCircle2, Eye, EyeOff, KeyRound, LogIn, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { ApiError, getFriendlyErrorMessage } from "@/lib/api/error";
-import { authApi } from "@/lib/api/endpoints";
+import { authApi, systemApi } from "@/lib/api/endpoints";
 import {
   ForgotPasswordFormSchema,
   LoginFormSchema,
@@ -37,6 +39,14 @@ export function LoginForm() {
     requestId?: string;
   } | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  const setupStatusQuery = useQuery({
+    queryKey: ["system", "setup-status"],
+    queryFn: () => systemApi.getSetupStatus(),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const isUninitialized = setupStatusQuery.data && !setupStatusQuery.data.isInitialized;
 
   const loginTitleId = useId();
   const forgotTitleId = useId();
@@ -166,6 +176,27 @@ export function LoginForm() {
             </h1>
           </div>
         </div>
+
+        {isUninitialized ? (
+          <div
+            role="alert"
+            className="mb-5 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900"
+          >
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-700" aria-hidden={true} />
+            <div className="flex-1 space-y-1">
+              <p className="font-semibold text-slate-900">Hệ thống chưa có Quản trị viên ban đầu</p>
+              <p className="text-slate-600">
+                Đây là cài đặt mới. Vui lòng thiết lập tài khoản Quản trị viên Tối cao để bắt đầu vận hành.
+              </p>
+              <Link
+                href="/setup"
+                className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline pt-0.5"
+              >
+                Khởi tạo Quản trị viên ngay →
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {serverError ? (
           <div
