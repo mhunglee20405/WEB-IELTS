@@ -53,6 +53,8 @@ interface ExerciseRunnerProps {
 
 function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
   const queryClient = useQueryClient();
+  const nowMs = useNowMs();
+  const isDeadlinePassed = new Date(detail.effectiveDueAt).getTime() <= nowMs;
   const [answers, setAnswers] = useState<Record<string, string>>(
     () => loadExerciseDraft(userId, detail.studentAssignmentId)?.answers ?? {},
   );
@@ -171,10 +173,25 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
           key={question.id}
           question={question}
           value={answers[question.id] ?? ""}
-          disabled={submitMutation.isPending}
+          disabled={submitMutation.isPending || isDeadlinePassed}
           onChange={(nextVal) => handleAnswerChange(question.id, nextVal)}
         />
       ))}
+
+      {isDeadlinePassed ? (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"
+        >
+          <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden={true} />
+          <div className="space-y-1">
+            <p className="font-bold">Thời hạn nộp bài đã kết thúc</p>
+            <p className="text-xs text-amber-900">
+              Thời gian làm bài tập đã kết thúc vào lúc {formatVnDateTime(detail.effectiveDueAt)} (06:00 AM hôm sau). Hệ thống đã khóa chức năng nộp bài mới.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {submitError ? (
         <div
@@ -198,11 +215,11 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
         <button
           type="button"
           onClick={() => setConfirmOpen(true)}
-          disabled={submitMutation.isPending || totalQuestions === 0}
+          disabled={submitMutation.isPending || totalQuestions === 0 || isDeadlinePassed}
           className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Send className="h-4 w-4" aria-hidden={true} />
-          {submitMutation.isPending ? "Đang chấm điểm..." : "Nộp bài"}
+          {submitMutation.isPending ? "Đang chấm điểm..." : isDeadlinePassed ? "Đã hết hạn nộp" : "Nộp bài"}
         </button>
       </div>
     </div>

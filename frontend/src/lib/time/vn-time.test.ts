@@ -15,15 +15,15 @@ import {
 } from "./vn-time";
 
 describe("vn-time utilities", () => {
-  it("computes exact UTC bounds for Asia/Ho_Chi_Minh 00:00–23:59 daily window", async () => {
+  it("computes exact UTC bounds for Asia/Ho_Chi_Minh 06:00–06:00 (+24h) daily window", async () => {
     const syncBounds = getVnDailyWindowSync("2026-11-12");
-    expect(syncBounds.startUtcIso).toBe("2026-11-11T17:00:00.000Z");
-    expect(syncBounds.endExclusiveUtcIso).toBe("2026-11-12T17:00:00.000Z");
-    expect(syncBounds.displayEndTime).toBe("23:59");
+    expect(syncBounds.startUtcIso).toBe("2026-11-11T23:00:00.000Z");
+    expect(syncBounds.endExclusiveUtcIso).toBe("2026-11-12T23:00:00.000Z");
+    expect(syncBounds.displayEndTime).toBe("06:00 (+1d)");
 
     const temporalBounds = await getDailyWindowBounds("2026-11-12", "Asia/Ho_Chi_Minh");
-    expect(temporalBounds.startUtcIso).toBe("2026-11-11T17:00:00Z");
-    expect(temporalBounds.endExclusiveUtcIso).toBe("2026-11-12T17:00:00Z");
+    expect(temporalBounds.startUtcIso).toBe("2026-11-11T23:00:00Z");
+    expect(temporalBounds.endExclusiveUtcIso).toBe("2026-11-12T23:00:00Z");
   });
 
   it("formats dates cleanly in Asia/Ho_Chi_Minh regardless of host timezone", () => {
@@ -75,8 +75,8 @@ describe("vn-time utilities", () => {
     const week = getWeekRangeForDateKey("2026-11-12");
     expect(week.dateKeys[0]).toBe("2026-11-09");
     expect(week.dateKeys[6]).toBe("2026-11-15");
-    expect(week.fromUtcIso).toBe("2026-11-08T17:00:00.000Z");
-    expect(week.toUtcIso).toBe("2026-11-15T17:00:00.000Z");
+    expect(week.fromUtcIso).toBe("2026-11-08T23:00:00.000Z");
+    expect(week.toUtcIso).toBe("2026-11-15T23:00:00.000Z");
 
     const month = getMonthGridForDateKey("2026-11-12");
     expect(month.year).toBe(2026);

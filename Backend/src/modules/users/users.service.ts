@@ -45,8 +45,14 @@ export class UsersService {
       type: argon2.argon2id,
     });
 
+    const effectiveRole =
+      createUserDto.role ||
+      (createUserDto.roles && createUserDto.roles[0]) ||
+      UserRole.STUDENT;
+
     const user = new this.userModel({
       ...createUserDto,
+      role: effectiveRole,
       email: createUserDto.email.toLowerCase().trim(),
       passwordHash,
     });
@@ -54,9 +60,9 @@ export class UsersService {
     const savedUser = await user.save();
 
     // Create profile based on role
-    if (createUserDto.role === UserRole.STUDENT) {
+    if (effectiveRole === UserRole.STUDENT) {
       await new this.studentProfileModel({ userId: savedUser._id }).save();
-    } else if (createUserDto.role === UserRole.TEACHER) {
+    } else if (effectiveRole === UserRole.TEACHER) {
       await new this.teacherProfileModel({ userId: savedUser._id }).save();
     }
 
@@ -122,8 +128,15 @@ export class UsersService {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('User not found');
     }
+    const updatePayload: Record<string, unknown> = { ...updateDto };
+    const nextRole = updateDto.role || (updateDto.roles && updateDto.roles[0]);
+    if (nextRole) {
+      updatePayload.role = nextRole;
+    }
+    delete updatePayload.roles;
+
     const user = await this.userModel
-      .findByIdAndUpdate(id, { $set: updateDto }, { new: true })
+      .findByIdAndUpdate(id, { $set: updatePayload }, { new: true })
       .select('-passwordHash')
       .exec();
     if (!user) {

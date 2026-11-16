@@ -108,7 +108,7 @@ export default function TeacherAssignmentsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Quản lý bài tập đã giao"
-        subtitle="Theo dõi các bài tập hằng ngày theo khung giờ 00:00–23:59 GMT+7 và kết quả làm bài."
+        subtitle="Theo dõi các bài tập hằng ngày theo khung giờ 06:00 – 06:00 (hôm sau, 24 giờ) GMT+7 và kết quả làm bài."
         actions={
           <Link
             href="/teacher/assignments/new"

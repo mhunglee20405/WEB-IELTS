@@ -103,13 +103,8 @@ export function computeStudentAssignmentLifecycleStatus(
     };
   }
 
-  // If assignment is explicitly marked SCHEDULED, or has assignedDate and now < openMs
-  const isScheduled =
-    assignment.status === AssignmentStatus.SCHEDULED ||
-    (Boolean(assignment.assignedDate) && nowMs < openMs) ||
-    (assignment.status !== AssignmentStatus.PUBLISHED && nowMs < openMs);
-
-  if (isScheduled && nowMs < openMs) {
+  // If current time is earlier than assignment opening time (e.g. before 06:00 AM VN)
+  if (nowMs < openMs) {
     return {
       status: StudentAssignmentStatus.NOT_STARTED,
       scheduleStatus: 'SCHEDULED',
@@ -650,10 +645,10 @@ export class AssignmentsService {
       deadlineAt = bounds.dueAt;
       assignedDate = bounds.assignedDate;
     } else if (dto.targetDate) {
-      const bounds = createVnDailyBounds(dto.targetDate);
-      openAt = bounds.openAt;
-      deadlineAt = bounds.deadlineAt;
-      assignedDate = undefined as any;
+      const bounds = createVnDailyAssignmentBounds(dto.targetDate);
+      openAt = bounds.availableAt;
+      deadlineAt = bounds.dueAt;
+      assignedDate = bounds.assignedDate;
     } else if (dto.openAt && dto.deadlineAt) {
       openAt = new Date(dto.openAt);
       deadlineAt = new Date(dto.deadlineAt);
@@ -1367,8 +1362,8 @@ export class AssignmentsService {
     // CRITICAL: Students must NOT access protected questions/passages before availableAt!
     const isLocked =
       raw.status === AssignmentStatus.SCHEDULED ||
-      (studentLifecycle.scheduleStatus === 'SCHEDULED' &&
-        (Boolean(raw.assignedDate) || raw.status !== AssignmentStatus.PUBLISHED));
+      studentLifecycle.scheduleStatus === 'SCHEDULED' ||
+      now.getTime() < new Date(raw.openAt).getTime();
 
     if (!isLocked && raw.exerciseSnapshot) {
       sanitizedExercise = ExerciseMapper.toSanitized(raw.exerciseSnapshot);

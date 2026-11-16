@@ -1,6 +1,6 @@
-import { IsString, IsOptional, MinLength, MaxLength, IsEnum } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, IsEnum, IsArray } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { UserStatus } from 'src/database/schemas/enums';
+import { UserRole, UserStatus } from 'src/database/schemas/enums';
 
 export class UpdateUserDto {
   @ApiPropertyOptional()
@@ -19,6 +19,21 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
+
+  @ApiPropertyOptional({ enum: UserRole })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  roles?: UserRole[];
+
+  @ApiPropertyOptional({ example: 'Asia/Ho_Chi_Minh' })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 }
 
 export class UpdateUserStatusDto {

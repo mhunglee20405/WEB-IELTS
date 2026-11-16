@@ -126,16 +126,16 @@ export function formatVnDateTime(
 export interface DailyWindowUtcBounds {
   dateKey: string;
   timeZone: string;
-  /** Inclusive 00:00:00 in target timezone, serialized as UTC ISO */
+  /** Inclusive 06:00:00 in target timezone, serialized as UTC ISO */
   startUtcIso: string;
-  /** Exclusive 00:00:00 of the next day in target timezone, serialized as UTC ISO */
+  /** Exclusive 06:00:00 of the next day in target timezone, serialized as UTC ISO (+24h) */
   endExclusiveUtcIso: string;
-  /** Inclusive display end time in target timezone (`23:59`) */
+  /** Inclusive display end time in target timezone (`06:00 (+1d)`) */
   displayEndTime: string;
 }
 
 /**
- * Computes the UTC bounds for a local daily exercise window (`00:00–23:59`, exclusive `00:00` next day)
+ * Computes the UTC bounds for a local daily exercise window (`06:00–06:00 next day`, 24h duration)
  * in `Asia/Ho_Chi_Minh` (or any explicit IANA timezone via Temporal).
  */
 export async function getDailyWindowBounds(
@@ -146,11 +146,11 @@ export async function getDailyWindowBounds(
   const plainDate = Temporal.PlainDate.from(dateStr);
   const start = plainDate.toZonedDateTime({
     timeZone,
-    plainTime: "00:00:00",
+    plainTime: "06:00:00",
   });
   const endExclusive = plainDate.add({ days: 1 }).toZonedDateTime({
     timeZone,
-    plainTime: "00:00:00",
+    plainTime: "06:00:00",
   });
 
   return {
@@ -158,13 +158,13 @@ export async function getDailyWindowBounds(
     timeZone,
     startUtcIso: start.toInstant().toString(),
     endExclusiveUtcIso: endExclusive.toInstant().toString(),
-    displayEndTime: "23:59",
+    displayEndTime: "06:00 (+1d)",
   };
 }
 
 /**
  * Synchronous Asia/Ho_Chi_Minh daily window converter (UTC+7 fixed offset; no DST in Vietnam).
- * Prefer `getDailyWindowBounds` for arbitrary DST-observing timezones.
+ * Computes 06:00:00 AM on assigned date to 06:00:00 AM on the following day (24h).
  */
 export function getVnDailyWindowSync(dateStr: string): DailyWindowUtcBounds {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
@@ -175,16 +175,16 @@ export function getVnDailyWindowSync(dateStr: string): DailyWindowUtcBounds {
   const month = Number(match[2]);
   const day = Number(match[3]);
 
-  // 00:00:00 Asia/Ho_Chi_Minh (+07:00) corresponds to 17:00:00 UTC on the previous calendar day.
-  const startMs = Date.UTC(year, month - 1, day, -7, 0, 0, 0);
-  const endExclusiveMs = Date.UTC(year, month - 1, day + 1, -7, 0, 0, 0);
+  // 06:00:00 Asia/Ho_Chi_Minh (+07:00) corresponds to 23:00:00 UTC on the previous calendar day.
+  const startMs = Date.UTC(year, month - 1, day, 6, 0, 0, 0) - 7 * 60 * 60 * 1000;
+  const endExclusiveMs = startMs + 24 * 60 * 60 * 1000;
 
   return {
     dateKey: dateStr.trim(),
     timeZone: "Asia/Ho_Chi_Minh",
     startUtcIso: new Date(startMs).toISOString(),
     endExclusiveUtcIso: new Date(endExclusiveMs).toISOString(),
-    displayEndTime: "23:59",
+    displayEndTime: "06:00 (+1d)",
   };
 }
 

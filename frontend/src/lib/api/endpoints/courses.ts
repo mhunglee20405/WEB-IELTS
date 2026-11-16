@@ -33,10 +33,28 @@ export const coursesApi = {
   },
 
   create(payload: CreateCourseRequest): Promise<Course> {
-    return apiRequest<Course, CreateCourseRequest>({
+    const rawPayload = payload as unknown as Record<string, unknown>;
+    const rawType = (payload.courseType || rawPayload.type || "group") as string;
+    const type = rawType === "1:1" || rawType === "one_to_one" ? "one_to_one" : "group";
+    const body = {
+      code: payload.code,
+      title: payload.title,
+      description: payload.description,
+      startBand: Number(payload.startBand ?? 5.0),
+      targetBand: Number(payload.targetBand ?? 6.5),
+      type,
+      courseType: rawType,
+      teacherId: payload.teacherId,
+      startAt: payload.startDate || (rawPayload.startAt as string | undefined) || undefined,
+      endAt: payload.endDate || (rawPayload.endAt as string | undefined) || undefined,
+      startDate: payload.startDate || undefined,
+      endDate: payload.endDate || undefined,
+      timezone: payload.timezone,
+    };
+    return apiRequest<Course, typeof body>({
       method: "POST",
       path: "/courses",
-      body: payload,
+      body,
     });
   },
 
@@ -48,10 +66,30 @@ export const coursesApi = {
   },
 
   update(id: string, payload: UpdateCourseRequest): Promise<Course> {
-    return apiRequest<Course, UpdateCourseRequest>({
+    const rawPayload = payload as unknown as Record<string, unknown>;
+    const rawType = (payload.courseType || rawPayload.type) as string | undefined;
+    const body: Record<string, unknown> = {
+      title: payload.title,
+      description: payload.description,
+      startBand: payload.startBand !== undefined ? Number(payload.startBand) : undefined,
+      targetBand: payload.targetBand !== undefined ? Number(payload.targetBand) : undefined,
+      teacherId: payload.teacherId,
+      status: payload.status,
+      startAt: payload.startDate || (rawPayload.startAt as string | undefined) || undefined,
+      endAt: payload.endDate || (rawPayload.endAt as string | undefined) || undefined,
+      startDate: payload.startDate || undefined,
+      endDate: payload.endDate || undefined,
+      timezone: payload.timezone,
+    };
+    if (rawType) {
+      const type = rawType === "1:1" || rawType === "one_to_one" ? "one_to_one" : "group";
+      body.type = type;
+      body.courseType = rawType;
+    }
+    return apiRequest<Course, typeof body>({
       method: "PATCH",
       path: `/courses/${encodeURIComponent(id)}`,
-      body: payload,
+      body,
     });
   },
 

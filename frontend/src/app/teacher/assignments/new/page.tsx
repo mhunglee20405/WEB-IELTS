@@ -163,7 +163,7 @@ export default function TeacherNewAssignmentPage() {
     <div className="space-y-6">
       <PageHeader
         title="Giao bài tập hằng ngày"
-        subtitle="Chọn khóa học, đề đã xuất bản và ngày giao. Hệ thống tự khóa ngoài khung giờ 00:00–23:59 GMT+7."
+        subtitle="Chọn khóa học, đề đã xuất bản và ngày giao. Hệ thống tự động mở lúc 06:00 sáng và kết thúc lúc 06:00 sáng hôm sau (24 giờ) GMT+7."
         actions={
           <Link
             href="/teacher/assignments"
@@ -431,7 +431,7 @@ export default function TeacherNewAssignmentPage() {
                   {requiredScope === "FULL"
                     ? `toàn bộ ${selectedV2Test.partCount} phần (${selectedV2Test.totalQuestions} câu)`
                     : selectedV2Test.parts.find((p) => p.id === requiredPartId)?.title ??
-                      "1 phần chỉ định"}
+                    "1 phần chỉ định"}
                 </strong>
                 {durationMinutesOverride ? ` trong ${durationMinutesOverride} phút` : ""}
                 {maxAttempts ? `, tối đa ${maxAttempts} lượt thi` : ""}.
@@ -447,8 +447,8 @@ export default function TeacherNewAssignmentPage() {
                   Khung mở/đóng bài tự động theo giờ Việt Nam ({DEFAULT_TIMEZONE})
                 </p>
                 <p>
-                  Mở bài: <strong>{formatVnDateTime(vnWindowPreview.startUtcIso)}</strong> (00:00)
-                  · Hạn nộp: <strong>{formatVnDateTime(vnWindowPreview.endExclusiveUtcIso)}</strong>
+                  Mở bài: <strong>{formatVnDateTime(vnWindowPreview.startUtcIso)}</strong> (06:00)
+                  · Hạn nộp: <strong>{formatVnDateTime(vnWindowPreview.endExclusiveUtcIso)}</strong> (06:00 hôm sau, 24 giờ)
                 </p>
               </div>
             </div>

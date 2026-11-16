@@ -74,13 +74,13 @@ export class CoursesService {
     const teacher = await this.userModel
       .findOne({
         _id: new Types.ObjectId(dto.teacherId),
-        role: UserRole.TEACHER,
+        role: { $in: [UserRole.TEACHER, UserRole.ADMIN] },
         status: UserStatus.ACTIVE,
       })
       .exec();
 
     if (!teacher) {
-      throw new UnprocessableEntityException('Teacher not found or is not an active teacher');
+      throw new UnprocessableEntityException('Giảng viên phụ trách không tồn tại hoặc tài khoản chưa kích hoạt');
     }
 
     const existing = await this.courseModel.findOne({ code: dto.code.toUpperCase() }).exec();
@@ -88,17 +88,31 @@ export class CoursesService {
       throw new ConflictException(`Course code "${dto.code}" already exists`);
     }
 
-    if (dto.startAt && dto.endAt && new Date(dto.startAt) >= new Date(dto.endAt)) {
+    let courseType = dto.type;
+    const rawType = dto.courseType || dto.type;
+    if (rawType === '1:1' || rawType === 'one_to_one' || rawType === CourseType.ONE_TO_ONE) {
+      courseType = CourseType.ONE_TO_ONE;
+    } else {
+      courseType = CourseType.GROUP;
+    }
+
+    const rawStart = dto.startAt || dto.startDate;
+    const startAtDate = rawStart ? new Date(rawStart) : undefined;
+    const rawEnd = dto.endAt || dto.endDate;
+    const endAtDate = rawEnd ? new Date(rawEnd) : undefined;
+
+    if (startAtDate && endAtDate && startAtDate >= endAtDate) {
       throw new BadRequestException('startAt must be before endAt');
     }
 
     const course = new this.courseModel({
       ...dto,
+      type: courseType,
       code: dto.code.toUpperCase(),
       teacherId: new Types.ObjectId(dto.teacherId),
       createdBy: new Types.ObjectId(actorId),
-      startAt: dto.startAt ? new Date(dto.startAt) : undefined,
-      endAt: dto.endAt ? new Date(dto.endAt) : undefined,
+      startAt: startAtDate,
+      endAt: endAtDate,
     });
 
     try {
@@ -256,16 +270,25 @@ export class CoursesService {
       const teacher = await this.userModel
         .findOne({
           _id: new Types.ObjectId(dto.teacherId),
-          role: UserRole.TEACHER,
+          role: { $in: [UserRole.TEACHER, UserRole.ADMIN] },
           status: UserStatus.ACTIVE,
         })
         .exec();
       if (!teacher) {
-        throw new UnprocessableEntityException('Teacher not found or is not an active teacher');
+        throw new UnprocessableEntityException('Giảng viên phụ trách không tồn tại hoặc tài khoản chưa kích hoạt');
       }
     }
 
-    if (dto.type === CourseType.ONE_TO_ONE && course.type !== CourseType.ONE_TO_ONE) {
+    const rawType = dto.courseType || dto.type;
+    let effectiveType = dto.type;
+    if (rawType) {
+      effectiveType =
+        rawType === '1:1' || rawType === 'one_to_one' || rawType === CourseType.ONE_TO_ONE
+          ? CourseType.ONE_TO_ONE
+          : CourseType.GROUP;
+    }
+
+    if (effectiveType === CourseType.ONE_TO_ONE && course.type !== CourseType.ONE_TO_ONE) {
       const activeCount = await this.enrollmentModel
         .countDocuments({
           courseId: new Types.ObjectId(id),
@@ -282,16 +305,23 @@ export class CoursesService {
     if (dto.startBand !== undefined) validateBand(dto.startBand, 'startBand');
     if (dto.targetBand !== undefined) validateBand(dto.targetBand, 'targetBand');
 
-    const startAt = dto.startAt ? new Date(dto.startAt) : course.startAt;
-    const endAt = dto.endAt ? new Date(dto.endAt) : course.endAt;
+    const rawUpdateStart = dto.startAt || dto.startDate;
+    const startAt = rawUpdateStart ? new Date(rawUpdateStart) : course.startAt;
+    const rawUpdateEnd = dto.endAt || dto.endDate;
+    const endAt = rawUpdateEnd ? new Date(rawUpdateEnd) : course.endAt;
     if (startAt && endAt && startAt >= endAt) {
       throw new BadRequestException('startAt must be before endAt');
     }
 
     const updatePayload: Record<string, unknown> = { ...dto };
+    if (effectiveType) updatePayload['type'] = effectiveType;
+    delete updatePayload['courseType'];
+    delete updatePayload['startDate'];
+    delete updatePayload['endDate'];
+    delete updatePayload['timezone'];
     if (dto.teacherId) updatePayload['teacherId'] = new Types.ObjectId(dto.teacherId);
-    if (dto.startAt) updatePayload['startAt'] = new Date(dto.startAt);
-    if (dto.endAt) updatePayload['endAt'] = new Date(dto.endAt);
+    if (startAt) updatePayload['startAt'] = startAt;
+    if (endAt) updatePayload['endAt'] = endAt;
 
     const updated = await this.courseModel
       .findByIdAndUpdate(id, { $set: updatePayload }, { new: true })

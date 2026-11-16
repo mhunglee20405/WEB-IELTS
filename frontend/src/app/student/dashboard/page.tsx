@@ -41,7 +41,7 @@ export default function StudentDashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Tổng quan học tập"
-        subtitle={`Hôm nay ${formatDateKeyVi(todayKey)} · Cửa sổ bài tập hàng ngày 00:00 – 23:59 (Asia/Ho_Chi_Minh).`}
+        subtitle={`Hôm nay ${formatDateKeyVi(todayKey)} · Cửa sổ bài tập hàng ngày 06:00 – 06:00 hôm sau (24 giờ, Asia/Ho_Chi_Minh).`}
         actions={
           <Link
             href="/student/assignments"

@@ -45,8 +45,12 @@ export class UpdateCourseDto {
 
   @ApiPropertyOptional({ enum: CourseType })
   @IsOptional()
-  @IsEnum(CourseType)
   type?: CourseType;
+
+  @ApiPropertyOptional({ example: 'group' })
+  @IsOptional()
+  @IsString()
+  courseType?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -60,8 +64,23 @@ export class UpdateCourseDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsDateString()
   endAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: 'Asia/Ho_Chi_Minh' })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 
   @ApiPropertyOptional({ enum: CourseStatus })
   @IsOptional()

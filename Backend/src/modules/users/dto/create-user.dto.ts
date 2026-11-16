@@ -3,10 +3,9 @@ import {
   IsString,
   IsEnum,
   IsOptional,
+  IsArray,
   MinLength,
   MaxLength,
-  IsPhoneNumber,
-  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from 'src/database/schemas/enums';
@@ -27,13 +26,24 @@ export class CreateUserDto {
   @MinLength(8)
   password: string;
 
-  @ApiProperty({ enum: UserRole })
+  @ApiPropertyOptional({ enum: UserRole })
+  @IsOptional()
   @IsEnum(UserRole)
-  role: UserRole;
+  role?: UserRole;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  roles?: UserRole[];
 
   @ApiPropertyOptional({ example: '+84901234567' })
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @ApiPropertyOptional({ example: 'Asia/Ho_Chi_Minh' })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 }
 

@@ -131,7 +131,7 @@ export default function AdminSettingsPage() {
           </div>
           <div className="rounded-lg bg-slate-50 p-3">
             <dt className="text-xs font-medium text-slate-600">Cửa sổ bài tập hằng ngày</dt>
-            <dd className="mt-1 font-semibold text-slate-950">00:00 – 23:59 giờ Việt Nam</dd>
+            <dd className="mt-1 font-semibold text-slate-950">06:00 – 06:00 (hôm sau, 24 giờ) giờ Việt Nam</dd>
           </div>
           <div className="rounded-lg bg-slate-50 p-3">
             <dt className="text-xs font-medium text-slate-600">Ngưỡng qua bài &amp; mở đáp án</dt>

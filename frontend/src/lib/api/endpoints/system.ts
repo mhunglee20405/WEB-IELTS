@@ -4,6 +4,7 @@ export interface SetupStatus {
   isInitialized: boolean;
   adminCount: number;
   totalUsers: number;
+  requiresSetupToken?: boolean;
 }
 
 export interface BootstrapAdminPayload {
@@ -31,6 +32,7 @@ export const systemApi = {
     return apiRequest<SetupStatus>({
       method: "GET",
       path: "/system/setup-status",
+      skipAuth: true,
     });
   },
 
@@ -39,6 +41,7 @@ export const systemApi = {
       method: "POST",
       path: "/system/bootstrap-admin",
       body: payload,
+      skipAuth: true,
     });
   },
 };
