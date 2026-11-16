@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
+import { usersApi } from "@/lib/api/endpoints";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
 import { CourseFormSchema } from "@/lib/api/schemas";
 import type { Course, CourseFormat, CourseStatus } from "@/lib/api/types";
@@ -70,6 +72,24 @@ export function CourseForm({
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  const teachersQuery = useQuery({
+    queryKey: ["users", "teachers-list"],
+    queryFn: () => usersApi.list({ limit: 100 }),
+  });
+
+  const teacherOptions = useMemo(() => {
+    const allUsers = teachersQuery.data?.items ?? [];
+    return allUsers.filter(
+      (u) =>
+        u.roles?.includes("teacher") ||
+        u.roles?.includes("admin") ||
+        (u as unknown as { role?: string }).role === "teacher" ||
+        (u as unknown as { role?: string }).role === "admin",
+    );
+  }, [teachersQuery.data?.items]);
+
+  const effectiveTeacherId = values.teacherId || defaultTeacherId || teacherOptions[0]?.id || "";
+
   const updateField = <K extends keyof CourseFormValues>(key: K, next: CourseFormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: next }));
     setFieldErrors((prev) => {
@@ -90,7 +110,7 @@ export function CourseForm({
       startBand: values.startBand,
       targetBand: values.targetBand,
       status: values.status,
-      teacherId: values.teacherId,
+      teacherId: values.teacherId || effectiveTeacherId,
       timezone: values.timezone || DEFAULT_TIMEZONE,
       startDate: values.startDate || undefined,
       endDate: values.endDate || undefined,
@@ -265,19 +285,40 @@ export function CourseForm({
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label htmlFor="teacher-id" className="block text-sm font-medium text-slate-900">
-            Mã giảng viên phụ trách <span className="text-red-700">*</span>
+            Giảng viên phụ trách <span className="text-red-700">*</span>
           </label>
-          <input
-            id="teacher-id"
-            name="teacherId"
-            type="text"
-            required
-            value={values.teacherId}
-            onChange={(e) => updateField("teacherId", e.target.value)}
-            aria-invalid={Boolean(fieldErrors.teacherId)}
-            aria-describedby={fieldErrors.teacherId ? "teacher-id-err" : undefined}
-            className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
-          />
+          {teacherOptions.length > 0 ? (
+            <select
+              id="teacher-id"
+              name="teacherId"
+              required
+              value={values.teacherId}
+              onChange={(e) => updateField("teacherId", e.target.value)}
+              aria-invalid={Boolean(fieldErrors.teacherId)}
+              aria-describedby={fieldErrors.teacherId ? "teacher-id-err" : undefined}
+              className="mt-1.5 min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
+            >
+              <option value="">-- Chọn Giảng viên phụ trách --</option>
+              {teacherOptions.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.fullName} ({t.email}) [{t.roles?.join(", ").toUpperCase() || "USER"}]
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="teacher-id"
+              name="teacherId"
+              type="text"
+              required
+              value={values.teacherId}
+              onChange={(e) => updateField("teacherId", e.target.value)}
+              aria-invalid={Boolean(fieldErrors.teacherId)}
+              aria-describedby={fieldErrors.teacherId ? "teacher-id-err" : undefined}
+              placeholder="Nhập ID giảng viên phụ trách"
+              className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
+            />
+          )}
           {fieldErrors.teacherId ? (
             <p id="teacher-id-err" className="mt-1 text-xs font-medium text-red-700">
               {fieldErrors.teacherId}

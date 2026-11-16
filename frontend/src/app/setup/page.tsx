@@ -70,12 +70,17 @@ export default function SetupPage() {
       return;
     }
 
+    if (!setupToken.trim()) {
+      setValidationError("Vui lòng nhập Mã thiết lập (Setup Token) từ tệp .bootstrap-token trên máy chủ.");
+      return;
+    }
+
     bootstrapMutation.mutate({
       fullName: fullName.trim(),
       email: email.trim().toLowerCase(),
       phone: phone.trim() || undefined,
       password,
-      setupToken: setupToken.trim() || undefined,
+      setupToken: setupToken.trim(),
     });
   };
 
@@ -258,19 +263,23 @@ export default function SetupPage() {
 
                 <div>
                   <label htmlFor="setup-token" className="block text-xs font-semibold text-slate-700">
-                    Mã thiết lập (Setup Token) <span className="text-slate-600 font-normal">(chỉ cần nếu máy chủ yêu cầu)</span>
+                    Mã thiết lập (Setup Token) <span className="text-red-700">*</span>
                   </label>
                   <div className="relative mt-1.5">
                     <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" aria-hidden={true} />
                     <input
                       id="setup-token"
                       type="password"
+                      required
                       value={setupToken}
                       onChange={(e) => setSetupToken(e.target.value)}
-                      placeholder="Để trống nếu không cấu hình SETUP_TOKEN"
+                      placeholder="Nhập mã từ tệp .bootstrap-token trên máy chủ"
                       className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-700"
                     />
                   </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Mã kích hoạt một lần được tạo tự động trong tệp <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[10px] text-slate-800">.bootstrap-token</code> hoặc biến môi trường <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[10px] text-slate-800">SETUP_TOKEN</code>.
+                  </p>
                 </div>
 
                 <div className="pt-4">

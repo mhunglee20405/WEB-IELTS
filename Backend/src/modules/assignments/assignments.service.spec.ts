@@ -271,8 +271,8 @@ describe('AssignmentsService', () => {
       expect(res).toBeDefined();
       expect(res.id).toBe(assignmentId.toHexString());
       expect(res.title).toBe('Climate Change Passage');
-      expect(res.openAtVn).toContain('2026-11-20T00:00:00+07:00');
-      expect(res.deadlineAtVn).toContain('2026-11-20T23:59:59+07:00');
+      expect(res.openAtVn).toContain('2026-11-20T06:00:00+07:00');
+      expect(res.deadlineAtVn).toContain('2026-11-21T06:00:00+07:00');
 
       // Verify student_assignments were dispatched
       expect(studentAssignmentModel.insertMany).toHaveBeenCalledWith(

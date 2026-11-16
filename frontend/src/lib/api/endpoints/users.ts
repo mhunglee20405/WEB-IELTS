@@ -24,10 +24,20 @@ export const usersApi = {
   },
 
   create(payload: CreateUserRequest): Promise<AuthUser> {
-    return apiRequest<AuthUser, CreateUserRequest>({
+    const rawPayload = payload as unknown as Record<string, unknown>;
+    const role = (rawPayload.role as string | undefined) || (payload.roles && payload.roles[0]) || "student";
+    const body = {
+      fullName: payload.fullName,
+      email: payload.email,
+      password: payload.password,
+      role,
+      roles: [role],
+      timezone: payload.timezone,
+    };
+    return apiRequest<AuthUser, typeof body>({
       method: "POST",
       path: "/users",
-      body: payload,
+      body,
     });
   },
 
@@ -39,10 +49,21 @@ export const usersApi = {
   },
 
   update(id: string, payload: UpdateUserRequest): Promise<AuthUser> {
-    return apiRequest<AuthUser, UpdateUserRequest>({
+    const rawPayload = payload as unknown as Record<string, unknown>;
+    const role = (rawPayload.role as string | undefined) || (payload.roles && payload.roles[0]);
+    const body: Record<string, unknown> = {
+      fullName: payload.fullName,
+      status: payload.status,
+      timezone: payload.timezone,
+    };
+    if (role) {
+      body.role = role;
+      body.roles = [role];
+    }
+    return apiRequest<AuthUser, typeof body>({
       method: "PATCH",
       path: `/users/${encodeURIComponent(id)}`,
-      body: payload,
+      body,
     });
   },
 };

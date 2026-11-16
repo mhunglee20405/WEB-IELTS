@@ -21,6 +21,7 @@ import {
   StudentAssignmentStatus,
   UserRole,
 } from 'src/database/schemas/enums';
+import { formatVnDateTime } from 'src/common/utils/timezone.util';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { SubmissionQueryDto } from './dto/submission-query.dto';
 
@@ -102,6 +103,30 @@ export class SubmissionsService {
 
     if (!studentAssignment) {
       throw new ForbiddenException('You are not assigned to this assignment');
+    }
+
+    const nowMs = Date.now();
+    if (assignment.openAt && nowMs < new Date(assignment.openAt).getTime()) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: 'ASSIGNMENT_NOT_YET_AVAILABLE',
+        message: `Bài tập chưa đến giờ mở. Thời gian mở bài: ${formatVnDateTime(assignment.openAt)} (06:00 AM).`,
+        availableAt: assignment.openAt,
+        availableAtVn: formatVnDateTime(assignment.openAt),
+      });
+    }
+
+    const effectiveDeadline = studentAssignment.effectiveDeadlineAt || assignment.deadlineAt;
+    if (effectiveDeadline && nowMs >= new Date(effectiveDeadline).getTime()) {
+      throw new BadRequestException({
+        statusCode: 400,
+        error: 'BadRequest',
+        code: 'ASSIGNMENT_EXPIRED',
+        message: `Thời hạn làm bài tập đã kết thúc vào ${formatVnDateTime(effectiveDeadline)} (06:00 AM hôm sau).`,
+        deadlineAt: effectiveDeadline,
+        deadlineAtVn: formatVnDateTime(effectiveDeadline),
+      });
     }
 
     // Check existing submissions count

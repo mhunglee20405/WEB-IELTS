@@ -46,9 +46,14 @@ export class CreateCourseDto {
   @IsIeltsBand()
   targetBand: number;
 
-  @ApiProperty({ enum: CourseType })
-  @IsEnum(CourseType)
-  type: CourseType;
+  @ApiPropertyOptional({ enum: CourseType })
+  @IsOptional()
+  type?: CourseType;
+
+  @ApiPropertyOptional({ example: 'group' })
+  @IsOptional()
+  @IsString()
+  courseType?: string;
 
   @ApiProperty({ description: 'Teacher user ID (ObjectId)' })
   @IsMongoId()
@@ -59,9 +64,24 @@ export class CreateCourseDto {
   @IsDateString()
   startAt?: string;
 
+  @ApiPropertyOptional({ example: '2026-01-15' })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
   @ApiPropertyOptional({ example: '2026-06-30T00:00:00.000Z' })
   @IsOptional()
   @IsDateString()
   endAt?: string;
+
+  @ApiPropertyOptional({ example: '2026-06-30' })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: 'Asia/Ho_Chi_Minh' })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 }
 

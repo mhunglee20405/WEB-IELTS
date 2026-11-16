@@ -127,6 +127,16 @@ export function getFriendlyErrorMessage(error: unknown): string {
   if (normalized.code in CODE_MESSAGES_VI) {
     return CODE_MESSAGES_VI[normalized.code]!;
   }
+  const isGenericStatusMessage =
+    !normalized.message ||
+    /^(Unauthorized|Forbidden|Not Found|Bad Request|Internal Server Error|Conflict|Yêu cầu thất bại\.)/i.test(
+      normalized.message.trim(),
+    );
+
+  if (!isGenericStatusMessage) {
+    return normalized.message;
+  }
+
   if (normalized.statusCode === 401) {
     return CODE_MESSAGES_VI.UNAUTHORIZED!;
   }

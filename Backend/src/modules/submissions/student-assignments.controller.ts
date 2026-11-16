@@ -103,16 +103,19 @@ export class StudentAssignmentsController {
     const dueAt = assignment.deadlineAt || new Date();
     const effectiveDueAt = sa.effectiveDeadlineAt || dueAt;
 
+    const isLocked = isStudent && new Date().getTime() < new Date(openAt).getTime();
     const rawQuestions = snapshot?.questions || exercise?.questions || [];
-    const sanitizedQuestions = rawQuestions.map((q: any, idx: number) => ({
-      id: q.questionId || `q-${idx + 1}`,
-      questionId: q.questionId || `q-${idx + 1}`,
-      orderIndex: q.orderIndex ?? (idx + 1),
-      prompt: q.prompt || '',
-      type: q.type,
-      points: q.points ?? 1,
-      options: q.options || [],
-    }));
+    const sanitizedQuestions = isLocked
+      ? []
+      : rawQuestions.map((q: any, idx: number) => ({
+          id: q.questionId || `q-${idx + 1}`,
+          questionId: q.questionId || `q-${idx + 1}`,
+          orderIndex: q.orderIndex ?? (idx + 1),
+          prompt: q.prompt || '',
+          type: q.type,
+          points: q.points ?? 1,
+          options: q.options || [],
+        }));
 
     const exercisePublic = {
       id: extractObjectId(exercise?._id || assignment._id),
@@ -120,12 +123,14 @@ export class StudentAssignmentsController {
       type: exerciseType,
       status: 'published',
       version: assignment.exerciseVersion || exercise?.version || 1,
-      instructions: snapshot?.instructions || exercise?.instructions || '',
-      passageHtml: snapshot?.passage || exercise?.passage || '',
-      audioAssetId: snapshot?.audioAssets?.[0]?.objectKey || exercise?.audioAssetId || undefined,
+      instructions: isLocked ? '' : (snapshot?.instructions || exercise?.instructions || ''),
+      passageHtml: isLocked ? '' : (snapshot?.passage || exercise?.passage || ''),
+      audioAssetId: isLocked ? undefined : (snapshot?.audioAssets?.[0]?.objectKey || exercise?.audioAssetId || undefined),
       durationMinutes: exercise?.durationMinutes || undefined,
       passThreshold: assignment.targetScorePercent ?? 70,
       questions: sanitizedQuestions,
+      questionCount: rawQuestions.length,
+      isLocked,
     };
 
     return {
