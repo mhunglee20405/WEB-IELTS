@@ -93,23 +93,59 @@ export const coursesApi = {
     });
   },
 
-  listStudents(
+  async listStudents(
     courseId: string,
-    query: { page?: number; limit?: number } = {},
+    query: { page?: number; limit?: number; status?: string } = {},
   ): Promise<PaginatedResponse<CourseStudent>> {
     const qs = buildQueryString({ ...query });
-    return apiRequest<PaginatedResponse<CourseStudent>>({
+    const res = await apiRequest<PaginatedResponse<Record<string, unknown>>>({
       method: "GET",
       path: `/courses/${encodeURIComponent(courseId)}/students${qs}`,
     });
+    const items: CourseStudent[] = (res.items || []).map((raw: Record<string, unknown>) => {
+      const stu = (raw.student || {}) as Record<string, unknown>;
+      const studentId = String(
+        raw.studentId ||
+        stu._id ||
+        stu.id ||
+        raw._id ||
+        raw.id ||
+        ""
+      );
+      const fullName = String(raw.fullName || stu.fullName || stu.name || "");
+      const email = String(raw.email || stu.email || "");
+      const enrolledAt = String(raw.enrolledAt || raw.joinedAt || raw.createdAt || new Date().toISOString());
+      const rawStatus = String(raw.status || "active");
+      const status = rawStatus === "dropped" ? "inactive" : (rawStatus as CourseStudent["status"]);
+
+      return {
+        studentId,
+        fullName,
+        email,
+        enrolledAt,
+        status,
+      };
+    });
+    return {
+      ...res,
+      items,
+    };
   },
 
-  addStudent(courseId: string, payload: AddCourseStudentRequest): Promise<CourseStudent> {
-    return apiRequest<CourseStudent, AddCourseStudentRequest>({
+  async addStudent(courseId: string, payload: AddCourseStudentRequest): Promise<CourseStudent> {
+    const raw = await apiRequest<Record<string, unknown>, AddCourseStudentRequest>({
       method: "POST",
       path: `/courses/${encodeURIComponent(courseId)}/students`,
       body: payload,
     });
+    const stu = (raw.student || {}) as Record<string, unknown>;
+    return {
+      studentId: String(raw.studentId || stu._id || stu.id || payload.studentId),
+      fullName: String(raw.fullName || stu.fullName || "Học viên"),
+      email: String(raw.email || stu.email || ""),
+      enrolledAt: String(raw.enrolledAt || raw.joinedAt || new Date().toISOString()),
+      status: (raw.status as CourseStudent["status"]) || "active",
+    };
   },
 
   removeStudent(courseId: string, studentId: string): Promise<{ ok?: boolean }> {

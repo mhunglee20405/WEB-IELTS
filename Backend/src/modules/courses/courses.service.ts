@@ -133,20 +133,35 @@ export class CoursesService {
   async findAll(actor: UserDocument, query: CourseQueryDto): Promise<PaginatedCourses> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const filter: Record<string, unknown> = {};
+    const conditions: Record<string, unknown>[] = [];
 
     if (actor.role === UserRole.TEACHER) {
-      filter['teacherId'] = actor._id;
+      conditions.push({ teacherId: actor._id });
     } else if (actor.role === UserRole.STUDENT) {
       return this.findMine(actor, query);
     }
 
-    if (query.status) filter['status'] = query.status;
-    if (query.type) filter['type'] = query.type;
+    if (query.status) {
+      if (query.status === CourseStatus.UPCOMING) {
+        conditions.push({
+          $or: [
+            { status: CourseStatus.UPCOMING },
+            { status: CourseStatus.DRAFT },
+            { startAt: { $gt: new Date() }, status: { $ne: CourseStatus.ARCHIVED } },
+          ],
+        });
+      } else {
+        conditions.push({ status: query.status });
+      }
+    }
+    if (query.type) conditions.push({ type: query.type });
     if (query.search) {
       const regex = new RegExp(escapeRegex(query.search.trim()), 'i');
-      filter['$or'] = [{ code: regex }, { title: regex }];
+      conditions.push({ $or: [{ code: regex }, { title: regex }] });
     }
+
+    const filter: Record<string, unknown> =
+      conditions.length === 0 ? {} : conditions.length === 1 ? conditions[0] : { $and: conditions };
 
     const [items, total] = await Promise.all([
       this.courseModel
@@ -189,14 +204,29 @@ export class CoursesService {
       .exec();
 
     const courseIds = enrollments.map((e) => e.courseId);
-    const filter: Record<string, unknown> = { _id: { $in: courseIds } };
+    const conditions: Record<string, unknown>[] = [{ _id: { $in: courseIds } }];
 
-    if (query.status) filter['status'] = query.status;
-    if (query.type) filter['type'] = query.type;
+    if (query.status) {
+      if (query.status === CourseStatus.UPCOMING) {
+        conditions.push({
+          $or: [
+            { status: CourseStatus.UPCOMING },
+            { status: CourseStatus.DRAFT },
+            { startAt: { $gt: new Date() }, status: { $ne: CourseStatus.ARCHIVED } },
+          ],
+        });
+      } else {
+        conditions.push({ status: query.status });
+      }
+    }
+    if (query.type) conditions.push({ type: query.type });
     if (query.search) {
       const regex = new RegExp(escapeRegex(query.search.trim()), 'i');
-      filter['$or'] = [{ code: regex }, { title: regex }];
+      conditions.push({ $or: [{ code: regex }, { title: regex }] });
     }
+
+    const filter: Record<string, unknown> =
+      conditions.length === 1 ? conditions[0] : { $and: conditions };
 
     const [items, total] = await Promise.all([
       this.courseModel
@@ -395,7 +425,7 @@ export class CoursesService {
     actor: UserDocument,
     page: number,
     limit: number,
-    status: EnrollmentStatus = EnrollmentStatus.ACTIVE,
+    status?: EnrollmentStatus,
   ): Promise<{ items: unknown[]; total: number; page: number; limit: number }> {
     if (!Types.ObjectId.isValid(courseId)) throw new NotFoundException('Course not found');
 
@@ -406,7 +436,10 @@ export class CoursesService {
       this.assertTeacherOwns(course, (actor._id as Types.ObjectId).toHexString());
     }
 
-    const filter = { courseId: new Types.ObjectId(courseId), status };
+    const filter: Record<string, unknown> = { courseId: new Types.ObjectId(courseId) };
+    if (status) {
+      filter['status'] = status;
+    }
 
     const [enrollments, total] = await Promise.all([
       this.enrollmentModel
@@ -419,14 +452,33 @@ export class CoursesService {
       this.enrollmentModel.countDocuments(filter).exec(),
     ]);
 
-    const items = enrollments.map((e) => ({
-      enrollmentId: (e._id as Types.ObjectId).toHexString(),
-      student: e.studentId,
-      joinedAt: e.joinedAt,
-      leftAt: e.leftAt,
-      status: e.status,
-      history: e.history,
-    }));
+    const items = enrollments.map((e) => {
+      const raw = typeof e.toObject === 'function' ? e.toObject() : e;
+      const stu = raw.studentId as any;
+      const studentIdStr =
+        stu && typeof stu === 'object'
+          ? (stu._id || stu.id)?.toString()
+          : stu
+            ? String(stu)
+            : '';
+      const fullName = stu && typeof stu === 'object' ? stu.fullName || '' : '';
+      const email = stu && typeof stu === 'object' ? stu.email || '' : '';
+      const phone = stu && typeof stu === 'object' ? stu.phone || '' : '';
+
+      return {
+        enrollmentId: (e._id as Types.ObjectId).toHexString(),
+        studentId: studentIdStr,
+        student: e.studentId,
+        fullName,
+        email,
+        phone,
+        enrolledAt: e.joinedAt,
+        joinedAt: e.joinedAt,
+        leftAt: e.leftAt,
+        status: e.status,
+        history: e.history,
+      };
+    });
 
     return { items, total, page, limit };
   }

@@ -5,6 +5,8 @@ import { tokenStore } from "../token-store";
 import type {
   AuthTokens,
   AuthUser,
+  ChangeEmailRequest,
+  ChangePasswordRequest,
   ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
@@ -77,6 +79,26 @@ export const authApi = {
       path: "/auth/me",
     });
     return AuthUserSchema.parse(data);
+  },
+
+  async changeEmail(payload: ChangeEmailRequest): Promise<{ success: boolean; message: string; user: AuthUser; tokens?: AuthTokens }> {
+    const data = await apiRequest<{ success: boolean; message: string; user: AuthUser; tokens?: AuthTokens }, ChangeEmailRequest>({
+      method: "PATCH",
+      path: "/auth/change-email",
+      body: payload,
+    });
+    if (data.tokens) {
+      tokenStore.setTokens(data.tokens);
+    }
+    return data;
+  },
+
+  async changePassword(payload: ChangePasswordRequest): Promise<{ success: boolean; message: string }> {
+    return apiRequest<{ success: boolean; message: string }, ChangePasswordRequest>({
+      method: "PATCH",
+      path: "/auth/change-password",
+      body: payload,
+    });
   },
 
   async getStudentProfile(): Promise<StudentProfile> {

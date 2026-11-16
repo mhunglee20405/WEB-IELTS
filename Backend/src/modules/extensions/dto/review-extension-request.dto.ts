@@ -1,16 +1,30 @@
 import { IsEnum, IsOptional, IsString, MaxLength, IsDateString } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { ExtensionRequestStatus } from 'src/database/schemas/enums';
 
 export class ReviewExtensionRequestDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     enum: [ExtensionRequestStatus.APPROVED, ExtensionRequestStatus.REJECTED],
     description: 'Decision status',
   })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
   @IsEnum([ExtensionRequestStatus.APPROVED, ExtensionRequestStatus.REJECTED], {
     message: 'status must be either approved or rejected',
   })
-  status: ExtensionRequestStatus.APPROVED | ExtensionRequestStatus.REJECTED;
+  status?: ExtensionRequestStatus.APPROVED | ExtensionRequestStatus.REJECTED;
+
+  @ApiPropertyOptional({
+    enum: [ExtensionRequestStatus.APPROVED, ExtensionRequestStatus.REJECTED],
+    description: 'Alternative alias for status',
+  })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
+  @IsEnum([ExtensionRequestStatus.APPROVED, ExtensionRequestStatus.REJECTED], {
+    message: 'decision must be either approved or rejected',
+  })
+  decision?: ExtensionRequestStatus.APPROVED | ExtensionRequestStatus.REJECTED;
 
   @ApiPropertyOptional({
     example: 'Đồng ý gia hạn thêm 2 ngày, chú ý hoàn thành đúng hạn mới.',
@@ -20,6 +34,14 @@ export class ReviewExtensionRequestDto {
   @IsString()
   @MaxLength(500)
   reviewNote?: string;
+
+  @ApiPropertyOptional({
+    description: 'Alternative alias for reviewNote',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  decisionNote?: string;
 
   @ApiPropertyOptional({
     example: '2026-12-05T23:59:59.999Z',

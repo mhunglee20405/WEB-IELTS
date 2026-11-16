@@ -80,7 +80,7 @@ export default function TeacherCourseStudentsPage() {
   const isOneOnOneAtLimit = course?.courseType === "1:1" && activeRosterCount >= 1;
 
   const pickerUsers = availableStudentsQuery.data;
-  const enrolledSet = new Set(roster.map((r) => r.studentId));
+  const enrolledSet = new Set(roster.filter((r) => r.status === "active").map((r) => r.studentId));
   const candidateStudents = pickerUsers?.filter((u) => !enrolledSet.has(u.id)) ?? [];
 
   const handleEnrollSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -101,7 +101,7 @@ export default function TeacherCourseStudentsPage() {
           href={`/teacher/students/${encodeURIComponent(row.studentId)}`}
           className="font-semibold text-blue-800 hover:underline"
         >
-          {row.fullName}
+          {row.fullName || "Học viên"}
         </Link>
       ),
     },
@@ -124,16 +124,27 @@ export default function TeacherCourseStudentsPage() {
       key: "actions",
       header: "Thao tác",
       align: "end",
-      renderCell: (row) => (
-        <button
-          type="button"
-          onClick={() => setRemovingStudent(row)}
-          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-800 hover:bg-red-50"
-        >
-          <UserMinus className="h-3.5 w-3.5" aria-hidden={true} />
-          Rút khỏi lớp
-        </button>
-      ),
+      renderCell: (row) =>
+        row.status === "active" ? (
+          <button
+            type="button"
+            onClick={() => setRemovingStudent(row)}
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-800 hover:bg-red-50"
+          >
+            <UserMinus className="h-3.5 w-3.5" aria-hidden={true} />
+            Rút khỏi lớp
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => addMutation.mutate(row.studentId)}
+            disabled={addMutation.isPending || isOneOnOneAtLimit}
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50 disabled:opacity-50"
+          >
+            <UserPlus className="h-3.5 w-3.5" aria-hidden={true} />
+            Ghi danh lại
+          </button>
+        ),
     },
   ];
 
@@ -248,10 +259,10 @@ export default function TeacherCourseStudentsPage() {
         loadingLabel="Đang tải danh sách học viên..."
       >
         <DataTable
-          caption={`Danh sách học viên đang ghi danh (${roster.length})`}
+          caption={`Danh sách học viên (${activeRosterCount} đang học / ${roster.length} tổng cộng)`}
           columns={columns}
           rows={roster}
-          getRowKey={(row) => row.studentId}
+          getRowKey={(row) => row.studentId || row.email}
           emptyTitle="Lớp học chưa có học viên nào"
           emptyDescription="Hãy thêm học viên đầu tiên bằng biểu mẫu phía trên."
         />

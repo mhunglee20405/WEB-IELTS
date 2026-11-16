@@ -1,6 +1,8 @@
 import {
   Injectable,
   UnauthorizedException,
+  BadRequestException,
+  ConflictException,
   Logger,
   OnModuleInit,
   OnModuleDestroy,
@@ -17,6 +19,9 @@ import Redis from 'ioredis';
 import { User, UserDocument } from 'src/database/schemas/user.schema';
 import { UserStatus } from 'src/database/schemas/enums';
 import { LoginDto } from './dto/login.dto';
+import { ChangeEmailDto } from './dto/change-email.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { AuditService } from '../audit/audit.service';
 
 export interface TokenPair {
   accessToken: string;
@@ -43,6 +48,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private auditService: AuditService,
     @Optional() @Inject('AUTH_REDIS_CLIENT') private injectedRedis?: Redis,
   ) {}
 
@@ -206,11 +212,189 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     await this.deleteStoreKey(key);
   }
 
+  /**
+   * Revokes all active sessions/refresh tokens for a specific user.
+   */
+  async revokeAllUserSessions(userId: string): Promise<void> {
+    // 1. In-memory store cleanup
+    for (const [key, value] of this.fallbackStore.entries()) {
+      try {
+        const parsed = JSON.parse(value.payload);
+        if (parsed.userId === userId) {
+          this.fallbackStore.delete(key);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. Redis store cleanup
+    if (this.isRedisConnected && this.redisClient) {
+      try {
+        const stream = this.redisClient.scanStream({
+          match: 'auth:refresh:*',
+          count: 100,
+        });
+
+        await new Promise<void>((resolve) => {
+          stream.on('data', async (keys: string[]) => {
+            if (!keys.length) return;
+            for (const key of keys) {
+              try {
+                const val = await this.redisClient?.get(key);
+                if (val) {
+                  const parsed = JSON.parse(val);
+                  if (parsed.userId === userId) {
+                    await this.redisClient?.del(key);
+                  }
+                }
+              } catch {
+                // ignore
+              }
+            }
+          });
+          stream.on('end', () => resolve());
+          stream.on('error', () => resolve());
+        });
+      } catch (err: any) {
+        this.logger.warn(`Could not revoke Redis sessions for user ${userId}: ${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * Secure email change for authenticated user:
+   * - Requires and verifies current account password
+   * - Normalizes new email and verifies uniqueness in Atlas
+   * - Increments tokenVersion to invalidate stale JWTs
+   * - Revokes previous refresh tokens
+   * - Generates new token pair with updated email
+   * - Records sanitized audit log event
+   */
+  async changeEmail(
+    userId: string,
+    dto: ChangeEmailDto,
+  ): Promise<{ success: boolean; message: string; user: Record<string, unknown>; tokens: TokenPair }> {
+    const user = await this.userModel.findById(userId).select('+passwordHash').exec();
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Tài khoản không tồn tại hoặc đã bị khóa.');
+    }
+
+    const isPasswordValid = await argon2.verify(user.passwordHash, dto.currentPassword);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Mật khẩu hiện tại không chính xác.');
+    }
+
+    const normalizedNewEmail = dto.newEmail.toLowerCase().trim();
+    if (normalizedNewEmail === user.email) {
+      throw new BadRequestException('Email mới không được trùng với email hiện tại.');
+    }
+
+    const emailInUse = await this.userModel.findOne({ email: normalizedNewEmail }).exec();
+    if (emailInUse) {
+      throw new ConflictException('Email này đã được sử dụng bởi một tài khoản khác trong hệ thống.');
+    }
+
+    const oldEmail = user.email;
+    user.email = normalizedNewEmail;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    await this.revokeAllUserSessions(userId);
+    const newTokens = await this.generateTokenPair(user);
+
+    await this.auditService.log({
+      action: 'USER_EMAIL_CHANGED',
+      entityType: 'User',
+      entityId: user._id,
+      actorId: user._id,
+      metadata: {
+        oldEmail,
+        newEmail: normalizedNewEmail,
+      },
+    });
+
+    const userSummary = {
+      id: (user._id as Types.ObjectId).toHexString(),
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      roles: [user.role],
+      status: user.status,
+      phone: user.phone,
+      timezone: 'Asia/Ho_Chi_Minh',
+      createdAt: (user as any).createdAt,
+      updatedAt: (user as any).updatedAt,
+    };
+
+    return {
+      success: true,
+      message: 'Cập nhật địa chỉ email thành công.',
+      user: userSummary,
+      tokens: newTokens,
+    };
+  }
+
+  /**
+   * Secure password change for authenticated user:
+   * - Requires and verifies current password
+   * - Rejects password reuse
+   * - Hashes new password with Argon2id
+   * - Increments tokenVersion (immediate invalidation of all existing access tokens)
+   * - Revokes all refresh tokens in Redis
+   * - Records sanitized audit log event
+   */
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+  ): Promise<{ success: boolean; message: string }> {
+    const user = await this.userModel.findById(userId).select('+passwordHash').exec();
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Tài khoản không tồn tại hoặc đã bị khóa.');
+    }
+
+    const isPasswordValid = await argon2.verify(user.passwordHash, dto.currentPassword);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Mật khẩu hiện tại không chính xác.');
+    }
+
+    const isSamePassword = await argon2.verify(user.passwordHash, dto.newPassword);
+    if (isSamePassword) {
+      throw new BadRequestException('Mật khẩu mới không được trùng với mật khẩu hiện tại.');
+    }
+
+    const newPasswordHash = await argon2.hash(dto.newPassword, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 1,
+    });
+
+    user.passwordHash = newPasswordHash;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    await this.revokeAllUserSessions(userId);
+
+    await this.auditService.log({
+      action: 'USER_PASSWORD_CHANGED',
+      entityType: 'User',
+      entityId: user._id,
+      actorId: user._id,
+    });
+
+    return {
+      success: true,
+      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
+    };
+  }
+
   private async generateTokenPair(user: UserDocument, existingFamily?: string): Promise<TokenPair> {
     const payload = {
       sub: (user._id as Types.ObjectId).toHexString(),
       email: user.email,
       role: user.role,
+      tv: user.tokenVersion || 0,
     };
 
     const accessSecret = this.configService.get<string>('jwt.accessSecret');

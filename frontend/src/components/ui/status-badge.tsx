@@ -28,6 +28,8 @@ export type BadgeStatus =
   | "closed"
   | "reviewed"
   | "excused"
+  | "withdrawn"
+  | "dropped"
   | string;
 
 interface StatusConfig {
@@ -157,6 +159,16 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     label: "Đã hoàn tác",
     classes: "border-teal-300 bg-teal-50 text-teal-900",
     dot: "bg-teal-700",
+  },
+  withdrawn: {
+    label: "Đã rút khỏi lớp",
+    classes: "border-slate-300 bg-slate-100 text-slate-700",
+    dot: "bg-slate-500",
+  },
+  dropped: {
+    label: "Đã rút khỏi lớp",
+    classes: "border-slate-300 bg-slate-100 text-slate-700",
+    dot: "bg-slate-500",
   },
   scheduled: {
     label: "Sắp diễn ra",

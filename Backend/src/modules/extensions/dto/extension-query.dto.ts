@@ -1,6 +1,6 @@
 import { IsOptional, IsInt, Min, Max, IsEnum, IsMongoId } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ExtensionRequestStatus } from 'src/database/schemas/enums';
 
 export class ExtensionQueryDto {
@@ -21,6 +21,7 @@ export class ExtensionQueryDto {
 
   @ApiPropertyOptional({ enum: ExtensionRequestStatus })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
   @IsEnum(ExtensionRequestStatus)
   status?: ExtensionRequestStatus;
 

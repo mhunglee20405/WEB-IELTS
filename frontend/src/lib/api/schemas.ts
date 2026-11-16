@@ -12,8 +12,10 @@ export const AuthUserSchema = z.object({
   roles: z.array(UserRoleSchema).min(1),
   status: UserStatusSchema,
   timezone: z.string().default("Asia/Ho_Chi_Minh"),
+  phone: z.string().optional(),
   avatarUrl: z.string().optional(),
-  createdAt: z.string().optional(),
+  createdAt: z.union([z.string(), z.date()]).optional().transform((v) => (v instanceof Date ? v.toISOString() : v)),
+  updatedAt: z.union([z.string(), z.date()]).optional().transform((v) => (v instanceof Date ? v.toISOString() : v)),
 });
 
 export const AuthTokensSchema = z.object({
@@ -27,7 +29,7 @@ export const LoginResponseSchema = z.object({
   tokens: AuthTokensSchema,
 });
 
-export const CourseStatusSchema = z.enum(["active", "upcoming", "archived"]);
+export const CourseStatusSchema = z.enum(["active", "upcoming", "archived", "draft", "completed"]);
 export const CourseFormatSchema = z.enum(["1:1", "group"]);
 
 export const CourseSchema = z

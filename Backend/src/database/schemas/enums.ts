@@ -21,6 +21,7 @@ export enum CourseStatus {
   ACTIVE = 'active',
   COMPLETED = 'completed',
   ARCHIVED = 'archived',
+  UPCOMING = 'upcoming',
 }
 
 export enum LessonStatus {

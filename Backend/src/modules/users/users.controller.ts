@@ -20,7 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto, UpdateUserStatusDto } from './dto/update-user.dto';
+import { UpdateUserDto, UpdateUserStatusDto, UpdateOwnProfileDto } from './dto/update-user.dto';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -70,9 +70,9 @@ export class UsersController {
   }
 
   @Patch('me')
-  @ApiOperation({ summary: 'Update own profile (whitelisted fields)' })
-  async updateMe(@CurrentUser() user: UserDocument, @Body() updateDto: UpdateUserDto) {
-    return this.usersService.update(
+  @ApiOperation({ summary: 'Update own profile (whitelisted fields: fullName, phone)' })
+  async updateMe(@CurrentUser() user: UserDocument, @Body() updateDto: UpdateOwnProfileDto) {
+    return this.usersService.updateOwnProfile(
       (user._id as Types.ObjectId).toHexString(),
       updateDto,
     );

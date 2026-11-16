@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Patch,
   Body,
   Get,
   UseGuards,
@@ -12,6 +13,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ChangeEmailDto } from './dto/change-email.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { UserDocument } from 'src/database/schemas/user.schema';
 import { Types } from 'mongoose';
@@ -57,7 +60,35 @@ export class AuthController {
       status: user.status,
       phone: user.phone,
       timezone: 'Asia/Ho_Chi_Minh',
+      createdAt: (user as any).createdAt,
+      updatedAt: (user as any).updatedAt,
     };
+  }
+
+  @Patch('change-email')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change login email with password confirmation' })
+  async changeEmail(
+    @CurrentUser() user: UserDocument,
+    @Body() dto: ChangeEmailDto,
+  ) {
+    const userId = (user._id as Types.ObjectId).toHexString();
+    return this.authService.changeEmail(userId, dto);
+  }
+
+  @Patch('change-password')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change password with current password confirmation' })
+  async changePassword(
+    @CurrentUser() user: UserDocument,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    const userId = (user._id as Types.ObjectId).toHexString();
+    return this.authService.changePassword(userId, dto);
   }
 }
 

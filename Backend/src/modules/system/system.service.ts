@@ -26,12 +26,40 @@ export interface SetupStatusResponse {
 @Injectable()
 export class SystemService implements OnModuleInit {
   private readonly logger = new Logger(SystemService.name);
-  private readonly tokenFilePath = path.resolve(process.cwd(), '.bootstrap-token');
 
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Resolves all deterministic candidate paths for the .bootstrap-token file.
+   * Ensures that regardless of whether the process is started from root (D:\WEB-IELTS)
+   * or Backend (D:\WEB-IELTS\Backend), the token file is always recognized identically.
+   */
+  public getCandidateTokenPaths(): string[] {
+    const candidatePaths: string[] = [];
+
+    // 1. Explicit environment variable if provided
+    const envPath = this.configService.get<string>('BOOTSTRAP_TOKEN_FILE') || process.env.BOOTSTRAP_TOKEN_FILE;
+    if (envPath && envPath.trim()) {
+      candidatePaths.push(path.resolve(envPath.trim()));
+    }
+
+    // 2. Canonical Backend directory: resolved from __dirname (works in both src/ and dist/)
+    const backendDir = path.resolve(__dirname, '../../..');
+    candidatePaths.push(path.resolve(backendDir, '.bootstrap-token'));
+
+    // 3. Workspace root (parent of Backend)
+    const workspaceRoot = path.resolve(backendDir, '..');
+    candidatePaths.push(path.resolve(workspaceRoot, '.bootstrap-token'));
+
+    // 4. Current working directory fallback
+    candidatePaths.push(path.resolve(process.cwd(), '.bootstrap-token'));
+
+    // Deduplicate while preserving order
+    return Array.from(new Set(candidatePaths));
+  }
 
   async onModuleInit(): Promise<void> {
     try {
@@ -46,33 +74,60 @@ export class SystemService implements OnModuleInit {
 
   /**
    * Retrieves or generates a secure one-time bootstrap authorization token.
-   * If SETUP_TOKEN is not in env, generates a random 32-char token and saves to .bootstrap-token.
+   * If SETUP_TOKEN is configured in env, uses it.
+   * Otherwise, loads or generates a 32-char token and synchronizes it across candidate locations.
    */
   public ensureBootstrapToken(): string {
-    const configuredToken = this.configService.get<string>('SETUP_TOKEN');
+    const configuredToken = this.configService.get<string>('SETUP_TOKEN') || process.env.SETUP_TOKEN;
     if (configuredToken && configuredToken.trim().length > 0) {
       return configuredToken.trim();
     }
 
-    if (fs.existsSync(this.tokenFilePath)) {
-      try {
-        const token = fs.readFileSync(this.tokenFilePath, 'utf8').trim();
-        if (token.length > 0) return token;
-      } catch {
-        // Fallback to regeneration
+    const candidatePaths = this.getCandidateTokenPaths();
+    let existingToken = '';
+
+    // Check candidate paths in priority order for an existing valid token
+    for (const filePath of candidatePaths) {
+      if (fs.existsSync(filePath)) {
+        try {
+          const content = fs.readFileSync(filePath, 'utf8').trim();
+          if (content.length > 0) {
+            existingToken = content;
+            break;
+          }
+        } catch {
+          // Continue to next path
+        }
       }
     }
 
-    const generatedToken = crypto.randomBytes(16).toString('hex');
-    try {
-      fs.writeFileSync(this.tokenFilePath, generatedToken, { mode: 0o600, encoding: 'utf8' });
-      this.logger.warn(
-        `🛡️ [SECURITY] Uninitialized system detected! Generated one-time bootstrap token at: ${this.tokenFilePath}`,
-      );
-    } catch (err: any) {
-      this.logger.error(`Could not persist .bootstrap-token file: ${err.message}`);
+    const token = existingToken || crypto.randomBytes(16).toString('hex');
+
+    // Synchronize the token across candidate paths so any working directory or user reference sees the exact same token
+    for (const filePath of candidatePaths) {
+      try {
+        const dir = path.dirname(filePath);
+        if (fs.existsSync(dir)) {
+          let currentContent = '';
+          if (fs.existsSync(filePath)) {
+            currentContent = fs.readFileSync(filePath, 'utf8').trim();
+          }
+          if (currentContent !== token) {
+            fs.writeFileSync(filePath, token, { mode: 0o600, encoding: 'utf8' });
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Could not sync bootstrap token to ${filePath}: ${err.message}`);
+      }
     }
-    return generatedToken;
+
+    if (!existingToken) {
+      this.logger.warn(
+        `🛡️ [SECURITY] Uninitialized system detected! Generated one-time bootstrap token at: ${candidatePaths[0]}`,
+      );
+    }
+
+    return token;
   }
 
   /**
@@ -113,7 +168,19 @@ export class SystemService implements OnModuleInit {
     const expectedToken = this.ensureBootstrapToken();
     const providedToken = (headerToken || dto.setupToken || '').trim();
 
-    if (!providedToken || providedToken !== expectedToken) {
+    let isTokenValid = false;
+    if (providedToken.length > 0 && providedToken.length === expectedToken.length) {
+      try {
+        isTokenValid = crypto.timingSafeEqual(
+          Buffer.from(providedToken, 'utf8'),
+          Buffer.from(expectedToken, 'utf8'),
+        );
+      } catch {
+        isTokenValid = false;
+      }
+    }
+
+    if (!isTokenValid) {
       this.logger.warn(`Rejected unauthorized bootstrap attempt from anonymous user (Invalid or missing setupToken).`);
       throw new UnauthorizedException(
         'Mã ủy quyền khởi tạo (Setup Token) không hợp lệ hoặc không được cung cấp. Vui lòng lấy mã từ biến môi trường SETUP_TOKEN hoặc tệp .bootstrap-token trên máy chủ.',
@@ -183,13 +250,15 @@ export class SystemService implements OnModuleInit {
 
       this.logger.log(`Initial System Administrator successfully created: ${normalizedEmail} (ID: ${adminUser._id})`);
 
-      // 6. Secure cleanup of temporary one-time bootstrap token file
-      if (fs.existsSync(this.tokenFilePath)) {
-        try {
-          fs.unlinkSync(this.tokenFilePath);
-          this.logger.log(`Temporary bootstrap token file removed after successful initialization.`);
-        } catch {
-          // Non-critical
+      // 6. Secure cleanup of temporary one-time bootstrap token files across all candidate locations
+      for (const filePath of this.getCandidateTokenPaths()) {
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+            this.logger.log(`Temporary bootstrap token file removed after successful initialization: ${filePath}`);
+          } catch {
+            // Non-critical
+          }
         }
       }
 

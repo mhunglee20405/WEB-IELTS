@@ -11,7 +11,8 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CourseType } from 'src/database/schemas/enums';
+import { CourseStatus, CourseType } from 'src/database/schemas/enums';
+import { Transform } from 'class-transformer';
 import { IsIeltsBand } from 'src/common/validators/ielts-band.validator';
 
 export class CreateCourseDto {
@@ -83,5 +84,11 @@ export class CreateCourseDto {
   @IsOptional()
   @IsString()
   timezone?: string;
+
+  @ApiPropertyOptional({ enum: CourseStatus })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
+  @IsEnum(CourseStatus)
+  status?: CourseStatus;
 }
 

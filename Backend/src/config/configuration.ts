@@ -8,6 +8,7 @@ export const validationSchema = Joi.object({
   API_PREFIX: Joi.string().default('api/v1'),
 
   MONGODB_URI: Joi.string().required(),
+  MONGODB_DNS_SERVERS: Joi.string().allow('').optional(),
 
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().default(6379),
@@ -30,9 +31,9 @@ export const validationSchema = Joi.object({
   STORAGE_TYPE: Joi.string().valid('disk', 's3').default('disk'),
   STORAGE_LOCAL_PATH: Joi.string().default('./uploads'),
 
-  SEED_ADMIN_EMAIL: Joi.string().email({ tlds: { allow: false } }).required(),
-  SEED_ADMIN_PASSWORD: Joi.string().min(8).required(),
-  SEED_ADMIN_FULLNAME: Joi.string().required(),
+  SEED_ADMIN_EMAIL: Joi.string().email({ tlds: { allow: false } }).allow('').optional(),
+  SEED_ADMIN_PASSWORD: Joi.string().min(8).allow('').optional(),
+  SEED_ADMIN_FULLNAME: Joi.string().allow('').optional(),
 
   CORS_ALLOWED_ORIGINS: Joi.string().default('http://localhost:3000'),
 });
@@ -44,6 +45,7 @@ export default () => ({
 
   mongodb: {
     uri: process.env.MONGODB_URI,
+    dnsServers: process.env.MONGODB_DNS_SERVERS,
   },
 
   redis: {

@@ -412,10 +412,13 @@ export class ExtensionsService {
       throw new NotFoundException('Student assignment not found');
     }
 
+    const effectiveStatus = (dto.status || dto.decision || ExtensionRequestStatus.APPROVED) as ExtensionRequestStatus;
+    const effectiveReviewNote = dto.reviewNote || dto.decisionNote;
+
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
-        if (dto.status === ExtensionRequestStatus.APPROVED) {
+        if (effectiveStatus === ExtensionRequestStatus.APPROVED) {
           const approvedDeadline = dto.approvedDeadlineAt
             ? new Date(dto.approvedDeadlineAt)
             : requestDoc.requestedDeadlineAt;
@@ -464,11 +467,11 @@ export class ExtensionsService {
           await studentAssignment.save({ session });
         }
 
-        requestDoc.status = dto.status;
+        requestDoc.status = effectiveStatus;
         requestDoc.reviewedBy = actor._id as Types.ObjectId;
         requestDoc.reviewedAt = new Date();
-        if (dto.reviewNote) {
-          requestDoc.reviewNote = dto.reviewNote;
+        if (effectiveReviewNote) {
+          requestDoc.reviewNote = effectiveReviewNote;
         }
 
         await requestDoc.save({ session });
@@ -479,13 +482,13 @@ export class ExtensionsService {
 
     // Post-transaction notifications and audit logging
     if (this.notificationsService) {
-      const isApproved = dto.status === ExtensionRequestStatus.APPROVED;
+      const isApproved = effectiveStatus === ExtensionRequestStatus.APPROVED;
       const notifType = NotificationType.EXTENSION_REVIEWED;
       const notifTitle = isApproved
         ? 'Yêu cầu xin gia hạn bài tập đã được duyệt'
         : 'Yêu cầu xin gia hạn bài tập đã bị từ chối';
-      const notifBody = dto.reviewNote
-        ? `Giáo viên đã nhận xét: "${dto.reviewNote}"`
+      const notifBody = effectiveReviewNote
+        ? `Giáo viên đã nhận xét: "${effectiveReviewNote}"`
         : isApproved
           ? 'Hạn nộp mới của bạn đã được cập nhật thành công.'
           : 'Yêu cầu gia hạn của bạn không được phê duyệt. Vui lòng nộp bài sớm.';

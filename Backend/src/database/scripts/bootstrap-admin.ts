@@ -131,13 +131,19 @@ async function run() {
 
   await admin.save();
 
-  // Clean up any temporary .bootstrap-token file
-  const tokenFile = path.resolve(process.cwd(), '.bootstrap-token');
-  if (fs.existsSync(tokenFile)) {
-    try {
-      fs.unlinkSync(tokenFile);
-    } catch {
-      // Ignore
+  // Clean up any temporary .bootstrap-token files across candidate paths
+  const candidateTokenFiles = [
+    path.resolve(process.cwd(), '.bootstrap-token'),
+    path.resolve(__dirname, '../../..', '.bootstrap-token'),
+    path.resolve(__dirname, '../../../..', '.bootstrap-token'),
+  ];
+  for (const tokenFile of Array.from(new Set(candidateTokenFiles))) {
+    if (fs.existsSync(tokenFile)) {
+      try {
+        fs.unlinkSync(tokenFile);
+      } catch {
+        // Ignore
+      }
     }
   }
 
