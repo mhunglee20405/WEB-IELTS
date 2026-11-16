@@ -47,6 +47,7 @@ const PORTAL_NAV_ITEMS: Record<PortalRole, PortalNavEntry[]> = {
     { href: "/admin/courses", label: "Quản lý khóa học" },
     { href: "/admin/audit", label: "Kiểm toán & Phạt" },
     { href: "/admin/settings", label: "Cấu hình hệ thống" },
+    { href: "/admin/profile", label: "Hồ sơ cá nhân" },
   ],
 };
 
@@ -159,6 +160,7 @@ const EXACT_ROUTE_TITLES: Record<string, string> = {
   "/admin/courses": "Quản lý khóa học toàn hệ thống",
   "/admin/audit": "Kiểm toán & Hoàn tác điểm phạt",
   "/admin/settings": "Cấu hình & Trạng thái hệ thống",
+  "/admin/profile": "Hồ sơ quản trị viên",
 };
 
 /**

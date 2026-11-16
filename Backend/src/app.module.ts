@@ -35,7 +35,7 @@ import { SystemModule } from 'src/modules/system/system.module';
       isGlobal: true,
       load: [configuration],
       validationSchema,
-      envFilePath: ['.env', 'Backend/.env', '../Backend/.env'],
+      envFilePath: ['Backend/.env', '.env', '../Backend/.env'],
     }),
 
     // Redis & BullMQ

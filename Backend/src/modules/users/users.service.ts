@@ -13,7 +13,7 @@ import {
 } from 'src/database/schemas/teacher-profile.schema';
 import { UserRole, UserStatus } from 'src/database/schemas/enums';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto, UpdateUserStatusDto } from './dto/update-user.dto';
+import { UpdateUserDto, UpdateUserStatusDto, UpdateOwnProfileDto } from './dto/update-user.dto';
 
 export interface PaginatedUsers {
   items: Partial<UserDocument>[];
@@ -159,11 +159,34 @@ export class UsersService {
     return user;
   }
 
+  async updateOwnProfile(id: string, dto: UpdateOwnProfileDto): Promise<Partial<UserDocument>> {
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('User not found');
+    }
+    const updatePayload: Record<string, unknown> = {};
+    if (dto.fullName !== undefined) {
+      updatePayload.fullName = dto.fullName.trim();
+    }
+    if (dto.phone !== undefined) {
+      updatePayload.phone = dto.phone.trim() || undefined;
+    }
+
+    const user = await this.userModel
+      .findByIdAndUpdate(id, { $set: updatePayload }, { new: true })
+      .select('-passwordHash')
+      .exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return this.sanitize(user);
+  }
+
   sanitize(user: UserDocument): Partial<UserDocument> {
     const obj = user.toObject() as unknown as Record<string, unknown>;
     delete obj['passwordHash'];
     obj['id'] = (user._id as Types.ObjectId).toHexString();
     obj['roles'] = [obj['role']];
+    obj['timezone'] = 'Asia/Ho_Chi_Minh';
     return obj as unknown as Partial<UserDocument>;
   }
 }

@@ -41,6 +41,7 @@ export const systemApi = {
       method: "POST",
       path: "/system/bootstrap-admin",
       body: payload,
+      headers: payload.setupToken ? { "x-setup-token": payload.setupToken } : undefined,
       skipAuth: true,
     });
   },

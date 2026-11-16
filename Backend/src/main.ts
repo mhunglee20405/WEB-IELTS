@@ -9,6 +9,10 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { applyDnsServersOverride } from './database/dns-resolver';
+
+// Early DNS override if environment variable is set
+applyDnsServersOverride();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

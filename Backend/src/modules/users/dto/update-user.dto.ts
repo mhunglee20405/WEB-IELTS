@@ -42,3 +42,18 @@ export class UpdateUserStatusDto {
   status: UserStatus;
 }
 
+export class UpdateOwnProfileDto {
+  @ApiPropertyOptional({ example: 'Nguyễn Văn A' })
+  @IsOptional()
+  @IsString()
+  @MinLength(2, { message: 'Họ và tên phải có ít nhất 2 ký tự.' })
+  @MaxLength(100, { message: 'Họ và tên không được vượt quá 100 ký tự.' })
+  fullName?: string;
+
+  @ApiPropertyOptional({ example: '0901234567' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20, { message: 'Số điện thoại không hợp lệ.' })
+  phone?: string;
+}
+

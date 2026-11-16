@@ -1,6 +1,6 @@
 import { IsOptional, IsEnum, IsInt, Min, Max, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { CourseStatus, CourseType } from 'src/database/schemas/enums';
 
 export class CourseQueryDto {
@@ -21,6 +21,7 @@ export class CourseQueryDto {
 
   @ApiPropertyOptional({ enum: CourseStatus })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
   @IsEnum(CourseStatus)
   status?: CourseStatus;
 

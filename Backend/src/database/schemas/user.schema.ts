@@ -36,6 +36,9 @@ export class User {
   @Prop({ trim: true })
   phone?: string;
 
+  @Prop({ default: 0 })
+  tokenVersion?: number;
+
   // Virtual
   createdAt?: Date;
   updatedAt?: Date;

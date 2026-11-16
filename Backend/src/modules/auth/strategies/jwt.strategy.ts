@@ -12,6 +12,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  tv?: number;
   iat?: number;
   exp?: number;
 }
@@ -36,6 +37,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     if (!user) {
       throw new UnauthorizedException('User not found or inactive');
+    }
+
+    if (payload.tv !== undefined && (user.tokenVersion || 0) !== payload.tv) {
+      throw new UnauthorizedException('Phiên đăng nhập đã hết hạn do thay đổi thông tin xác thực. Vui lòng đăng nhập lại.');
     }
 
     return user;

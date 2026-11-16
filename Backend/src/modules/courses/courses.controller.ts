@@ -125,7 +125,7 @@ export class CoursesController {
       actor,
       page,
       limit,
-      status ?? EnrollmentStatus.ACTIVE,
+      status,
     );
   }
 

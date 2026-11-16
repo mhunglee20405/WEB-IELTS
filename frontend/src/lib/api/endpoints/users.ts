@@ -4,6 +4,7 @@ import type {
   CreateUserRequest,
   PaginatedResponse,
   UpdateUserRequest,
+  UpdateProfileRequest,
 } from "../types";
 
 export interface ListUsersQuery {
@@ -64,6 +65,14 @@ export const usersApi = {
       method: "PATCH",
       path: `/users/${encodeURIComponent(id)}`,
       body,
+    });
+  },
+
+  updateOwnProfile(payload: UpdateProfileRequest): Promise<AuthUser> {
+    return apiRequest<AuthUser, UpdateProfileRequest>({
+      method: "PATCH",
+      path: "/users/me",
+      body: payload,
     });
   },
 };

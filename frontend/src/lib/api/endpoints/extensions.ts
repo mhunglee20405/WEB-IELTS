@@ -59,7 +59,7 @@ export const extensionsApi = {
       });
     }
 
-    const liveQuery = buildQueryString({ status: "PENDING", ...query });
+    const liveQuery = buildQueryString({ status: "pending", ...query });
     return apiRequest<PaginatedResponse<ExtensionRequestItem>>({
       method: "GET",
       path: `/extension-requests${liveQuery}`,
@@ -75,12 +75,15 @@ export const extensionsApi = {
       });
     }
 
+    const status = payload.decision === "approved" ? "approved" : "rejected";
     return apiRequest<ExtensionRequestItem, Record<string, unknown>>({
       method: "PATCH",
       path: `/extension-requests/${encodeURIComponent(id)}/review`,
       body: {
-        decision: payload.decision === "approved" ? "APPROVED" : "REJECTED",
+        status,
+        decision: status,
         reviewNote: payload.decisionNote,
+        decisionNote: payload.decisionNote,
       },
     });
   },

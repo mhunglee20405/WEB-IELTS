@@ -11,8 +11,25 @@ export interface AuthUser {
   roles: UserRole[];
   status: UserStatus;
   timezone: string;
+  phone?: string;
   avatarUrl?: string;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpdateProfileRequest {
+  fullName?: string;
+  phone?: string;
+}
+
+export interface ChangeEmailRequest {
+  newEmail: string;
+  currentPassword: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface AuthTokens {
@@ -76,7 +93,7 @@ export interface TeacherProfile {
   pendingTranslationsCount: number;
 }
 
-export type CourseStatus = "active" | "upcoming" | "archived";
+export type CourseStatus = "active" | "upcoming" | "archived" | "draft" | "completed";
 export type CourseFormat = "1:1" | "group";
 
 export interface Course {

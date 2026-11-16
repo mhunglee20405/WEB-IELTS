@@ -2,6 +2,7 @@ import { Logger, Module, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectConnection, MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Connection } from 'mongoose';
+import { applyDnsServersOverride } from './dns-resolver';
 
 @Module({
   imports: [
@@ -9,6 +10,11 @@ import { Connection } from 'mongoose';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
+        const dnsServers = configService.get<string>('mongodb.dnsServers') || process.env.MONGODB_DNS_SERVERS;
+        if (dnsServers) {
+          applyDnsServersOverride(dnsServers);
+        }
+
         const uri = configService.get<string>('mongodb.uri') || '';
         const nodeEnv = (configService.get<string>('nodeEnv') || process.env.NODE_ENV || 'development').toLowerCase();
         const isTestEnv = nodeEnv === 'test' || process.env.JEST_WORKER_ID !== undefined;

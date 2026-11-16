@@ -121,5 +121,40 @@ describe('UsersService', () => {
       expect(scorePercent >= 70).toBe(false);
     });
   });
+
+  describe('updateOwnProfile', () => {
+    it('should update fullName and phone and return sanitized user', async () => {
+      const updatedMock = {
+        ...mockUser,
+        fullName: 'Updated Name',
+        phone: '0987654321',
+        toObject: function () { return { ...this, passwordHash: undefined }; },
+      };
+      userModel.findByIdAndUpdate.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(updatedMock),
+        }),
+      });
+
+      const res = await service.updateOwnProfile('507f1f77bcf86cd799439011', {
+        fullName: 'Updated Name',
+        phone: '0987654321',
+      });
+
+      expect(res).toBeDefined();
+      expect(res.fullName).toBe('Updated Name');
+      expect(userModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        '507f1f77bcf86cd799439011',
+        { $set: { fullName: 'Updated Name', phone: '0987654321' } },
+        { new: true },
+      );
+    });
+
+    it('should throw NotFoundException for invalid id', async () => {
+      await expect(
+        service.updateOwnProfile('invalid-id', { fullName: 'Test' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
 });
 

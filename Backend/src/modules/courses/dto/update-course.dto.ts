@@ -11,6 +11,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { CourseStatus, CourseType } from 'src/database/schemas/enums';
 import { IsIeltsBand } from 'src/common/validators/ielts-band.validator';
 
@@ -84,6 +85,7 @@ export class UpdateCourseDto {
 
   @ApiPropertyOptional({ enum: CourseStatus })
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
   @IsEnum(CourseStatus)
   status?: CourseStatus;
 }
