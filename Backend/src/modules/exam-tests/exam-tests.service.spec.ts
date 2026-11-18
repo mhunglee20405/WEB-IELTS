@@ -351,5 +351,53 @@ describe('ExamTestsService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('findAllPublished', () => {
+    it('constructs correct query filters for skill, mode, difficulty, and search', async () => {
+      const mockQueryChain = {
+        sort: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([
+          {
+            _id: new Types.ObjectId(),
+            title: 'IELTS Academic Reading Test 01',
+            subtitle: 'Passage 1',
+            skill: ExamSkill.READING,
+            difficulty: 'TARGET_65',
+            tags: ['Reading', 'Academic'],
+            allowedModes: [ExamMode.PART, ExamMode.FULL],
+            status: ExamTestStatus.PUBLISHED,
+            parts: [],
+          },
+        ]),
+      };
+      examTestModel.find.mockReturnValue(mockQueryChain);
+      examTestModel.countDocuments.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(1),
+      });
+
+      const res = await service.findAllPublished({
+        skill: ExamSkill.READING,
+        mode: ExamMode.PART,
+        difficulty: 'TARGET_65',
+        search: 'Reading',
+        page: 1,
+        limit: 20,
+      });
+
+      expect(res.items).toHaveLength(1);
+      expect(res.items[0].difficulty).toBe('TARGET_65');
+      expect(examTestModel.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          $and: expect.arrayContaining([
+            { status: ExamTestStatus.PUBLISHED },
+            { skill: ExamSkill.READING },
+            { allowedModes: ExamMode.PART },
+          ]),
+        }),
+      );
+    });
+  });
 });
 

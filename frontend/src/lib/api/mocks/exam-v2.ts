@@ -154,6 +154,12 @@ function summarizeTest(test: ExamTestDetailAuthoring): ExamTestSummary {
   void _instructions;
   return {
     ...rest,
+    difficulty: test.difficulty ?? "TARGET_65",
+    tags: Array.isArray(test.tags) ? test.tags : [],
+    allowedModes:
+      Array.isArray(test.allowedModes) && test.allowedModes.length > 0
+        ? test.allowedModes
+        : ["PART", "FULL"],
     parts: test.parts.map((p) => ({
       id: p.id,
       partNumber: p.partNumber,
@@ -1503,14 +1509,25 @@ export function dispatchExamV2MockRequest<T>(
 
     let items = state.tests.filter((t) => t.status === "PUBLISHED");
     if (skill) items = items.filter((t) => t.skill === skill);
-    if (mode) items = items.filter((t) => t.allowedModes.includes(mode));
-    if (difficulty) items = items.filter((t) => t.difficulty === difficulty);
+    if (mode) {
+      items = items.filter((t) => {
+        const modes =
+          Array.isArray(t.allowedModes) && t.allowedModes.length > 0
+            ? t.allowedModes
+            : ["PART", "FULL"];
+        return modes.includes(mode);
+      });
+    }
+    if (difficulty) {
+      items = items.filter((t) => (t.difficulty || "TARGET_65") === difficulty);
+    }
     if (search) {
       items = items.filter(
         (t) =>
           t.title.toLowerCase().includes(search) ||
           (t.subtitle?.toLowerCase().includes(search) ?? false) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(search)),
+          (t.instructions?.toLowerCase().includes(search) ?? false) ||
+          (t.tags || []).some((tag) => tag.toLowerCase().includes(search)),
       );
     }
     return { handled: true, data: paginate(items.map(summarizeTest), sp) as T };
