@@ -3,6 +3,7 @@ import { Document, Types } from 'mongoose';
 import {
   ExamSkill,
   ExamMode,
+  ExamDifficulty,
   ExamPreset,
   ExamTestStatus,
   ExamQuestionType,
@@ -153,6 +154,19 @@ export class ExamTest {
   @Prop({ required: true, trim: true })
   title: string;
 
+  @Prop({ trim: true })
+  subtitle?: string;
+
+  @Prop({
+    type: String,
+    enum: Object.values(ExamDifficulty),
+    default: ExamDifficulty.TARGET_65,
+  })
+  difficulty: string;
+
+  @Prop({ type: [String], default: [] })
+  tags: string[];
+
   @Prop({
     type: String,
     enum: Object.values(ExamSkill),
@@ -218,3 +232,5 @@ export const ExamTestSchema = SchemaFactory.createForClass(ExamTest);
 
 ExamTestSchema.index({ createdBy: 1, status: 1 });
 ExamTestSchema.index({ skill: 1, status: 1 });
+ExamTestSchema.index({ allowedModes: 1, status: 1 });
+ExamTestSchema.index({ difficulty: 1, status: 1 });

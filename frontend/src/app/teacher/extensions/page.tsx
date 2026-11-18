@@ -14,7 +14,7 @@ import {
 } from "@/components/ui";
 import { extensionsApi } from "@/lib/api/endpoints";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
-import { teacherKeys } from "@/lib/api/query-keys";
+import { studentKeys, teacherKeys } from "@/lib/api/query-keys";
 import { ExtensionDecisionFormSchema } from "@/lib/api/schemas";
 import type { ExtensionRequestItem } from "@/lib/api/types";
 import { formatVnDateTime } from "@/lib/time/vn-time";
@@ -41,8 +41,14 @@ function DecisionDialogForm({
     mutationFn: (payload: { decision: "approved" | "rejected"; decisionNote: string }) =>
       extensionsApi.decide(target.item.id, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["teacher", "extensions"] });
-      await queryClient.invalidateQueries({ queryKey: teacherKeys.dashboard });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["teacher", "extensions"] }),
+        queryClient.invalidateQueries({ queryKey: teacherKeys.dashboard }),
+        queryClient.invalidateQueries({ queryKey: teacherKeys.assignmentsRoot }),
+        queryClient.invalidateQueries({ queryKey: ["student", "assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["student", "extensions"] }),
+        queryClient.invalidateQueries({ queryKey: studentKeys.dashboard }),
+      ]);
       onDecided(
         target.decision === "approved"
           ? `Đã phê duyệt gia hạn cho học viên ${target.item.studentName ?? target.item.studentId}.`
@@ -189,9 +195,11 @@ export default function TeacherExtensionsPage() {
       header: "Hạn cũ → Đề xuất mới",
       renderCell: (row) => (
         <div className="text-xs">
-          <p className="text-slate-600">{formatVnDateTime(row.currentDueAt)}</p>
+          <p className="text-slate-600">Hạn cũ: {formatVnDateTime(row.currentDueAt)}</p>
           <p className="font-semibold text-blue-900">
-            → {formatVnDateTime(row.requestedDueAt)}
+            {row.status === "approved"
+              ? `Hạn mới duyệt: ${formatVnDateTime(row.grantedDueAt || row.requestedDueAt)}`
+              : `→ ${formatVnDateTime(row.requestedDueAt)}`}
           </p>
         </div>
       ),

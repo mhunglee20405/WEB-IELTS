@@ -127,6 +127,13 @@ export enum ExamMode {
   FULL = 'FULL',
 }
 
+export enum ExamDifficulty {
+  FOUNDATION = 'FOUNDATION',
+  INTERMEDIATE = 'INTERMEDIATE',
+  TARGET_65 = 'TARGET_65',
+  TARGET_75_PLUS = 'TARGET_75_PLUS',
+}
+
 export enum PartType {
   PASSAGE = 'PASSAGE',
   SECTION = 'SECTION',

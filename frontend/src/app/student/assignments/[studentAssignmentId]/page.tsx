@@ -241,12 +241,24 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={detail.passed ? "passed" : detail.status} />
-          <span className="text-slate-600">
-            Hạn nộp:{" "}
-            <strong className="font-semibold text-slate-900">
-              {formatVnDateTime(detail.effectiveDueAt)}
-            </strong>
-          </span>
+          {detail.effectiveDueAt !== detail.dueAt ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-slate-500">
+                Hạn gốc:{" "}
+                <span className="line-through">{formatVnDateTime(detail.dueAt)}</span>
+              </span>
+              <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-900 font-medium">
+                Hạn mới đã gia hạn: <strong>{formatVnDateTime(detail.effectiveDueAt)}</strong>
+              </span>
+            </div>
+          ) : (
+            <span className="text-slate-600">
+              Hạn nộp:{" "}
+              <strong className="font-semibold text-slate-900">
+                {formatVnDateTime(detail.effectiveDueAt)}
+              </strong>
+            </span>
+          )}
           {bestScore !== null ? (
             <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-800">
               Điểm cao nhất: {bestScore}%

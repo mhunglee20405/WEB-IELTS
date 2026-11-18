@@ -14,6 +14,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ExamSkill,
   ExamMode,
+  ExamDifficulty,
   ExamPreset,
   ExamTestStatus,
   PartType,
@@ -86,6 +87,11 @@ export class CreateExamTestDto {
   @IsString()
   title: string;
 
+  @ApiPropertyOptional({ example: 'Đề luyện tập chuyên sâu' })
+  @IsOptional()
+  @IsString()
+  subtitle?: string;
+
   @ApiProperty({ enum: ExamSkill, example: ExamSkill.READING })
   @IsEnum(ExamSkill)
   skill: ExamSkill;
@@ -94,6 +100,17 @@ export class CreateExamTestDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ enum: ExamDifficulty, example: ExamDifficulty.TARGET_65 })
+  @IsOptional()
+  @IsString()
+  difficulty?: string;
+
+  @ApiPropertyOptional({ example: ['Academic', 'Reading'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 
   @ApiPropertyOptional({ enum: ExamPreset, default: ExamPreset.IELTS_ACADEMIC })
   @IsOptional()
@@ -131,10 +148,26 @@ export class UpdateExamTestDto {
   @IsString()
   title?: string;
 
+  @ApiPropertyOptional({ example: 'Updated subtitle' })
+  @IsOptional()
+  @IsString()
+  subtitle?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ enum: ExamDifficulty, example: ExamDifficulty.TARGET_65 })
+  @IsOptional()
+  @IsString()
+  difficulty?: string;
+
+  @ApiPropertyOptional({ example: ['Academic', 'Reading'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
 
   @ApiPropertyOptional({ enum: ExamPreset })
   @IsOptional()
@@ -314,6 +347,21 @@ export class ExamTestQueryDto {
   @IsOptional()
   @IsEnum(ExamSkill)
   skill?: ExamSkill;
+
+  @ApiPropertyOptional({ enum: ExamMode })
+  @IsOptional()
+  @IsEnum(ExamMode)
+  mode?: ExamMode;
+
+  @ApiPropertyOptional({ enum: ExamDifficulty, example: ExamDifficulty.TARGET_65 })
+  @IsOptional()
+  @IsString()
+  difficulty?: string;
+
+  @ApiPropertyOptional({ example: 'Cambridge' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 
   @ApiPropertyOptional({ enum: ExamTestStatus })
   @IsOptional()

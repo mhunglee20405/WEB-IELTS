@@ -1070,10 +1070,14 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
     ext.decisionNote = body.decisionNote;
     ext.decidedAt = new Date().toISOString();
     if (body.decision === "approved") {
+      ext.grantedDueAt = ext.requestedDueAt;
       const sa = mockState.studentAssignments.find(
         (s) => s.studentAssignmentId === ext.studentAssignmentId,
       );
       if (sa) {
+        if (!sa.originalDueAt) {
+          sa.originalDueAt = sa.dueAt || sa.effectiveDueAt;
+        }
         sa.effectiveDueAt = ext.requestedDueAt;
         sa.status = "extended";
       }

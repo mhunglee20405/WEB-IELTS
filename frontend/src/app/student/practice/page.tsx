@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Clock, Headphones, Layers, PlayCircle } from "lucide-react";
@@ -55,7 +55,32 @@ export default function StudentPracticeLibraryPage() {
     queryFn: () => examAttemptsApi.list({ page: 1, limit: 5 }),
   });
 
-  const tests = catalogQuery.data?.items ?? [];
+  const tests = useMemo(() => {
+    const rawItems = catalogQuery.data?.items ?? [];
+    return rawItems.filter((test) => {
+      if (skillParam && test.skill !== skillParam) return false;
+      if (modeParam) {
+        const modes =
+          Array.isArray(test.allowedModes) && test.allowedModes.length > 0
+            ? test.allowedModes
+            : ["PART", "FULL"];
+        if (!modes.includes(modeParam)) return false;
+      }
+      if (diffParam) {
+        const testDiff = test.difficulty || "TARGET_65";
+        if (testDiff !== diffParam) return false;
+      }
+      if (searchParam) {
+        const q = searchParam.toLowerCase();
+        const matchTitle = test.title.toLowerCase().includes(q);
+        const matchSubtitle = test.subtitle?.toLowerCase().includes(q) ?? false;
+        const matchTags = (test.tags ?? []).some((tag) => tag.toLowerCase().includes(q));
+        if (!matchTitle && !matchSubtitle && !matchTags) return false;
+      }
+      return true;
+    });
+  }, [catalogQuery.data?.items, skillParam, modeParam, diffParam, searchParam]);
+
   const attempts = recentAttemptsQuery.data?.items ?? [];
 
   return (

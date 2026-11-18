@@ -357,6 +357,7 @@ export interface StudentAssignmentSummary {
   openAt: string;
   dueAt: string;
   effectiveDueAt: string;
+  originalDueAt?: string;
   timezone: string;
   status: StudentAssignmentStatus;
   attemptsCount: number;
@@ -468,7 +469,9 @@ export interface ExtensionRequestItem {
   studentName?: string;
   reason: string;
   currentDueAt: string;
+  originalDueAt?: string;
   requestedDueAt: string;
+  grantedDueAt?: string;
   status: ExtensionStatus;
   decisionNote?: string;
   decidedAt?: string;
@@ -955,11 +958,17 @@ export interface ReadingTranslationDetail {
 }
 
 export interface SaveReadingTranslationDraftRequest {
+  testId?: string;
+  studentAssignmentId?: string;
+  exerciseVersion?: number;
   textVi: string;
   revision: number;
 }
 
 export interface SubmitReadingTranslationRequest {
+  testId?: string;
+  studentAssignmentId?: string;
+  exerciseVersion?: number;
   textVi: string;
   revision?: number;
 }

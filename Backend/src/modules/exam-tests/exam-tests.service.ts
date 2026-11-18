@@ -20,6 +20,7 @@ import { UserDocument } from 'src/database/schemas/user.schema';
 import {
   ExamSkill,
   ExamMode,
+  ExamDifficulty,
   ExamTestStatus,
   UserRole,
   PartType,
@@ -56,9 +57,9 @@ export class ExamTestsService {
   }
 
   private checkDraftStatus(test: ExamTestDocument) {
-    if (test.status !== ExamTestStatus.DRAFT) {
+    if (test.status === ExamTestStatus.ARCHIVED) {
       throw new BadRequestException(
-        `Cannot modify a ${test.status} exam test. Please create a new version instead.`,
+        `Cannot modify an ARCHIVED exam test.`,
       );
     }
   }
@@ -70,8 +71,11 @@ export class ExamTestsService {
 
     const test = new this.examTestModel({
       title: dto.title,
+      subtitle: dto.subtitle,
       skill: dto.skill,
       description: dto.description,
+      difficulty: dto.difficulty || ExamDifficulty.TARGET_65,
+      tags: dto.tags || [],
       examPreset: dto.examPreset,
       allowedModes: dto.allowedModes || [ExamMode.PART, ExamMode.FULL],
       passScore: dto.passScore ?? 70,
@@ -92,16 +96,41 @@ export class ExamTestsService {
       throw new ForbiddenException('Students cannot access teacher exam tests');
     }
 
-    const filter: Record<string, any> = {};
+    const conditions: Record<string, any>[] = [];
     if (actor.role === UserRole.TEACHER) {
-      filter.createdBy = actor._id;
+      conditions.push({ createdBy: actor._id });
     }
     if (query.skill) {
-      filter.skill = query.skill;
+      conditions.push({ skill: query.skill });
     }
     if (query.status) {
-      filter.status = query.status;
+      conditions.push({ status: query.status });
     }
+    if (query.mode) {
+      conditions.push({ allowedModes: query.mode });
+    }
+    if (query.difficulty) {
+      conditions.push({ difficulty: query.difficulty });
+    }
+    if (query.search && query.search.trim()) {
+      const term = query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(term, 'i');
+      conditions.push({
+        $or: [
+          { title: regex },
+          { subtitle: regex },
+          { description: regex },
+          { tags: regex },
+        ],
+      });
+    }
+
+    const filter =
+      conditions.length === 0
+        ? {}
+        : conditions.length === 1
+        ? conditions[0]
+        : { $and: conditions };
 
     const page = Math.max(1, query.page || 1);
     const limit = Math.min(100, Math.max(1, query.limit || 20));
@@ -125,10 +154,40 @@ export class ExamTestsService {
   }
 
   async findAllPublished(query: ExamTestQueryDto) {
-    const filter: Record<string, any> = { status: ExamTestStatus.PUBLISHED };
+    const conditions: Record<string, any>[] = [{ status: ExamTestStatus.PUBLISHED }];
     if (query.skill) {
-      filter.skill = query.skill;
+      conditions.push({ skill: query.skill });
     }
+    if (query.mode) {
+      conditions.push({ allowedModes: query.mode });
+    }
+    if (query.difficulty) {
+      if (query.difficulty === 'TARGET_65') {
+        conditions.push({
+          $or: [
+            { difficulty: 'TARGET_65' },
+            { difficulty: { $exists: false } },
+            { difficulty: null },
+          ],
+        });
+      } else {
+        conditions.push({ difficulty: query.difficulty });
+      }
+    }
+    if (query.search && query.search.trim()) {
+      const term = query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(term, 'i');
+      conditions.push({
+        $or: [
+          { title: regex },
+          { subtitle: regex },
+          { description: regex },
+          { tags: regex },
+        ],
+      });
+    }
+
+    const filter = conditions.length === 1 ? conditions[0] : { $and: conditions };
 
     const page = Math.max(1, query.page || 1);
     const limit = Math.min(100, Math.max(1, query.limit || 20));
@@ -209,7 +268,10 @@ export class ExamTestsService {
     this.checkDraftStatus(test);
 
     if (dto.title !== undefined) test.title = dto.title;
+    if (dto.subtitle !== undefined) (test as any).subtitle = dto.subtitle;
     if (dto.description !== undefined) test.description = dto.description;
+    if (dto.difficulty !== undefined) (test as any).difficulty = dto.difficulty;
+    if (dto.tags !== undefined) (test as any).tags = dto.tags;
     if (dto.examPreset !== undefined) test.examPreset = dto.examPreset;
     if (dto.allowedModes !== undefined) test.allowedModes = dto.allowedModes;
     if (dto.passScore !== undefined) test.passScore = dto.passScore;
@@ -501,7 +563,9 @@ export class ExamTestsService {
     }
 
     test.status = ExamTestStatus.PUBLISHED;
-    test.publishedAt = new Date();
+    if (!test.publishedAt) {
+      test.publishedAt = new Date();
+    }
     const saved = await test.save();
     return ExamTestMapper.toTeacherDetailedTest(saved);
   }

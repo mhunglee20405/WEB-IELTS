@@ -19,6 +19,7 @@ import {
   NotificationType,
   ExamSkill,
   ExamMode,
+  ExamDifficulty,
   ExamTestStatus,
   ExamQuestionType,
   PartType,
@@ -1129,7 +1130,10 @@ async function seed() {
   if (!examTest) {
     examTest = await ExamTestModel.create({
       title: 'IELTS Cambridge Academic Reading Test 01',
+      subtitle: 'Passage 1 • The Secret Life of Bees',
       skill: ExamSkill.READING,
+      difficulty: ExamDifficulty.TARGET_65,
+      tags: ['Reading', 'Cambridge', 'Academic'],
       status: ExamTestStatus.PUBLISHED,
       version: 1,
       allowedModes: [ExamMode.PART, ExamMode.FULL],

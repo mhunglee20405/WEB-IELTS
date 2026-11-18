@@ -165,6 +165,51 @@ describe("Phase 9 IELTS Practice, CBT Exam Engine, Question Bank & Translation W
       screen.getByRole("heading", { name: /IELTS Academic Listening Full Test 01/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Ancient Maritime Navigation/i)).toBeNull();
+
+    // 1b. Test filters by mode, difficulty and search in student practice library
+    const modeSelect = screen.getByLabelText("Lọc theo chế độ");
+    const diffSelect = screen.getByLabelText("Lọc theo độ khó");
+    const searchInput = screen.getByPlaceholderText("Tìm theo tên đề, chủ đề...");
+
+    // Filter by mode: FULL (single passage part-only test should be hidden)
+    fireEvent.change(modeSelect, { target: { value: "FULL" } });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /IELTS Academic Reading Full Test 01/i })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: /Acoustic Architecture/i })).toBeNull();
+    });
+
+    // Reset mode
+    fireEvent.change(modeSelect, { target: { value: "" } });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Acoustic Architecture/i })).toBeInTheDocument();
+    });
+
+    // Filter by difficulty: TARGET_75_PLUS (only singlePassagePractice matches)
+    fireEvent.change(diffSelect, { target: { value: "TARGET_75_PLUS" } });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Acoustic Architecture/i })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: /IELTS Academic Reading Full Test 01/i })).toBeNull();
+    });
+
+    // Reset difficulty
+    fireEvent.change(diffSelect, { target: { value: "" } });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /IELTS Academic Reading Full Test 01/i })).toBeInTheDocument();
+    });
+
+    // Filter by search keyword: "Campus" (matches listening test)
+    fireEvent.change(searchInput, { target: { value: "Campus" } });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /IELTS Academic Listening Full Test 01/i })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: /Acoustic Architecture/i })).toBeNull();
+    });
+
+    // Reset search
+    fireEvent.change(searchInput, { target: { value: "" } });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Acoustic Architecture/i })).toBeInTheDocument();
+    });
+
     unmountLib();
 
     // 2. Student Practice Detail supports PART & FULL selection + launching attempt

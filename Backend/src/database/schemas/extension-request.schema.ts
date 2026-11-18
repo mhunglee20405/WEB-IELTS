@@ -21,6 +21,9 @@ export class ExtensionRequest {
   @Prop({ required: true })
   requestedDeadlineAt: Date;
 
+  @Prop()
+  grantedDeadlineAt?: Date;
+
   @Prop({
     type: String,
     enum: Object.values(ExtensionRequestStatus),
