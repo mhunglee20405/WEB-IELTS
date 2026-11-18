@@ -84,21 +84,46 @@ export function AssignmentCard({ item, nowMs }: AssignmentCardProps) {
             <dt className="inline font-medium text-slate-700">Mở bài: </dt>
             <dd className="inline">{formatVnDateTime(item.openAt)}</dd>
           </div>
-          <div className="sm:col-span-2">
-            <dt className="inline font-medium text-slate-700">
-              {hasExtendedDue ? "Hạn mới (đã gia hạn): " : "Hạn nộp: "}
-            </dt>
-            <dd className="inline">
-              {formatVnDateTime(item.effectiveDueAt)}{" "}
-              <span
-                className={cn(
-                  "font-medium",
-                  remaining.isOverdue && !item.passed ? "text-red-700" : "text-slate-700",
-                )}
-              >
-                ({item.passed ? "Đã đạt" : remaining.label})
-              </span>
-            </dd>
+          <div className="sm:col-span-2 space-y-0.5">
+            {hasExtendedDue ? (
+              <>
+                <div>
+                  <dt className="inline font-medium text-slate-500">Hạn nộp gốc: </dt>
+                  <dd className="inline text-slate-500 line-through">
+                    {formatVnDateTime(item.dueAt)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="inline font-medium text-blue-800">Hạn mới (đã gia hạn): </dt>
+                  <dd className="inline font-medium text-blue-900">
+                    {formatVnDateTime(item.effectiveDueAt)}{" "}
+                    <span
+                      className={cn(
+                        "font-medium",
+                        remaining.isOverdue && !item.passed ? "text-red-700" : "text-slate-700",
+                      )}
+                    >
+                      ({item.passed ? "Đã đạt" : remaining.label})
+                    </span>
+                  </dd>
+                </div>
+              </>
+            ) : (
+              <div>
+                <dt className="inline font-medium text-slate-700">Hạn nộp: </dt>
+                <dd className="inline">
+                  {formatVnDateTime(item.effectiveDueAt)}{" "}
+                  <span
+                    className={cn(
+                      "font-medium",
+                      remaining.isOverdue && !item.passed ? "text-red-700" : "text-slate-700",
+                    )}
+                  >
+                    ({item.passed ? "Đã đạt" : remaining.label})
+                  </span>
+                </dd>
+              </div>
+            )}
           </div>
         </dl>
 

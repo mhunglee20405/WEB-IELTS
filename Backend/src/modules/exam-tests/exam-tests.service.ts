@@ -57,9 +57,9 @@ export class ExamTestsService {
   }
 
   private checkDraftStatus(test: ExamTestDocument) {
-    if (test.status !== ExamTestStatus.DRAFT) {
+    if (test.status === ExamTestStatus.ARCHIVED) {
       throw new BadRequestException(
-        `Cannot modify a ${test.status} exam test. Please create a new version instead.`,
+        `Cannot modify an ARCHIVED exam test.`,
       );
     }
   }
@@ -563,7 +563,9 @@ export class ExamTestsService {
     }
 
     test.status = ExamTestStatus.PUBLISHED;
-    test.publishedAt = new Date();
+    if (!test.publishedAt) {
+      test.publishedAt = new Date();
+    }
     const saved = await test.save();
     return ExamTestMapper.toTeacherDetailedTest(saved);
   }

@@ -222,7 +222,7 @@ export function ExamTestBuilder({
   const router = useRouter();
   const queryClient = useQueryClient();
   const isEditingExisting = Boolean(initialTest);
-  const isPublishedLocked = initialTest?.status === "PUBLISHED";
+  const isPublishedLocked = false;
 
   const [title, setTitle] = useState(initialTest?.title ?? "");
   const [subtitle, setSubtitle] = useState(initialTest?.subtitle ?? "");
@@ -444,9 +444,9 @@ export function ExamTestBuilder({
       }
       setStatusBanner({
         type: "success",
-        text: published
-          ? "Đã xuất bản đề thi thành công! Học viên có thể làm bài ngay."
-          : "Kiểm tra hợp lệ thành công — sẵn sàng xuất bản.",
+        text: initialTest?.status === "PUBLISHED"
+          ? "Đã cập nhật đề thi thành công!"
+          : "Đã xuất bản đề thi thành công! Học viên có thể làm bài ngay.",
       });
       if (published) {
         router.refresh();
@@ -514,25 +514,12 @@ export function ExamTestBuilder({
         </div>
       </div>
 
-      {isPublishedLocked && (
-        <Card className="border-amber-300 bg-amber-50/60">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold text-amber-950">
-                Đề thi này đã được xuất bản (Trạng thái bất biến)
-              </p>
-              <p className="mt-0.5 text-xs text-amber-900">
-                Để không làm sai lệch bài làm của học viên cũ, không thể sửa trực tiếp phiên bản đã xuất bản. Hãy tạo phiên bản v{(initialTest?.version ?? 1) + 1}.
-              </p>
-            </div>
-            <Button
-              variant="primary"
-              loading={newVersionMutation.isPending}
-              onClick={() => newVersionMutation.mutate()}
-            >
-              <CopyPlus className="h-4 w-4" />
-              Tạo phiên bản nháp v{(initialTest?.version ?? 1) + 1}
-            </Button>
+      {initialTest?.status === "PUBLISHED" && (
+        <Card className="border-blue-200 bg-blue-50/60 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-blue-900">
+              Đề thi đang ở trạng thái Xuất bản (v{initialTest.version}). Mọi chỉnh sửa được lưu sẽ có hiệu lực trực tiếp cho các lượt làm bài mới của học viên.
+            </p>
           </div>
         </Card>
       )}
@@ -1401,36 +1388,26 @@ export function ExamTestBuilder({
       </div>
 
       {/* Bottom Save & Publish Action Bar */}
-      {!isPublishedLocked && (
-        <div className="sticky bottom-3 z-20 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-xs">
-          <Button
-            variant="secondary"
-            loading={validateAndPublishMutation.isPending}
-            onClick={() => validateAndPublishMutation.mutate(false)}
-          >
-            <ShieldCheck className="h-4 w-4" />
-            Lưu &amp; Kiểm tra (Validate)
-          </Button>
-          <Button
-            variant="secondary"
-            loading={saveDraftMutation.isPending}
-            onClick={() => saveDraftMutation.mutate()}
-            data-testid="teacher-save-draft-btn"
-          >
-            <Save className="h-4 w-4" />
-            Lưu bản nháp
-          </Button>
-          <Button
-            variant="primary"
-            loading={validateAndPublishMutation.isPending}
-            onClick={() => validateAndPublishMutation.mutate(true)}
-            data-testid="teacher-publish-exam-btn"
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            Xuất bản đề thi
-          </Button>
-        </div>
-      )}
+      <div className="sticky bottom-3 z-20 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-xs">
+        <Button
+          variant="secondary"
+          loading={saveDraftMutation.isPending}
+          onClick={() => saveDraftMutation.mutate()}
+          data-testid="teacher-save-draft-btn"
+        >
+          <Save className="h-4 w-4" />
+          Lưu bản nháp
+        </Button>
+        <Button
+          variant="primary"
+          loading={validateAndPublishMutation.isPending}
+          onClick={() => validateAndPublishMutation.mutate(true)}
+          data-testid="teacher-publish-exam-btn"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          {initialTest?.status === "PUBLISHED" ? "Cập nhật đề thi" : "Xuất bản đề thi"}
+        </Button>
+      </div>
     </div>
   );
 }

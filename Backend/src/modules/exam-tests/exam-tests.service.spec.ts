@@ -127,12 +127,31 @@ describe('ExamTestsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('rejects modification if test is already PUBLISHED', async () => {
+    it('allows modification if test is PUBLISHED', async () => {
       const testDoc = {
         _id: new Types.ObjectId(),
         title: 'Published Test',
         createdBy: teacherAId,
         status: ExamTestStatus.PUBLISHED,
+        parts: [],
+        toObject: () => testDoc,
+        save: jest.fn().mockResolvedValue(true),
+      };
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(testDoc),
+      });
+
+      const updated = await service.update(testDoc._id.toHexString(), { title: 'New Title' }, teacherA);
+      expect(testDoc.title).toBe('New Title');
+      expect(testDoc.save).toHaveBeenCalled();
+    });
+
+    it('rejects modification if test is ARCHIVED', async () => {
+      const testDoc = {
+        _id: new Types.ObjectId(),
+        title: 'Archived Test',
+        createdBy: teacherAId,
+        status: ExamTestStatus.ARCHIVED,
         parts: [],
         toObject: () => testDoc,
         save: jest.fn(),

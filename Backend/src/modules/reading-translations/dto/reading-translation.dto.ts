@@ -68,6 +68,11 @@ export class SubmitReadingTranslationDto {
   @IsOptional()
   @IsString()
   textVi?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @IsNumber()
+  revision?: number;
 }
 
 export class ReviewReadingTranslationDto {

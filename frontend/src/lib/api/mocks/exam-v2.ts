@@ -2116,11 +2116,11 @@ export function dispatchExamV2MockRequest<T>(
   if (method === "POST" && teacherPartGroupMatch) {
     const test = state.tests.find((t) => t.id === teacherPartGroupMatch[1]);
     if (!test) mockNotFound("Không tìm thấy đề thi.");
-    if (test.status === "PUBLISHED") {
+    if (test.status === "ARCHIVED") {
       throw new ApiError({
-        statusCode: 409,
-        code: "EXAM_VERSION_CONFLICT",
-        message: "Đề đã xuất bản không thể thêm nhóm câu hỏi trực tiếp. Hãy tạo phiên bản mới.",
+        statusCode: 400,
+        code: "EXAM_ARCHIVED",
+        message: "Đề thi đã lưu trữ không thể thêm nhóm câu hỏi.",
       });
     }
     const part = test.parts.find((p) => p.id === teacherPartGroupMatch[2]);
@@ -2157,11 +2157,11 @@ export function dispatchExamV2MockRequest<T>(
   if (teacherGroupEditMatch) {
     const test = state.tests.find((t) => t.id === teacherGroupEditMatch[1]);
     if (!test) mockNotFound("Không tìm thấy đề thi.");
-    if (test.status === "PUBLISHED") {
+    if (test.status === "ARCHIVED") {
       throw new ApiError({
-        statusCode: 409,
-        code: "EXAM_VERSION_CONFLICT",
-        message: "Đề đã xuất bản không thể sửa câu hỏi trực tiếp.",
+        statusCode: 400,
+        code: "EXAM_ARCHIVED",
+        message: "Đề thi đã lưu trữ không thể sửa câu hỏi.",
       });
     }
     const groupId = teacherGroupEditMatch[2]!;
@@ -2203,11 +2203,11 @@ export function dispatchExamV2MockRequest<T>(
     if (!test) mockNotFound("Không tìm thấy đề thi.");
     const partId = teacherPartMatch[2];
     if (!partId && method === "POST") {
-      if (test.status === "PUBLISHED") {
+      if (test.status === "ARCHIVED") {
         throw new ApiError({
-          statusCode: 409,
-          code: "EXAM_VERSION_CONFLICT",
-          message: "Đề đã xuất bản không thể thêm Passage/Section trực tiếp.",
+          statusCode: 400,
+          code: "EXAM_ARCHIVED",
+          message: "Đề thi đã lưu trữ không thể thêm Passage/Section.",
         });
       }
       const req = body as UpsertExamPartInput;
@@ -2259,11 +2259,11 @@ export function dispatchExamV2MockRequest<T>(
     if (partId) {
       const partIdx = test.parts.findIndex((p) => p.id === partId);
       if (partIdx === -1) mockNotFound("Không tìm thấy Passage/Section.");
-      if (test.status === "PUBLISHED") {
+      if (test.status === "ARCHIVED") {
         throw new ApiError({
-          statusCode: 409,
-          code: "EXAM_VERSION_CONFLICT",
-          message: "Đề đã xuất bản không thể chỉnh sửa nội dung Passage/Section.",
+          statusCode: 400,
+          code: "EXAM_ARCHIVED",
+          message: "Đề thi đã lưu trữ không thể chỉnh sửa nội dung Passage/Section.",
         });
       }
       if (method === "DELETE") {
@@ -2313,11 +2313,11 @@ export function dispatchExamV2MockRequest<T>(
       return { handled: true, data: { ok: true, message: "Đã xóa đề thi thành công" } as T };
     }
     if (!action && method === "PATCH") {
-      if (test.status === "PUBLISHED") {
+      if (test.status === "ARCHIVED") {
         throw new ApiError({
-          statusCode: 409,
-          code: "EXAM_VERSION_CONFLICT",
-          message: "Đề đã xuất bản ở trạng thái bất biến. Hãy tạo phiên bản mới để chỉnh sửa.",
+          statusCode: 400,
+          code: "EXAM_ARCHIVED",
+          message: "Đề thi đã lưu trữ không thể chỉnh sửa.",
         });
       }
       const patch = body as UpdateTeacherExamTestRequest;
@@ -2346,8 +2346,10 @@ export function dispatchExamV2MockRequest<T>(
         });
       }
       test.status = "PUBLISHED";
-      test.publishedAt = new Date().toISOString();
-      test.updatedAt = test.publishedAt;
+      if (!test.publishedAt) {
+        test.publishedAt = new Date().toISOString();
+      }
+      test.updatedAt = new Date().toISOString();
       return { handled: true, data: test as T };
     }
     if (action === "new-version" && method === "POST") {
