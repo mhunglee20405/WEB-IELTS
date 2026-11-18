@@ -37,7 +37,13 @@ export default function TeacherAssignmentsPage() {
   const filtered = useMemo(() => {
     const items = assignmentsQuery.data ?? [];
     if (courseFilter === "all") return items;
-    return items.filter((a) => a.courseId === courseFilter);
+    return items.filter((a) => {
+      const aCourseId =
+        typeof a.courseId === "object" && a.courseId !== null
+          ? (a.courseId as any).id || (a.courseId as any)._id
+          : a.courseId;
+      return String(aCourseId) === String(courseFilter);
+    });
   }, [assignmentsQuery.data, courseFilter]);
 
   const columns: DataTableColumn<Assignment>[] = [
@@ -92,15 +98,18 @@ export default function TeacherAssignmentsPage() {
       key: "actions",
       header: "Kết quả học viên",
       align: "end",
-      renderCell: (row) => (
-        <Link
-          href={`/teacher/assignments/${encodeURIComponent(row.id)}/results`}
-          className={buttonVariants({ variant: "soft", size: "sm" })}
-        >
-          <BarChart3 className="h-3.5 w-3.5" aria-hidden={true} />
-          Xem kết quả
-        </Link>
-      ),
+      renderCell: (row) => {
+        const asgId = row.id || (row as any)._id;
+        return (
+          <Link
+            href={`/teacher/assignments/${encodeURIComponent(asgId)}/results`}
+            className={buttonVariants({ variant: "soft", size: "sm" })}
+          >
+            <BarChart3 className="h-3.5 w-3.5" aria-hidden={true} />
+            Xem kết quả
+          </Link>
+        );
+      },
     },
   ];
 
@@ -132,11 +141,14 @@ export default function TeacherAssignmentsPage() {
             className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-950"
           >
             <option value="all">Tất cả khóa học</option>
-            {(coursesQuery.data?.items ?? []).map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.code} — {course.title}
-              </option>
-            ))}
+            {(coursesQuery.data?.items ?? []).map((course: any) => {
+              const cId = course.id || course._id;
+              return (
+                <option key={cId} value={cId}>
+                  {course.code} — {course.title}
+                </option>
+              );
+            })}
           </select>
         </div>
       </Toolbar>
@@ -155,7 +167,7 @@ export default function TeacherAssignmentsPage() {
           caption={`Bài tập đã giao (${filtered.length})`}
           columns={columns}
           rows={filtered}
-          getRowKey={(row) => row.id}
+          getRowKey={(row) => row.id || (row as any)._id || ""}
           emptyTitle="Chưa có bài tập nào được giao"
           emptyDescription="Nhấn 'Giao bài tập mới' để phân phối đề đã xuất bản cho lớp học."
         />

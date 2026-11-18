@@ -23,12 +23,16 @@ const YNNG_DEFAULTS: readonly QuestionOption[] = [
   { id: "NOT GIVEN", label: "NOT GIVEN", text: "NOT GIVEN" },
 ];
 
-function getChoiceOptions(question: ExerciseQuestionPublic): readonly QuestionOption[] {
+function getChoiceOptions(
+  question: ExerciseQuestionPublic,
+  isTfng: boolean,
+  isYnng: boolean,
+): readonly QuestionOption[] {
   if (question.options && question.options.length > 0) {
     return question.options;
   }
-  if (question.type === "tfng") return TFNG_DEFAULTS;
-  if (question.type === "ynng") return YNNG_DEFAULTS;
+  if (isTfng || question.type === "tfng") return TFNG_DEFAULTS;
+  if (isYnng || question.type === "ynng") return YNNG_DEFAULTS;
   return [];
 }
 
@@ -45,11 +49,19 @@ export function QuestionRenderer({
   onChange,
 }: QuestionRendererProps) {
   const controlId = useId();
-  const groupName = `question-${question.id}-${controlId}`;
+  const qId = question.id || (question as any).questionId || controlId;
+  const groupName = `question-${qId}-${controlId}`;
   const isAnswered = value.trim().length > 0;
 
-  if (question.type === "mcq" || question.type === "tfng" || question.type === "ynng") {
-    const options = getChoiceOptions(question);
+  const rawType = String(question.type || "mcq").toUpperCase().trim();
+  const isTfng = rawType === "TFNG" || rawType === "TRUE_FALSE_NOT_GIVEN";
+  const isYnng = rawType === "YNNG" || rawType === "YES_NO_NOT_GIVEN";
+  const isMcq = rawType === "MCQ" || rawType.startsWith("MULTIPLE_CHOICE");
+  const isMatching = rawType === "MATCHING" || rawType.startsWith("MATCHING_");
+  const isChoice = isMcq || isTfng || isYnng;
+
+  if (isChoice) {
+    const options = getChoiceOptions(question, isTfng, isYnng);
     return (
       <fieldset className="lms-card space-y-3" disabled={disabled}>
         <legend className="flex w-full items-start justify-between gap-3 text-sm font-semibold text-slate-900">
@@ -73,8 +85,11 @@ export function QuestionRenderer({
 
         <div className="space-y-2">
           {options.map((opt) => {
-            const optionValue = opt.id || opt.label;
-            const isSelected = value === optionValue;
+            const optionValue = opt.id || opt.label || opt.text || "";
+            const isSelected =
+              value === optionValue ||
+              (opt.id ? value === opt.id : false) ||
+              (opt.label ? value === opt.label : false);
             return (
               <label key={optionValue} className="lms-choice-label">
                 <input
@@ -86,7 +101,7 @@ export function QuestionRenderer({
                   className="h-4 w-4 shrink-0 accent-blue-700"
                 />
                 <span className="text-sm text-slate-900">
-                  {question.type === "mcq" && opt.label && opt.text !== opt.label ? (
+                  {isMcq && opt.label && opt.text && opt.text !== opt.label ? (
                     <>
                       <strong className="mr-1.5 font-semibold">{opt.label}.</strong>
                       {opt.text}
@@ -103,7 +118,7 @@ export function QuestionRenderer({
     );
   }
 
-  if (question.type === "matching" && question.options && question.options.length > 0) {
+  if (isMatching && question.options && question.options.length > 0) {
     return (
       <div className="lms-card space-y-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -126,10 +141,10 @@ export function QuestionRenderer({
         >
           <option value="">— Chọn đáp án ghép cặp —</option>
           {question.options.map((opt) => {
-            const optionValue = opt.id || opt.label;
+            const optionValue = opt.id || opt.label || opt.text || "";
             return (
               <option key={optionValue} value={optionValue}>
-                {opt.label ? `${opt.label}. ${opt.text}` : opt.text}
+                {opt.label && opt.text && opt.label !== opt.text ? `${opt.label}. ${opt.text}` : opt.text || opt.label}
               </option>
             );
           })}
@@ -152,7 +167,7 @@ export function QuestionRenderer({
         </span>
       </div>
       <p id={`${controlId}-hint`} className="text-xs text-slate-600">
-        Nhập chính xác từ/cụm từ tiếng Anh theo nội dung bài {question.type === "fill_blank" ? "điền khuyết" : "trả lời ngắn"}.
+        Nhập chính xác từ/cụm từ tiếng Anh theo nội dung bài {rawType.includes("SHORT") ? "trả lời ngắn" : "điền khuyết"}.
       </p>
       <input
         id={controlId}

@@ -54,7 +54,11 @@ function TranslationReviewPane({
 
   const reviewMutation = useMutation({
     mutationFn: (payload: { decision: "approved" | "needs_revision"; feedback: string }) =>
-      studentAssignmentsApi.reviewTranslation(item.workspace.translationId, payload),
+      studentAssignmentsApi.reviewTranslation(item.workspace.translationId, {
+        decision: payload.decision,
+        feedback: payload.feedback,
+        teacherComment: payload.feedback,
+      } as any),
     onSuccess: async (_updated, vars) => {
       await queryClient.invalidateQueries({ queryKey: teacherKeys.translationsQueue });
       await queryClient.invalidateQueries({ queryKey: teacherKeys.dashboard });
@@ -249,15 +253,23 @@ function PassageTranslationReviewPane({
   const [feedback, setFeedback] = useState(item.teacherFeedback ?? "");
   const [fieldError, setFieldError] = useState<string | null>(null);
 
+  const partNumber = item.partNumber || 1;
+  const passageTitle = item.passageTitle || `Passage ${partNumber}`;
+  const studentDisplayName = item.studentName || "Học viên";
+
   const reviewMutation = useMutation({
     mutationFn: (payload: { decision: "REVIEWED" | "NEEDS_REVISION"; feedback: string }) =>
-      readingTranslationsApi.reviewTranslation(item.translationId, payload),
+      readingTranslationsApi.reviewTranslation(item.translationId, {
+        decision: payload.decision,
+        feedback: payload.feedback,
+        teacherComment: payload.feedback,
+      } as any),
     onSuccess: async (_updated, vars) => {
       await queryClient.invalidateQueries({ queryKey: examKeys.teacherTranslationsRoot });
       onReviewed(
         vars.decision === "REVIEWED"
-          ? `Đã chấm hoàn tất Passage ${item.partNumber} của ${item.studentName}.`
-          : `Đã trả lại bản dịch Passage ${item.partNumber} để ${item.studentName} chỉnh sửa.`,
+          ? `Đã chấm hoàn tất Passage ${partNumber} của ${studentDisplayName}.`
+          : `Đã trả lại bản dịch Passage ${partNumber} để ${studentDisplayName} chỉnh sửa.`,
       );
     },
   });
@@ -279,10 +291,10 @@ function PassageTranslationReviewPane({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-base font-semibold text-slate-950">
-              Học viên: {item.studentName}
+              Học viên: {studentDisplayName}
             </p>
             <p className="text-sm text-slate-700">
-              {item.testTitle} · Passage {item.partNumber}: {item.passageTitle}
+              {item.testTitle || "Đề thi"} · Passage {partNumber}: {passageTitle}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -303,7 +315,7 @@ function PassageTranslationReviewPane({
       <ReadingSplitWorkspace
         leftLabel="Bài đọc gốc (Passage)"
         rightLabel="Bản dịch tiếng Việt học viên"
-        leftTitle={`Passage ${item.partNumber}: ${item.passageTitle}`}
+        leftTitle={`Passage ${partNumber}: ${passageTitle}`}
         leftContent={
           item.paragraphs && item.paragraphs.length > 0 ? (
             <div className="space-y-3 text-sm leading-relaxed text-slate-800">
@@ -314,7 +326,11 @@ function PassageTranslationReviewPane({
               ))}
             </div>
           ) : (
-            <SafeHtml html={item.passageHtml} lang="en" preset="richText" />
+            <SafeHtml
+              html={item.passageHtml || (item as any).contentHtml || "<p>Nội dung đoạn văn đang được cập nhật...</p>"}
+              lang="en"
+              preset="richText"
+            />
           )
         }
         rightContent={
@@ -545,7 +561,7 @@ export default function TeacherTranslationsPage() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-sm font-semibold text-slate-950">
-                              {entry.studentName}
+                              {entry.studentName || "Học viên"}
                             </span>
                             <StatusBadge
                               status={entry.status === "REVIEWED" ? "approved" : "submitted"}
@@ -553,10 +569,10 @@ export default function TeacherTranslationsPage() {
                             />
                           </div>
                           <p className="text-xs font-medium text-slate-700">
-                            {entry.testTitle} · Passage {entry.partNumber}
+                            {entry.testTitle || "Đề thi"} · Passage {entry.partNumber || 1}
                           </p>
                           <p className="truncate text-xs text-slate-600">
-                            {entry.passageTitle}
+                            {entry.passageTitle || `Passage ${entry.partNumber || 1}`}
                           </p>
                         </button>
                       </li>

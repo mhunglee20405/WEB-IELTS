@@ -415,8 +415,8 @@ export class ReadingTranslationsService {
     const [docs, total] = await Promise.all([
       this.translationModel
         .find(filter)
-        .populate('studentId', 'fullName email')
-        .populate('testId', 'title')
+        .populate('studentId', 'fullName name email')
+        .populate('testId', 'title parts')
         .sort({ submittedAt: -1, createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
@@ -424,16 +424,34 @@ export class ReadingTranslationsService {
       this.translationModel.countDocuments(filter).exec(),
     ]);
 
-    return {
-      items: docs.map((d: any) => ({
+    const items = docs.map((d: any) => {
+      const test = d.testId as any;
+      const part = (test?.parts || []).find(
+        (p: any) =>
+          extractObjectId(p._id) === String(d.passageId) ||
+          String(p.ordinal) === String(d.passageId),
+      );
+      const partNumber =
+        part?.ordinal ??
+        (d.passageId && !isNaN(Number(d.passageId)) ? Number(d.passageId) : 1);
+      const passageTitle = part?.title || `Passage ${partNumber}`;
+      const passageHtml = part?.contentHtml || '';
+
+      const studentName = d.studentId?.fullName || d.studentId?.name || 'Học viên';
+
+      return {
         id: extractObjectId(d._id),
         translationId: extractObjectId(d._id),
         studentId: d.studentId ? extractObjectId(d.studentId._id || d.studentId) : null,
-        studentName: d.studentId?.fullName || null,
+        studentName,
         studentEmail: d.studentId?.email || null,
         testId: d.testId ? extractObjectId(d.testId._id || d.testId) : null,
         testTitle: d.testId?.title || null,
         passageId: d.passageId || null,
+        partNumber,
+        passageTitle,
+        passageHtml,
+        paragraphs: [],
         status: (d.status || '').toUpperCase(),
         textVi: d.translatedText,
         translatedText: d.translatedText,
@@ -441,10 +459,15 @@ export class ReadingTranslationsService {
         teacherFeedback: d.teacherComment,
         teacherComment: d.teacherComment,
         reviewedAt: d.reviewedAt,
-      })),
+      };
+    });
+
+    return {
+      items,
       total,
       page,
       limit,
+      totalPages: Math.ceil(total / limit) || 1,
     };
   }
 
@@ -462,17 +485,29 @@ export class ReadingTranslationsService {
       throw new NotFoundException('Translation submission not found');
     }
 
-    sub.teacherComment = dto.teacherComment;
+    const comment = dto.teacherComment || dto.feedback || '';
+    sub.teacherComment = comment;
     sub.reviewedBy = teacher._id as Types.ObjectId;
     sub.reviewedAt = new Date();
-    sub.status = TranslationSubmissionStatus.REVIEWED;
+
+    const isNeedsRevision =
+      dto.decision === 'NEEDS_REVISION' ||
+      dto.decision === 'needs_revision';
+
+    if (isNeedsRevision) {
+      sub.status = TranslationSubmissionStatus.DRAFT;
+    } else {
+      sub.status = TranslationSubmissionStatus.REVIEWED;
+    }
 
     await sub.save();
 
     return {
       id: extractObjectId(sub._id),
+      translationId: extractObjectId(sub._id),
       status: sub.status.toUpperCase(),
       teacherComment: sub.teacherComment,
+      teacherFeedback: sub.teacherComment,
       reviewedAt: sub.reviewedAt,
       reviewedBy: extractObjectId(teacher._id),
     };

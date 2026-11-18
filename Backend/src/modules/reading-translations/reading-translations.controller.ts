@@ -3,6 +3,7 @@ import {
   Get,
   Put,
   Post,
+  Patch,
   Param,
   Body,
   Query,
@@ -109,6 +110,17 @@ export class TeacherReadingTranslationsController {
   @ApiOperation({ summary: 'Provide teacher feedback and mark translation as REVIEWED' })
   @ApiParam({ name: 'translationId', description: 'TranslationSubmission ObjectId' })
   review(
+    @Param('translationId') translationId: string,
+    @Body() dto: ReviewReadingTranslationDto,
+    @CurrentUser() actor: UserDocument,
+  ) {
+    return this.translationsService.reviewTranslation(translationId, dto, actor);
+  }
+
+  @Patch(':translationId/review')
+  @ApiOperation({ summary: 'Provide teacher feedback and mark translation as REVIEWED (PATCH alias)' })
+  @ApiParam({ name: 'translationId', description: 'TranslationSubmission ObjectId' })
+  reviewPatch(
     @Param('translationId') translationId: string,
     @Body() dto: ReviewReadingTranslationDto,
     @CurrentUser() actor: UserDocument,

@@ -71,9 +71,20 @@ export class SubmitReadingTranslationDto {
 }
 
 export class ReviewReadingTranslationDto {
-  @ApiProperty({ example: 'Bản dịch rất tốt, văn phong tự nhiên và chính xác thuật ngữ.' })
+  @ApiPropertyOptional({ example: 'Bản dịch rất tốt, văn phong tự nhiên và chính xác thuật ngữ.' })
+  @IsOptional()
   @IsString()
-  teacherComment: string;
+  teacherComment?: string;
+
+  @ApiPropertyOptional({ example: 'Nhận xét chi tiết cho học viên...' })
+  @IsOptional()
+  @IsString()
+  feedback?: string;
+
+  @ApiPropertyOptional({ example: 'REVIEWED', enum: ['REVIEWED', 'NEEDS_REVISION', 'approved', 'needs_revision'] })
+  @IsOptional()
+  @IsString()
+  decision?: string;
 }
 
 export class TeacherTranslationQueryDto {

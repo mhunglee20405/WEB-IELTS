@@ -310,6 +310,7 @@ export interface Assignment {
   allowedModes?: ("PART" | "FULL")[];
   durationSecondsOverride?: number | null;
   maxAttempts?: number | null;
+  allowRetake?: boolean;
 }
 
 export interface CreateAssignmentRequest {
@@ -326,6 +327,7 @@ export interface CreateAssignmentRequest {
   allowedModes?: ("PART" | "FULL")[];
   durationSecondsOverride?: number | null;
   maxAttempts?: number | null;
+  allowRetake?: boolean;
 }
 
 export interface UpdateAssignmentRequest {

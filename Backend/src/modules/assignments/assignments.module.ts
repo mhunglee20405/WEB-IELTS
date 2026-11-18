@@ -11,6 +11,11 @@ import {
   StudentAssignment,
   StudentAssignmentSchema,
 } from 'src/database/schemas/student-assignment.schema';
+import { Submission, SubmissionSchema } from 'src/database/schemas/submission.schema';
+import {
+  TranslationSubmission,
+  TranslationSubmissionSchema,
+} from 'src/database/schemas/translation-submission.schema';
 import { NotificationsModule } from 'src/modules/notifications/notifications.module';
 import { AuditModule } from 'src/modules/audit/audit.module';
 
@@ -23,6 +28,8 @@ import { AuditModule } from 'src/modules/audit/audit.module';
       { name: ExamTest.name, schema: ExamTestSchema },
       { name: Enrollment.name, schema: EnrollmentSchema },
       { name: StudentAssignment.name, schema: StudentAssignmentSchema },
+      { name: Submission.name, schema: SubmissionSchema },
+      { name: TranslationSubmission.name, schema: TranslationSubmissionSchema },
     ]),
     NotificationsModule,
     AuditModule,

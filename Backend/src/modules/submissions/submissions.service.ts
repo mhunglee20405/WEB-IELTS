@@ -61,6 +61,136 @@ export function normalizeTFNG(value: string): string {
   return norm;
 }
 
+export function normalizeQuestionType(type: string | undefined): string {
+  if (!type) return 'mcq';
+  const upper = String(type).toUpperCase().trim();
+  const lower = String(type).toLowerCase().trim();
+
+  if (upper === 'TRUE_FALSE_NOT_GIVEN' || lower === 'tfng' || lower === 'true_false_not_given') {
+    return 'tfng';
+  }
+  if (upper === 'YES_NO_NOT_GIVEN' || lower === 'ynng' || lower === 'yes_no_not_given') {
+    return 'ynng';
+  }
+  if (upper.startsWith('MATCHING') || lower === 'matching') {
+    return 'matching';
+  }
+  if (
+    upper.endsWith('_COMPLETION') ||
+    upper === 'FILL_BLANK' ||
+    upper === 'FILL_IN_THE_BLANK' ||
+    lower === 'fill_blank' ||
+    lower === 'fill_in_the_blank'
+  ) {
+    return 'fill_blank';
+  }
+  if (upper === 'SHORT_ANSWER' || lower === 'short_answer') {
+    return 'short_answer';
+  }
+  if (
+    upper.startsWith('MULTIPLE_CHOICE') ||
+    lower === 'mcq' ||
+    lower === 'multiple_choice'
+  ) {
+    return 'mcq';
+  }
+
+  const validV1 = ['mcq', 'tfng', 'ynng', 'fill_blank', 'matching', 'short_answer'];
+  return validV1.includes(lower) ? lower : 'mcq';
+}
+
+export function normalizeQuestionOptions(
+  options: any[] | undefined,
+): Array<{ id: string; label: string; text: string }> | undefined {
+  if (!options || !Array.isArray(options) || options.length === 0) {
+    return undefined;
+  }
+  return options.map((opt: any, idx: number) => {
+    if (typeof opt === 'string') {
+      return {
+        id: opt,
+        label: opt,
+        text: opt,
+      };
+    }
+    const raw = typeof opt.toObject === 'function' ? opt.toObject() : opt;
+    const id = String(raw.id ?? raw.key ?? raw._id ?? idx);
+    const label = String(raw.label ?? raw.key ?? raw.text ?? id);
+    const text = String(raw.text ?? raw.label ?? id);
+    return {
+      id,
+      label,
+      text,
+    };
+  });
+}
+
+export function gradeExamQuestion(
+  type: string,
+  studentAnswer: any,
+  gradingSpec: any,
+  points = 1,
+): { isCorrect: boolean; awardedPoints: number } {
+  if (!gradingSpec || !gradingSpec.acceptedKeys || gradingSpec.acceptedKeys.length === 0) {
+    return { isCorrect: false, awardedPoints: 0 };
+  }
+
+  const acceptedKeys: string[] = gradingSpec.acceptedKeys;
+  const caseSensitive = Boolean(gradingSpec.caseSensitive);
+  const normType = normalizeQuestionType(type);
+  const valStr = typeof studentAnswer === 'string' ? studentAnswer : String(studentAnswer || '');
+
+  let isCorrect = false;
+
+  switch (normType) {
+    case 'mcq':
+    case 'matching': {
+      const normalizedStudent = normalizeText(valStr, false);
+      isCorrect = acceptedKeys.some(
+        (key) => normalizeText(key, false) === normalizedStudent,
+      );
+      break;
+    }
+
+    case 'tfng':
+    case 'ynng': {
+      const normalizedStudent = normalizeTFNG(valStr);
+      isCorrect = acceptedKeys.some(
+        (key) => normalizeTFNG(key) === normalizedStudent,
+      );
+      break;
+    }
+
+    case 'fill_blank':
+    case 'short_answer': {
+      const normalizedStudent = normalizeText(valStr, caseSensitive);
+      if (gradingSpec.maxWords && gradingSpec.maxWords > 0) {
+        const words = normalizedStudent.split(' ').filter(Boolean);
+        if (words.length > gradingSpec.maxWords) {
+          return { isCorrect: false, awardedPoints: 0 };
+        }
+      }
+      isCorrect = acceptedKeys.some(
+        (key) => normalizeText(key, caseSensitive) === normalizedStudent,
+      );
+      break;
+    }
+
+    default: {
+      const normalizedStudent = normalizeText(valStr, caseSensitive);
+      isCorrect = acceptedKeys.some(
+        (key) => normalizeText(key, caseSensitive) === normalizedStudent,
+      );
+      break;
+    }
+  }
+
+  return {
+    isCorrect,
+    awardedPoints: isCorrect ? points : 0,
+  };
+}
+
 @Injectable()
 export class SubmissionsService {
   constructor(
@@ -163,43 +293,60 @@ export class SubmissionsService {
 
     const submissionAnswers: { questionId: string; value: string; awardedPoints: number }[] = [];
 
-    for (const q of snapshot.questions) {
+    for (const rawQ of snapshot.questions) {
+      const q = rawQ as any;
       const qPoints = q.points !== undefined && q.points > 0 ? q.points : 1;
       totalPossiblePoints += qPoints;
 
-      const rawVal = studentAnswerMap.get(q.questionId) || '';
+      const qId = String(
+        q.questionId || (q.number !== undefined ? String(q.number) : undefined) || q.id || ''
+      );
+      const rawVal =
+        studentAnswerMap.get(qId) ||
+        (q.questionId ? studentAnswerMap.get(q.questionId) : '') ||
+        '';
       const spec = q.answerSpecification;
+      const grading = q.grading;
       let isCorrect = false;
 
-      if (spec) {
-        switch (q.type) {
-          case QuestionType.MULTIPLE_CHOICE:
-          case QuestionType.MATCHING:
-          case QuestionType.MATCHING_HEADINGS:
-          case QuestionType.MATCHING_INFORMATION:
-            if (spec.correctKey) {
+      // 1. If ExamTest v2 grading specification with acceptedKeys exists:
+      if (grading && grading.acceptedKeys && grading.acceptedKeys.length > 0) {
+        const gradeRes = gradeExamQuestion(q.type, rawVal, grading, qPoints);
+        isCorrect = gradeRes.isCorrect;
+      }
+      // 2. Otherwise legacy answerSpecification:
+      else if (spec) {
+        const correctKey = spec.correctKey;
+        const acceptedAnswers = spec.acceptedAnswers || [];
+        const normType = normalizeQuestionType(q.type);
+
+        switch (normType) {
+          case 'mcq':
+          case 'matching':
+            if (correctKey) {
               isCorrect =
-                normalizeText(rawVal, false) === normalizeText(spec.correctKey, false);
+                normalizeText(rawVal, false) === normalizeText(correctKey, false);
             }
             break;
 
-          case QuestionType.TRUE_FALSE_NOT_GIVEN:
-          case QuestionType.YES_NO_NOT_GIVEN:
-            if (spec.correctKey) {
-              isCorrect = normalizeTFNG(rawVal) === normalizeTFNG(spec.correctKey);
+          case 'tfng':
+          case 'ynng':
+            if (correctKey) {
+              isCorrect = normalizeTFNG(rawVal) === normalizeTFNG(correctKey);
             }
             break;
 
-          case QuestionType.FILL_BLANK:
-          case QuestionType.SHORT_ANSWER:
-          case QuestionType.SENTENCE_COMPLETION:
-          case QuestionType.SUMMARY_COMPLETION:
-            if (spec.acceptedAnswers && spec.acceptedAnswers.length > 0) {
+          case 'fill_blank':
+          case 'short_answer':
+            if (acceptedAnswers && acceptedAnswers.length > 0) {
               const caseSensitive = Boolean(spec.caseSensitive);
               const normalizedInput = normalizeText(rawVal, caseSensitive);
-              isCorrect = spec.acceptedAnswers.some(
-                (acc) => normalizeText(acc, caseSensitive) === normalizedInput,
+              isCorrect = acceptedAnswers.some(
+                (acc: string) => normalizeText(acc, caseSensitive) === normalizedInput,
               );
+            } else if (correctKey) {
+              isCorrect =
+                normalizeText(rawVal, false) === normalizeText(correctKey, false);
             }
             break;
 
@@ -215,7 +362,7 @@ export class SubmissionsService {
       }
 
       submissionAnswers.push({
-        questionId: q.questionId,
+        questionId: qId || q.questionId,
         value: rawVal,
         awardedPoints,
       });

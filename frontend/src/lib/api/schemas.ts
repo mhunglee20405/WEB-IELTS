@@ -172,25 +172,78 @@ export const LessonSchema = z
 
 export const ExerciseTypeSchema = z.enum(["reading", "listening"]);
 export const ExerciseStatusSchema = z.enum(["draft", "published", "archived"]);
-export const QuestionTypeSchema = z.enum([
+export const QuestionTypeSchema = z.preprocess((val) => {
+  if (typeof val !== "string") return val;
+  const upper = val.toUpperCase().trim();
+  const lower = val.toLowerCase().trim();
+  if (upper === "TRUE_FALSE_NOT_GIVEN" || lower === "tfng" || lower === "true_false_not_given") {
+    return "tfng";
+  }
+  if (upper === "YES_NO_NOT_GIVEN" || lower === "ynng" || lower === "yes_no_not_given") {
+    return "ynng";
+  }
+  if (upper.startsWith("MATCHING") || lower === "matching") {
+    return "matching";
+  }
+  if (
+    upper.endsWith("_COMPLETION") ||
+    upper === "FILL_BLANK" ||
+    upper === "FILL_IN_THE_BLANK" ||
+    lower === "fill_blank" ||
+    lower === "fill_in_the_blank"
+  ) {
+    return "fill_blank";
+  }
+  if (upper === "SHORT_ANSWER" || lower === "short_answer") {
+    return "short_answer";
+  }
+  if (
+    upper.startsWith("MULTIPLE_CHOICE") ||
+    lower === "mcq" ||
+    lower === "multiple_choice"
+  ) {
+    return "mcq";
+  }
+  return lower;
+}, z.enum([
   "mcq",
   "tfng",
   "ynng",
   "fill_blank",
   "matching",
   "short_answer",
-]);
+]));
 
-export const QuestionOptionSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  text: z.string(),
-});
+export const QuestionOptionSchema = z.preprocess(
+  (val) => {
+    if (typeof val === "string") {
+      return {
+        id: val,
+        label: val,
+        text: val,
+      };
+    }
+    if (val && typeof val === "object") {
+      const raw = val as Record<string, unknown>;
+      const id = String(raw.id ?? raw.key ?? raw._id ?? "");
+      const label = String(raw.label ?? raw.key ?? raw.text ?? id);
+      const text = String(raw.text ?? raw.label ?? id);
+      return {
+        id,
+        label,
+        text,
+      };
+    }
+    return val;
+  },
+  z.object({
+    id: z.string(),
+    label: z.string(),
+    text: z.string(),
+  }),
+);
 
-/**
- * Strips any accidental `correctAnswer` or `explanation` from student-facing payloads.
- */
-export const ExerciseQuestionPublicSchema = z.object({
+export const BaseExerciseQuestionPublicSchema = z.object({
   id: z.string(),
   orderIndex: z.number(),
   prompt: z.string(),
@@ -199,26 +252,59 @@ export const ExerciseQuestionPublicSchema = z.object({
   points: z.number().default(1),
 });
 
-export const ExerciseQuestionAuthoringSchema = ExerciseQuestionPublicSchema.extend({
+/**
+ * Strips any accidental `correctAnswer` or `explanation` from student-facing payloads.
+ */
+export const ExerciseQuestionPublicSchema = z.preprocess((val) => {
+  if (val && typeof val === "object") {
+    const raw = val as Record<string, unknown>;
+    const id = String(raw.id ?? raw.questionId ?? (raw.number !== undefined ? raw.number : "") ?? "");
+    return {
+      ...raw,
+      id: id || "q-1",
+      orderIndex:
+        typeof raw.orderIndex === "number"
+          ? raw.orderIndex
+          : typeof raw.number === "number"
+            ? raw.number
+            : 1,
+    };
+  }
+  return val;
+}, BaseExerciseQuestionPublicSchema);
+
+export const ExerciseQuestionAuthoringSchema = BaseExerciseQuestionPublicSchema.extend({
   correctAnswer: z.string(),
   explanation: z.string().optional(),
 });
 
-export const ExercisePublicSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  type: ExerciseTypeSchema,
-  status: ExerciseStatusSchema,
-  version: z.number().int().min(1),
-  instructions: z.string().optional(),
-  passageHtml: z.string().optional(),
-  audioAssetId: z.string().optional(),
-  durationMinutes: z.number().optional(),
-  passThreshold: z.number().default(PASS_SCORE_THRESHOLD),
-  questions: z.array(ExerciseQuestionPublicSchema),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-});
+export const ExercisePublicSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object") {
+      const raw = val as Record<string, unknown>;
+      return {
+        ...raw,
+        passageHtml: (raw.passageHtml ?? raw.passage ?? "") as string,
+      };
+    }
+    return val;
+  },
+  z.object({
+    id: z.string(),
+    title: z.string(),
+    type: ExerciseTypeSchema,
+    status: ExerciseStatusSchema,
+    version: z.number().int().min(1),
+    instructions: z.string().optional(),
+    passageHtml: z.string().optional(),
+    audioAssetId: z.string().optional(),
+    durationMinutes: z.number().optional(),
+    passThreshold: z.number().default(PASS_SCORE_THRESHOLD),
+    questions: z.array(ExerciseQuestionPublicSchema),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+  }),
+);
 
 export const AssignmentStatusSchema = z.enum(["scheduled", "active", "closed"]);
 
@@ -279,9 +365,29 @@ export const StudentAssignmentSummarySchema = z.object({
   penaltyApplied: z.boolean(),
 });
 
-export const StudentAssignmentDetailSchema = StudentAssignmentSummarySchema.extend({
-  exercise: ExercisePublicSchema,
-});
+export const StudentAssignmentDetailSchema = z.preprocess(
+  (val) => {
+    if (val && typeof val === "object") {
+      const raw = val as Record<string, any>;
+      const saId = String(raw.studentAssignmentId ?? raw.id ?? raw._id ?? "");
+      const asgId = String(raw.assignmentId ?? raw.id ?? raw._id ?? "");
+      const courseId =
+        typeof raw.courseId === "object" && raw.courseId !== null
+          ? String(raw.courseId.id ?? raw.courseId._id ?? "")
+          : String(raw.courseId ?? "");
+      return {
+        ...raw,
+        studentAssignmentId: saId,
+        assignmentId: asgId,
+        courseId,
+      };
+    }
+    return val;
+  },
+  StudentAssignmentSummarySchema.extend({
+    exercise: ExercisePublicSchema,
+  }),
+);
 
 export const SubmissionResultSchema = z.object({
   submissionId: z.string(),
@@ -563,6 +669,7 @@ export const CreateAssignmentFormSchema = z.object({
   allowedModes: z.array(z.enum(["PART", "FULL"])).optional(),
   durationSecondsOverride: z.coerce.number().int().min(60).max(10800).optional().nullable(),
   maxAttempts: z.coerce.number().int().min(1).max(20).optional().nullable(),
+  allowRetake: z.boolean().optional(),
 });
 
 export const CreateUserFormSchema = z.object({

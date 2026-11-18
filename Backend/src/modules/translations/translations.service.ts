@@ -233,24 +233,33 @@ export class TranslationsService {
       throw new NotFoundException('Translation submission not found');
     }
 
-    const assignment = await this.assignmentModel.findById(submission.assignmentId).exec();
-    if (!assignment) {
-      throw new NotFoundException('Associated assignment not found');
-    }
-
-    const course = await this.courseModel.findById(assignment.courseId).exec();
-
-    if (actor.role === UserRole.TEACHER) {
-      const isTeacher = extractObjectId(course?.teacherId) === extractObjectId(actor._id);
-      if (!isTeacher) {
-        throw new ForbiddenException('You do not teach this course');
+    if (submission.assignmentId) {
+      const assignment = await this.assignmentModel.findById(submission.assignmentId).exec();
+      if (assignment) {
+        const course = await this.courseModel.findById(assignment.courseId).exec();
+        if (actor.role === UserRole.TEACHER) {
+          const isTeacher = extractObjectId(course?.teacherId) === extractObjectId(actor._id);
+          if (!isTeacher) {
+            throw new ForbiddenException('You do not teach this course');
+          }
+        }
       }
     }
 
-    submission.teacherComment = dto.teacherComment;
+    const comment = dto.teacherComment || dto.feedback || '';
+    submission.teacherComment = comment;
     submission.reviewedBy = actor._id as Types.ObjectId;
     submission.reviewedAt = new Date();
-    submission.status = TranslationSubmissionStatus.REVIEWED;
+
+    const isNeedsRevision =
+      dto.decision === 'needs_revision' ||
+      dto.decision === 'NEEDS_REVISION';
+
+    if (isNeedsRevision) {
+      submission.status = TranslationSubmissionStatus.DRAFT;
+    } else {
+      submission.status = TranslationSubmissionStatus.REVIEWED;
+    }
 
     await submission.save();
 
