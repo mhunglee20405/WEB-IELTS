@@ -447,6 +447,7 @@ export class ExamTestsService {
     return {
       testId,
       isValid: errors.length === 0,
+      valid: errors.length === 0,
       totalQuestions,
       errors,
     };
@@ -470,7 +471,7 @@ export class ExamTestsService {
       return ExamTestMapper.toStudentSafePart(part);
     }
 
-    return ExamTestMapper.toStudentSafeTest(test);
+    return ExamTestMapper.toStudentSafeFullTest(test);
   }
 
   async publish(testId: string, actor: UserDocument) {

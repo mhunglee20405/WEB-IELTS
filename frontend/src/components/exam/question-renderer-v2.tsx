@@ -210,7 +210,7 @@ function ExamSingleQuestionItem({
             {question.questionNumber}
           </span>
           <div className="space-y-1">
-            <p className="text-sm leading-relaxed font-medium text-slate-900">
+            <p className="text-sm leading-relaxed font-medium text-slate-900 whitespace-pre-line">
               {question.prompt}
             </p>
             {(question.blankLabel || effectiveMaxWords) && (
