@@ -2299,6 +2299,13 @@ export function dispatchExamV2MockRequest<T>(
     if (!action && method === "GET") {
       return { handled: true, data: test as T };
     }
+    if (!action && method === "DELETE") {
+      const idx = state.tests.findIndex((t) => t.id === teacherActionMatch[1]);
+      if (idx !== -1) {
+        state.tests.splice(idx, 1);
+      }
+      return { handled: true, data: { ok: true, message: "Đã xóa đề thi thành công" } as T };
+    }
     if (!action && method === "PATCH") {
       if (test.status === "PUBLISHED") {
         throw new ApiError({

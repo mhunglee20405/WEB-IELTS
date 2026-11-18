@@ -23,6 +23,19 @@ export interface ListExamAttemptsQuery {
   limit?: number;
 }
 
+function normalizeExamResult(raw: unknown): ExamResultResponse {
+  const unwrapped =
+    raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)
+      ? (raw as Record<string, unknown>).data
+      : raw;
+  const target = (unwrapped ?? {}) as Record<string, unknown>;
+  const normalized = {
+    ...target,
+    attemptId: target.attemptId ?? target.id ?? "",
+  };
+  return ExamResultResponseSchema.parse(normalized);
+}
+
 export const examAttemptsApi = {
   list(query: ListExamAttemptsQuery = {}): Promise<PaginatedResponse<ExamAttemptSummaryItem>> {
     const qs = buildQueryString({ ...query });
@@ -67,7 +80,7 @@ export const examAttemptsApi = {
     idempotencyKey?: string,
   ): Promise<ExamResultResponse> {
     const finalIdemKey = idempotencyKey ?? (payload as any)?.idempotencyKey ?? createIdempotencyKey();
-    const raw = await apiRequest<ExamResultResponse, Record<string, unknown>>({
+    const raw = await apiRequest<unknown, Record<string, unknown>>({
       method: "POST",
       path: `/exam-attempts/${encodeURIComponent(attemptId)}/submit`,
       body: {
@@ -76,15 +89,15 @@ export const examAttemptsApi = {
       },
       idempotencyKey: finalIdemKey,
     });
-    return ExamResultResponseSchema.parse(raw);
+    return normalizeExamResult(raw);
   },
 
   async getResult(attemptId: string): Promise<ExamResultResponse> {
-    const raw = await apiRequest<ExamResultResponse>({
+    const raw = await apiRequest<unknown>({
       method: "GET",
       path: `/exam-attempts/${encodeURIComponent(attemptId)}/result`,
     });
-    return ExamResultResponseSchema.parse(raw);
+    return normalizeExamResult(raw);
   },
 
   getReview(attemptId: string): Promise<ExamReviewResponse> {

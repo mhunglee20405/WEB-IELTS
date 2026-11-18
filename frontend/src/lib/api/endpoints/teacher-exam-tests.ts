@@ -655,6 +655,13 @@ export const teacherExamTestsApi = {
     });
   },
 
+  delete(testId: string): Promise<{ ok: boolean; message?: string }> {
+    return apiRequest<{ ok: boolean; message?: string }>({
+      method: "DELETE",
+      path: `/teacher/exam-tests/${encodeURIComponent(testId)}`,
+    });
+  },
+
   async uploadListeningAudio(
     file: File,
     options?: {

@@ -809,44 +809,60 @@ export const ExamAttemptDetailSchema = z
 export const ExamResultResponseSchema = z.object({
   attemptId: z.string(),
   testId: z.string(),
-  testTitle: z.string(),
+  testTitle: z.string().optional().default("IELTS Practice Test"),
   skill: ExamSkillSchema,
   mode: ExamModeSchema,
   partId: z.string().nullable().optional(),
   studentAssignmentId: z.string().nullable().optional(),
-  status: z.enum(["SUBMITTED", "EXPIRED"]),
+  status: z
+    .enum(["SUBMITTED", "EXPIRED", "AUTO_SUBMITTED", "IN_PROGRESS"])
+    .transform((s) => (s === "AUTO_SUBMITTED" || s === "IN_PROGRESS" ? "SUBMITTED" : s)),
   totalQuestions: z.number(),
   correctCount: z.number(),
   scorePercent: z.number(),
   passed: z.boolean(),
-  passThresholdPercent: z.number(),
+  passThresholdPercent: z.number().optional().default(70),
   ieltsBandEstimate: z.number().nullable().optional(),
-  answerReviewAvailable: z.boolean(),
+  answerReviewAvailable: z.boolean().optional().default(false),
   answerReviewLockedReason: z.string().nullable().optional(),
-  translationEligible: z.boolean(),
+  translationEligible: z.boolean().optional().default(false),
   translationEligibilityHint: z.string().nullable().optional(),
-  partBreakdown: z.array(
-    z.object({
-      partId: z.string(),
-      partNumber: z.number(),
-      title: z.string(),
-      correctCount: z.number(),
-      totalCount: z.number(),
-      percentage: z.number(),
-    }),
-  ),
+  partBreakdown: z
+    .array(
+      z.object({
+        partId: z.string(),
+        partNumber: z.number(),
+        title: z.string(),
+        correctCount: z.number(),
+        totalCount: z.number(),
+        percentage: z.number(),
+      }),
+    )
+    .optional()
+    .default([]),
   questionTypeBreakdown: z
     .array(
       z.object({
-        questionType: ExamQuestionTypeSchema,
+        questionType: z.preprocess((val) => {
+          if (typeof val === "string") {
+            if (val === "MULTIPLE_CHOICE") return "MULTIPLE_CHOICE_SINGLE";
+            if ((ExamQuestionTypeSchema.options as readonly string[]).includes(val)) return val;
+          }
+          return "MULTIPLE_CHOICE_SINGLE";
+        }, ExamQuestionTypeSchema),
         label: z.string().optional(),
         correctCount: z.number(),
         totalCount: z.number(),
       }),
     )
-    .optional(),
-  timeSpentSeconds: z.number(),
-  submittedAt: z.string(),
+    .optional()
+    .default([]),
+  timeSpentSeconds: z.number().optional().default(0),
+  submittedAt: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => v ?? new Date().toISOString()),
 });
 
 export const ReadingTranslationDraftSchema = z.object({

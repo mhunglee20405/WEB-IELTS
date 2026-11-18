@@ -204,5 +204,12 @@ export class TeacherExamTestsController {
   newVersion(@Param('testId') testId: string, @CurrentUser() actor: UserDocument) {
     return this.examTestsService.newVersion(testId, actor);
   }
+
+  @Delete(':testId')
+  @ApiOperation({ summary: 'Delete exam test' })
+  @ApiParam({ name: 'testId', description: 'ExamTest ObjectId' })
+  deleteTest(@Param('testId') testId: string, @CurrentUser() actor: UserDocument) {
+    return this.examTestsService.deleteTest(testId, actor);
+  }
 }
 

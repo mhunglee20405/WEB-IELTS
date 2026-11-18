@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Archive,
   BookOpen,
   CheckCircle2,
   CopyPlus,
@@ -15,11 +14,13 @@ import {
   Layers,
   Plus,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   FilterToolbar,
   PageHeader,
   QueryState,
@@ -32,6 +33,7 @@ import { examKeys } from "@/lib/api/query-keys";
 import type {
   ExamSkill,
   ExamTestStatus,
+  ExamTestSummary,
   ValidateExamTestResponse,
 } from "@/lib/api/types";
 
@@ -118,17 +120,21 @@ export default function TeacherQuestionBankPage() {
     },
   });
 
-  const archiveMutation = useMutation({
-    mutationFn: (testId: string) => teacherExamTestsApi.archive(testId),
-    onSuccess: (archived) => {
+  const [deleteTarget, setDeleteTarget] = useState<ExamTestSummary | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (testId: string) => teacherExamTestsApi.delete(testId),
+    onSuccess: (_, testId) => {
       refreshAll();
       setFeedback({
         type: "success",
-        text: `Đã lưu trữ đề "${archived.title}".`,
+        text: `Đã xóa đề thi "${deleteTarget?.title ?? testId}" thành công.`,
       });
+      setDeleteTarget(null);
     },
     onError: (err) => {
       setFeedback({ type: "error", text: getFriendlyErrorMessage(err) });
+      setDeleteTarget(null);
     },
   });
 
@@ -317,16 +323,15 @@ export default function TeacherQuestionBankPage() {
                       </Button>
                     )}
 
-                    {test.status === "PUBLISHED" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => archiveMutation.mutate(test.id)}
-                      >
-                        <Archive className="h-3.5 w-3.5" />
-                        Lưu trữ
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                      onClick={() => setDeleteTarget(test)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Xóa đề
+                    </Button>
                   </div>
                 </div>
               </Card>
@@ -334,6 +339,35 @@ export default function TeacherQuestionBankPage() {
           })}
         </div>
       </QueryState>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xác nhận xóa đề thi"
+        description={
+          <div className="space-y-2 text-sm text-slate-600">
+            <p>
+              Bạn có chắc chắn muốn xóa vĩnh viễn đề thi{" "}
+              <strong className="text-slate-900">
+                &ldquo;{deleteTarget?.title}&rdquo;
+              </strong>{" "}
+              (phiên bản v{deleteTarget?.version}) không?
+            </p>
+            <p className="text-rose-600 text-xs font-medium">
+              Cảnh báo: Hành động này không thể hoàn tác. Toàn bộ nội dung bài đọc/nghe và câu hỏi thuộc đề này sẽ bị xóa hoàn toàn.
+            </p>
+          </div>
+        }
+        confirmLabel="Xóa đề"
+        cancelLabel="Hủy"
+        variant="danger"
+        isSubmitting={deleteMutation.isPending}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteMutation.mutate(deleteTarget.id);
+          }
+        }}
+      />
     </div>
   );
 }

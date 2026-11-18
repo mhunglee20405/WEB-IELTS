@@ -370,7 +370,7 @@ export default function StudentExamResultPage() {
                           )}
                         >
                           <div className="flex flex-wrap items-start justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-900">
+                            <p className="whitespace-pre-line text-sm font-semibold text-slate-900 leading-snug">
                               <span className="mr-2 inline-flex h-6 min-w-6 items-center justify-center rounded bg-slate-900 px-1.5 text-xs text-white">
                                 {item.questionNumber}
                               </span>

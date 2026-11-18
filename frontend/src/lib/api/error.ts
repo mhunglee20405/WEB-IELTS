@@ -96,10 +96,20 @@ export function normalizeApiError(error: unknown): ApiError {
   }
 
   if (error instanceof Error && (error.name === "ZodError" || error.constructor.name === "ZodError")) {
+    const issues = (error as { issues?: Array<{ path?: Array<string | number>; message?: string }> }).issues;
+    const detailMsg =
+      Array.isArray(issues) && issues.length > 0
+        ? issues
+            .slice(0, 3)
+            .map((i) => `${(i.path || []).join(".") || "dữ liệu"}: ${i.message}`)
+            .join("; ")
+        : "";
     return new ApiError({
       statusCode: 422,
       code: "VALIDATION_ERROR",
-      message: CODE_MESSAGES_VI.VALIDATION_ERROR!,
+      message: detailMsg
+        ? `${CODE_MESSAGES_VI.VALIDATION_ERROR} (${detailMsg})`
+        : CODE_MESSAGES_VI.VALIDATION_ERROR!,
       timestamp: new Date().toISOString(),
       details: error,
     });
@@ -124,6 +134,13 @@ export function normalizeApiError(error: unknown): ApiError {
 
 export function getFriendlyErrorMessage(error: unknown): string {
   const normalized = normalizeApiError(error);
+  if (
+    normalized.code === "VALIDATION_ERROR" &&
+    normalized.message &&
+    normalized.message !== CODE_MESSAGES_VI.VALIDATION_ERROR
+  ) {
+    return normalized.message;
+  }
   if (normalized.code in CODE_MESSAGES_VI) {
     return CODE_MESSAGES_VI[normalized.code]!;
   }

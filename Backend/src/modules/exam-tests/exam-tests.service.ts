@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
   UnprocessableEntityException,
+  Optional,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,6 +15,7 @@ import {
   ExamPart,
   QuestionGroup,
 } from 'src/database/schemas/exam-test.schema';
+import { ExamAttempt, ExamAttemptDocument } from 'src/database/schemas/exam-attempt.schema';
 import { UserDocument } from 'src/database/schemas/user.schema';
 import {
   ExamSkill,
@@ -38,6 +40,9 @@ export class ExamTestsService {
   constructor(
     @InjectModel(ExamTest.name)
     private examTestModel: Model<ExamTestDocument>,
+    @Optional()
+    @InjectModel(ExamAttempt.name)
+    private examAttemptModel?: Model<ExamAttemptDocument>,
   ) {}
 
   private checkTeacherOwnership(test: ExamTestDocument, actor: UserDocument) {
@@ -543,5 +548,30 @@ export class ExamTestsService {
 
     const saved = await newDraft.save();
     return ExamTestMapper.toTeacherDetailedTest(saved);
+  }
+
+  async deleteTest(testId: string, actor: UserDocument) {
+    if (!Types.ObjectId.isValid(testId)) {
+      throw new NotFoundException('Exam test not found');
+    }
+    const test = await this.examTestModel.findById(testId).exec();
+    if (!test) {
+      throw new NotFoundException('Exam test not found');
+    }
+    this.checkTeacherOwnership(test, actor);
+
+    if (this.examAttemptModel) {
+      const attemptCount = await this.examAttemptModel
+        .countDocuments({ testId: test._id })
+        .exec();
+      if (attemptCount > 0) {
+        throw new BadRequestException(
+          'Không thể xóa đề thi đã có học viên làm bài. Bạn có thể lưu trữ đề này thay vì xóa.',
+        );
+      }
+    }
+
+    await this.examTestModel.findByIdAndDelete(testId).exec();
+    return { ok: true, message: 'Đã xóa đề thi thành công', testId };
   }
 }
