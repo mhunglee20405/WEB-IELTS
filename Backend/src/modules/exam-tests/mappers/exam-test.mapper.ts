@@ -45,6 +45,7 @@ export class ExamTestMapper {
       passScore: raw.passScore,
       fullDurationSeconds: raw.fullDurationSeconds || null,
       totalQuestions,
+      partCount: partsSummary.length,
       parts: partsSummary,
       translationEnabled: raw.translationEnabled,
       access: {
@@ -140,6 +141,7 @@ export class ExamTestMapper {
       status: raw.status,
       version: raw.version,
       totalQuestions,
+      partCount: parts.length,
       parts,
       createdBy: extractObjectId(raw.createdBy),
       publishedAt: raw.publishedAt,
