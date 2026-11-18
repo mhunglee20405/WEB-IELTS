@@ -188,6 +188,7 @@ export default function AdminCoursesPage() {
           <option value="all">Tất cả trạng thái</option>
           <option value="active">Đang hoạt động</option>
           <option value="upcoming">Sắp mở</option>
+          <option value="draft">Bản nháp</option>
           <option value="archived">Lưu trữ</option>
         </select>
 
@@ -250,6 +251,7 @@ export default function AdminCoursesPage() {
               courseType: values.courseType,
               startBand: values.startBand,
               targetBand: values.targetBand,
+              status: values.status,
               teacherId: values.teacherId,
               timezone: values.timezone,
               startDate: values.startDate,

@@ -100,6 +100,18 @@ export function CourseForm({
     });
   };
 
+  const handleStartDateChange = (dateVal: string) => {
+    updateField("startDate", dateVal);
+    if (mode === "create" && dateVal) {
+      const todayVn = new Date().toLocaleDateString("en-CA", { timeZone: DEFAULT_TIMEZONE });
+      if (dateVal > todayVn) {
+        updateField("status", "upcoming");
+      } else {
+        updateField("status", "active");
+      }
+    }
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const parsed = CourseFormSchema.safeParse({
@@ -270,13 +282,13 @@ export function CourseForm({
           <select
             id="course-status"
             name="status"
-            disabled={mode === "create"}
             value={values.status}
             onChange={(e) => updateField("status", e.target.value as CourseStatus)}
-            className="mt-1.5 min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 disabled:bg-slate-100"
+            className="mt-1.5 min-h-[44px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950"
           >
             <option value="active">Đang hoạt động</option>
             <option value="upcoming">Sắp mở</option>
+            <option value="draft">Bản nháp</option>
             <option value="archived">Lưu trữ</option>
           </select>
         </div>
@@ -335,7 +347,7 @@ export function CourseForm({
             name="startDate"
             type="date"
             value={values.startDate}
-            onChange={(e) => updateField("startDate", e.target.value)}
+            onChange={(e) => handleStartDateChange(e.target.value)}
             className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950"
           />
         </div>

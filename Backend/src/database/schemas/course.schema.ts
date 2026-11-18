@@ -40,7 +40,7 @@ export class Course {
   @Prop({
     type: String,
     enum: Object.values(CourseStatus),
-    default: CourseStatus.DRAFT,
+    default: CourseStatus.ACTIVE,
   })
   status: CourseStatus;
 

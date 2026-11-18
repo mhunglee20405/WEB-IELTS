@@ -45,6 +45,7 @@ export const coursesApi = {
       type,
       courseType: rawType,
       teacherId: payload.teacherId,
+      status: payload.status,
       startAt: payload.startDate || (rawPayload.startAt as string | undefined) || undefined,
       endAt: payload.endDate || (rawPayload.endAt as string | undefined) || undefined,
       startDate: payload.startDate || undefined,

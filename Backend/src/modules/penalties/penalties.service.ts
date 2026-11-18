@@ -22,7 +22,7 @@ import {
 } from 'src/database/schemas/student-assignment.schema';
 import { Course, CourseDocument } from 'src/database/schemas/course.schema';
 import { Enrollment, EnrollmentDocument } from 'src/database/schemas/enrollment.schema';
-import { UserDocument } from 'src/database/schemas/user.schema';
+import { User, UserDocument } from 'src/database/schemas/user.schema';
 import { EnrollmentStatus, UserRole } from 'src/database/schemas/enums';
 import { ReversePenaltyDto } from './dto/reverse-penalty.dto';
 import { PenaltyQueryDto } from './dto/penalty-query.dto';
@@ -55,6 +55,7 @@ export class PenaltiesService {
     @InjectModel(Enrollment.name) private enrollmentModel: Model<EnrollmentDocument>,
     @InjectConnection() private connection: Connection,
     @Optional() private auditService?: AuditService,
+    @Optional() @InjectModel(User.name) private userModel?: Model<UserDocument>,
   ) {}
 
   async getMine(student: UserDocument, query: PenaltyQueryDto) {
@@ -68,11 +69,18 @@ export class PenaltiesService {
     const [docs, total, aggResult] = await Promise.all([
       this.penaltyModel
         .find({ studentId: student._id })
-        .populate({
-          path: 'studentAssignmentId',
-          select: 'effectiveDeadlineAt',
-          populate: { path: 'assignmentId', select: 'title' },
-        })
+        .populate([
+          {
+            path: 'studentAssignmentId',
+            select: 'effectiveDeadlineAt assignmentId',
+            populate: {
+              path: 'assignmentId',
+              select: 'title courseId',
+              populate: { path: 'courseId', select: 'title code' },
+            },
+          },
+          { path: 'reversedBy', select: 'fullName email' },
+        ])
         .skip((page - 1) * limit)
         .limit(limit)
         .sort({ createdAt: -1 })
@@ -85,10 +93,13 @@ export class PenaltiesService {
     ]);
 
     const totalPoints = aggResult.length > 0 ? Math.max(0, aggResult[0].totalPoints) : 0;
+    const formattedDocs = docs.map((d) => this.formatTransaction(d));
 
     return {
       totalPoints,
-      items: docs.map((d) => this.formatTransaction(d)),
+      totalActivePoints: totalPoints,
+      items: formattedDocs,
+      records: formattedDocs,
       total,
       page,
       limit,
@@ -100,6 +111,15 @@ export class PenaltiesService {
     const limit = Math.min(100, Math.max(1, query.limit || 20));
 
     const filter: Record<string, any> = {};
+
+    // Only audit primary penalty charges (+1); reversals are compensating audit records
+    filter.deltaPoints = { $gt: 0 };
+
+    if (query.status === 'active') {
+      filter.isReversed = { $ne: true };
+    } else if (query.status === 'reversed') {
+      filter.isReversed = true;
+    }
 
     if (actor.role === UserRole.TEACHER) {
       const teacherCourses = await this.courseModel
@@ -141,19 +161,55 @@ export class PenaltiesService {
     }
 
     if (query.studentId && actor.role === UserRole.TEACHER) {
+      if (!Types.ObjectId.isValid(query.studentId)) {
+        throw new BadRequestException('Invalid studentId');
+      }
       filter.studentId = new Types.ObjectId(query.studentId);
+    }
+
+    if (query.search && query.search.trim()) {
+      const term = query.search.trim();
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      let matchedStudentIds: Types.ObjectId[] = [];
+      if (this.userModel) {
+        const matchedUsers = await this.userModel
+          .find({ $or: [{ fullName: regex }, { email: regex }] })
+          .select('_id')
+          .exec();
+        matchedStudentIds = matchedUsers.map((u) => u._id as Types.ObjectId);
+      }
+
+      if (matchedStudentIds.length > 0) {
+        if (filter.studentId) {
+          filter.$and = [
+            { $or: [{ reason: regex }, { studentId: { $in: matchedStudentIds } }] },
+          ];
+        } else {
+          filter.$or = [{ reason: regex }, { studentId: { $in: matchedStudentIds } }];
+        }
+      } else {
+        filter.reason = regex;
+      }
     }
 
     const [docs, total] = await Promise.all([
       this.penaltyModel
         .find(filter)
-        .populate('studentId', 'name fullName email avatar')
-        .populate({
-          path: 'studentAssignmentId',
-          select: 'effectiveDeadlineAt',
-          populate: { path: 'assignmentId', select: 'title' },
-        })
-        .populate('actorId', 'fullName email')
+        .populate([
+          { path: 'studentId', select: 'name fullName email avatar' },
+          {
+            path: 'studentAssignmentId',
+            select: 'effectiveDeadlineAt assignmentId',
+            populate: {
+              path: 'assignmentId',
+              select: 'title courseId',
+              populate: { path: 'courseId', select: 'title code' },
+            },
+          },
+          { path: 'actorId', select: 'fullName email' },
+          { path: 'reversedBy', select: 'fullName email' },
+        ])
         .skip((page - 1) * limit)
         .limit(limit)
         .sort({ createdAt: -1 })
@@ -161,8 +217,11 @@ export class PenaltiesService {
       this.penaltyModel.countDocuments(filter).exec(),
     ]);
 
+    const items = docs.map((d) => this.formatTransaction(d));
+
     return {
-      items: docs.map((d) => this.formatTransaction(d)),
+      items,
+      records: items,
       total,
       page,
       limit,
@@ -232,6 +291,9 @@ export class PenaltiesService {
         await reversalDoc.save({ session });
 
         original.isReversed = true;
+        original.reversedBy = actor._id;
+        original.reversedAt = new Date();
+        original.reversalReason = dto.reason;
         await original.save({ session });
 
         // Update cached penalty points in profile
@@ -268,23 +330,81 @@ export class PenaltiesService {
     return this.formatTransaction(reversalDoc!);
   }
 
-  private formatTransaction(doc: PenaltyTransactionDocument) {
+  formatTransaction(doc: PenaltyTransactionDocument) {
     const raw = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+
+    const studentObj: any =
+      raw.studentId && typeof raw.studentId === 'object' ? raw.studentId : null;
+    const studentAssignmentObj: any =
+      raw.studentAssignmentId && typeof raw.studentAssignmentId === 'object'
+        ? raw.studentAssignmentId
+        : null;
+    const assignmentObj: any =
+      studentAssignmentObj?.assignmentId && typeof studentAssignmentObj.assignmentId === 'object'
+        ? studentAssignmentObj.assignmentId
+        : null;
+    const courseObj: any =
+      assignmentObj?.courseId && typeof assignmentObj.courseId === 'object'
+        ? assignmentObj.courseId
+        : null;
+    const actorObj: any = raw.actorId && typeof raw.actorId === 'object' ? raw.actorId : null;
+    const reversedByObj: any =
+      raw.reversedBy && typeof raw.reversedBy === 'object' ? raw.reversedBy : null;
+
+    const studentName = studentObj?.fullName || studentObj?.name || studentObj?.email;
+    const assignmentTitle = assignmentObj?.title || 'Bài tập';
+    const courseTitle = courseObj
+      ? `${courseObj.code ? courseObj.code + ' — ' : ''}${courseObj.title || ''}`
+      : undefined;
+
+    const isReversed = Boolean(
+      raw.isReversed || raw.deltaPoints < 0 || raw.reversedTransactionId,
+    );
+    const reversedByName =
+      reversedByObj?.fullName ||
+      reversedByObj?.name ||
+      reversedByObj?.email ||
+      (raw.deltaPoints < 0 && actorObj ? (actorObj.fullName || actorObj.email) : undefined) ||
+      (isReversed ? 'Quản trị viên' : undefined);
+
+    const reversalReason =
+      raw.reversalReason ||
+      (typeof raw.reason === 'string' && raw.reason.startsWith('[REVERSAL] ')
+        ? raw.reason.replace('[REVERSAL] ', '')
+        : undefined);
+
+    const occurredAt = raw.createdAt
+      ? new Date(raw.createdAt).toISOString()
+      : new Date().toISOString();
+
+    const reversedAt = raw.reversedAt
+      ? new Date(raw.reversedAt).toISOString()
+      : isReversed && raw.updatedAt
+        ? new Date(raw.updatedAt).toISOString()
+        : undefined;
 
     return {
       id: extractObjectId(raw._id),
       studentId: extractObjectId(raw.studentId),
-      student: raw.studentId && typeof raw.studentId === 'object' ? raw.studentId : undefined,
+      studentName,
+      student: studentObj || undefined,
       studentAssignmentId: extractObjectId(raw.studentAssignmentId),
-      studentAssignment:
-        raw.studentAssignmentId && typeof raw.studentAssignmentId === 'object'
-          ? raw.studentAssignmentId
-          : undefined,
+      studentAssignment: studentAssignmentObj || undefined,
+      assignmentId: assignmentObj ? extractObjectId(assignmentObj._id) : extractObjectId(raw.studentAssignmentId),
+      assignmentTitle,
+      courseTitle,
       deltaPoints: raw.deltaPoints,
+      points: Math.abs(raw.deltaPoints ?? 1),
       reason: raw.reason,
+      occurredAt,
+      reversed: isReversed,
+      isReversed,
+      reversedAt,
+      reversedBy: isReversed ? reversedByName : undefined,
+      reversalReason,
       idempotencyKey: raw.idempotencyKey,
       actorId: raw.actorId ? extractObjectId(raw.actorId) : undefined,
-      actor: raw.actorId && typeof raw.actorId === 'object' ? raw.actorId : undefined,
+      actor: actorObj || undefined,
       reversedTransactionId: raw.reversedTransactionId
         ? extractObjectId(raw.reversedTransactionId)
         : undefined,

@@ -1,12 +1,21 @@
-import { isMockApiMode } from "../../env";
-import { apiRequest } from "../client";
+import { apiRequest, buildQueryString } from "../client";
 import type {
+  PaginatedResponse,
+  PenaltyQuery,
   PenaltyRecord,
   PenaltySummary,
   ReversePenaltyRequest,
 } from "../types";
 
 export const penaltiesApi = {
+  list(query: PenaltyQuery = {}): Promise<PaginatedResponse<PenaltyRecord>> {
+    const qs = buildQueryString({ ...query });
+    return apiRequest<PaginatedResponse<PenaltyRecord>>({
+      method: "GET",
+      path: `/penalties${qs}`,
+    });
+  },
+
   getMine(): Promise<PenaltySummary> {
     return apiRequest<PenaltySummary>({
       method: "GET",
@@ -15,16 +24,9 @@ export const penaltiesApi = {
   },
 
   getByStudent(studentId: string): Promise<PenaltySummary> {
-    if (isMockApiMode()) {
-      return apiRequest<PenaltySummary>({
-        method: "GET",
-        path: `/students/${encodeURIComponent(studentId)}/penalties`,
-      });
-    }
-
     return apiRequest<PenaltySummary>({
       method: "GET",
-      path: `/penalties?studentId=${encodeURIComponent(studentId)}`,
+      path: `/students/${encodeURIComponent(studentId)}/penalties`,
     });
   },
 

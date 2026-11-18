@@ -16,6 +16,7 @@ import {
 } from 'src/database/schemas/student-assignment.schema';
 import { Course, CourseSchema } from 'src/database/schemas/course.schema';
 import { Enrollment, EnrollmentSchema } from 'src/database/schemas/enrollment.schema';
+import { User, UserSchema } from 'src/database/schemas/user.schema';
 import { AuditModule } from 'src/modules/audit/audit.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { AuditModule } from 'src/modules/audit/audit.module';
       { name: StudentAssignment.name, schema: StudentAssignmentSchema },
       { name: Course.name, schema: CourseSchema },
       { name: Enrollment.name, schema: EnrollmentSchema },
+      { name: User.name, schema: UserSchema },
     ]),
     AuditModule,
   ],

@@ -122,6 +122,7 @@ export interface CreateCourseRequest {
   courseType?: CourseFormat;
   startBand?: number;
   targetBand?: number;
+  status?: CourseStatus;
   teacherId: string;
   timezone?: string;
   startDate?: string;
@@ -501,6 +502,15 @@ export interface PenaltyRecord {
 export interface PenaltySummary {
   totalActivePoints: number;
   records: PenaltyRecord[];
+}
+
+export interface PenaltyQuery {
+  page?: number;
+  limit?: number;
+  studentId?: string;
+  courseId?: string;
+  status?: "all" | "active" | "reversed";
+  search?: string;
 }
 
 export interface ReversePenaltyRequest {

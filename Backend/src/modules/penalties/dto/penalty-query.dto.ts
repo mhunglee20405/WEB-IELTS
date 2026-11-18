@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, Min, Max, IsMongoId } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsMongoId, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -27,5 +27,15 @@ export class PenaltyQueryDto {
   @IsOptional()
   @IsMongoId()
   courseId?: string;
+
+  @ApiPropertyOptional({ description: 'Filter by status: all, active, reversed' })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({ description: 'Search term by student name or reason' })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }
 

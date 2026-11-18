@@ -376,7 +376,7 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
       targetBand: body.targetBand,
       teacherId: body.teacherId,
       teacherName: mockState.users.find((u) => u.id === body.teacherId)?.fullName,
-      status: "active" as const,
+      status: (body.status ?? "active") as any,
       timezone: body.timezone ?? "Asia/Ho_Chi_Minh",
       studentCount: 0,
       startDate: body.startDate,
@@ -1082,6 +1082,21 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
   }
 
   // Penalties
+  if (method === "GET" && pathname === "/penalties") {
+    let records = [...mockState.penalties];
+    const status = sp.get("status");
+    if (status === "active") records = records.filter((r) => !r.reversed);
+    if (status === "reversed") records = records.filter((r) => r.reversed);
+    const studentIdParam = sp.get("studentId");
+    if (studentIdParam) records = records.filter((r) => r.studentId === studentIdParam);
+    return {
+      items: records,
+      records,
+      total: records.length,
+      page: 1,
+      limit: 100,
+    } as T;
+  }
   if (method === "GET" && pathname === "/penalties/mine") {
     const userId = getCurrentUser().id;
     const records = mockState.penalties.filter((p) => p.studentId === userId);
