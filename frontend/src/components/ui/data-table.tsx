@@ -81,26 +81,38 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={getRowKey(row)}>
-                {primaryColumn ? (
-                  <th scope="row">{primaryColumn.renderCell(row)}</th>
-                ) : null}
-                {secondaryColumns.map((column) => (
-                  <td
-                    key={column.key}
-                    style={
-                      {
-                        "--cell-label": `"${column.header.replaceAll('"', '\\"')}"`,
-                      } as CSSProperties
-                    }
-                    className={column.align === "end" ? "md:text-end" : undefined}
-                  >
-                    {column.renderCell(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {rows.map((row, index) => {
+              const rawKey = getRowKey ? getRowKey(row) : undefined;
+              const rowKey =
+                rawKey !== undefined && rawKey !== null && rawKey !== ""
+                  ? String(rawKey)
+                  : (row as any)?.id ||
+                    (row as any)?._id ||
+                    (row as any)?.studentId ||
+                    (row as any)?.key ||
+                    `row-${index}`;
+
+              return (
+                <tr key={rowKey}>
+                  {primaryColumn ? (
+                    <th scope="row">{primaryColumn.renderCell(row)}</th>
+                  ) : null}
+                  {secondaryColumns.map((column) => (
+                    <td
+                      key={column.key}
+                      style={
+                        {
+                          "--cell-label": `"${column.header.replaceAll('"', '\\"')}"`,
+                        } as CSSProperties
+                      }
+                      className={column.align === "end" ? "md:text-end" : undefined}
+                    >
+                      {column.renderCell(row)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -66,9 +66,13 @@ export default function TeacherNewAssignmentPage() {
   const createMutation = useMutation({
     mutationFn: assignmentsApi.create,
     onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: ["assignments"] });
+      await queryClient.invalidateQueries({ queryKey: ["teacher", "assignments"] });
+      await queryClient.invalidateQueries({ queryKey: ["student", "assignments"] });
       await queryClient.invalidateQueries({ queryKey: teacherKeys.assignmentsRoot });
       await queryClient.invalidateQueries({ queryKey: teacherKeys.dashboard });
-      router.push(`/teacher/assignments/${encodeURIComponent(created.id)}/results`);
+      const targetId = created.id || (created as any)._id;
+      router.push(`/teacher/assignments/${encodeURIComponent(targetId)}/results`);
     },
   });
 

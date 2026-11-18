@@ -117,13 +117,21 @@ export default function StudentAssignmentsPage() {
           emptyDescription="Bạn có thể chuyển sang tab khác để kiểm tra bài tập đã mở hoặc lịch sắp tới."
         >
           <div className="lms-card-grid">
-            {filteredItems.map((item) => (
-              <AssignmentCard
-                key={item.studentAssignmentId}
-                item={item}
-                nowMs={nowMs}
-              />
-            ))}
+            {filteredItems.map((item, index) => {
+              const cardKey =
+                item.studentAssignmentId ||
+                item.assignmentId ||
+                (item as any).id ||
+                (item as any)._id ||
+                `asg-${index}`;
+              return (
+                <AssignmentCard
+                  key={cardKey}
+                  item={item}
+                  nowMs={nowMs}
+                />
+              );
+            })}
           </div>
         </QueryState>
       </TabPanel>

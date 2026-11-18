@@ -93,9 +93,28 @@ export async function fetchAllTeacherAssignments(
 
   const lists = await Promise.all(
     courses.map(async (course) => {
+      const cId = course.id || (course as any)._id;
+      if (!cId) return [] as Assignment[];
       try {
-        const res = await assignmentsApi.listByCourse(course.id, { limit: 100 });
-        return res.items;
+        const res = await assignmentsApi.listByCourse(cId, { limit: 100 });
+        return (res.items ?? []).map((item: any) => {
+          const itemId = item.id || item._id;
+          const aCourseId =
+            typeof item.courseId === "object" && item.courseId !== null
+              ? item.courseId.id || item.courseId._id
+              : item.courseId || cId;
+          const aCourseTitle =
+            item.courseTitle ||
+            (typeof item.courseId === "object" ? item.courseId.title : undefined) ||
+            course.title;
+          return {
+            ...item,
+            id: itemId,
+            _id: itemId,
+            courseId: aCourseId,
+            courseTitle: aCourseTitle,
+          } as Assignment;
+        });
       } catch {
         return [] as Assignment[];
       }
@@ -105,7 +124,10 @@ export async function fetchAllTeacherAssignments(
   const unique = new Map<string, Assignment>();
   for (const list of lists) {
     for (const item of list) {
-      unique.set(item.id, item);
+      const key = item.id || (item as any)._id;
+      if (key) {
+        unique.set(key, item);
+      }
     }
   }
 

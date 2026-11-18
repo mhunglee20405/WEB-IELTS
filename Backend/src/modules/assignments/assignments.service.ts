@@ -831,6 +831,54 @@ export class AssignmentsService {
     const page = Math.max(1, query.page || 1);
     const limit = Math.min(100, Math.max(1, query.limit || 20));
 
+    // Ensure active enrollments have student assignments dispatched
+    try {
+      const activeEnrollments = await this.enrollmentModel
+        .find({
+          studentId: student._id,
+          status: EnrollmentStatus.ACTIVE,
+        })
+        .select('courseId')
+        .exec();
+
+      if (activeEnrollments.length > 0) {
+        const activeCourseIds = activeEnrollments.map((e) => e.courseId);
+        const nonDraftAssignments = await this.assignmentModel
+          .find({
+            courseId: { $in: activeCourseIds },
+            status: { $in: [AssignmentStatus.PUBLISHED, AssignmentStatus.SCHEDULED] },
+          })
+          .select('_id deadlineAt')
+          .exec();
+
+        if (nonDraftAssignments.length > 0) {
+          const existingSAs = await this.studentAssignmentModel
+            .find({
+              studentId: student._id,
+              assignmentId: { $in: nonDraftAssignments.map((a) => a._id) },
+            })
+            .select('assignmentId')
+            .exec();
+
+          const existingSet = new Set(existingSAs.map((sa) => sa.assignmentId.toString()));
+          const missing = nonDraftAssignments.filter((a) => !existingSet.has(a._id.toString()));
+
+          if (missing.length > 0) {
+            const toInsert = missing.map((a) => ({
+              assignmentId: a._id,
+              studentId: student._id,
+              originalDeadlineAt: a.deadlineAt,
+              effectiveDeadlineAt: a.deadlineAt,
+              status: StudentAssignmentStatus.NOT_STARTED,
+            }));
+            await this.studentAssignmentModel.insertMany(toInsert, { ordered: false });
+          }
+        }
+      }
+    } catch (backfillErr: any) {
+      this.logger.warn(`findMine on-the-fly backfill failed: ${backfillErr.message}`);
+    }
+
     const saFilter: Record<string, any> = {
       studentId: student._id,
     };
@@ -881,10 +929,13 @@ export class AssignmentsService {
     const items = paginated.map((sa: any) => {
       const assignment = sa.assignmentId;
       const studentLifecycle = computeStudentAssignmentLifecycleStatus(assignment, sa, now);
+      const asgIdStr = extractObjectId(assignment._id);
+      const saIdStr = extractObjectId(sa._id);
       return {
-        id: extractObjectId(assignment._id),
-        studentAssignmentId: extractObjectId(sa._id),
-        assignmentId: extractObjectId(assignment._id),
+        id: asgIdStr,
+        _id: asgIdStr,
+        studentAssignmentId: saIdStr,
+        assignmentId: asgIdStr,
         title: assignment.title,
         course: assignment.courseId
           ? {
@@ -1235,9 +1286,14 @@ export class AssignmentsService {
   }
 
   private async dispatchStudentAssignments(assignment: AssignmentDocument): Promise<number> {
+    const rawCourseId = assignment.courseId;
+    const courseIdObj =
+      typeof rawCourseId === 'string'
+        ? new Types.ObjectId(rawCourseId)
+        : (rawCourseId as Types.ObjectId);
     const activeEnrollments = await this.enrollmentModel
       .find({
-        courseId: assignment.courseId,
+        courseId: { $in: [courseIdObj, courseIdObj.toHexString()] },
         status: EnrollmentStatus.ACTIVE,
       })
       .exec();
@@ -1290,33 +1346,40 @@ export class AssignmentsService {
 
   private formatAssignment(assignment: any, includeSnapshot = false) {
     const raw = typeof assignment.toObject === 'function' ? assignment.toObject() : assignment;
-    const courseId = raw.courseId
-      ? typeof raw.courseId === 'object' && raw.courseId._id
+    const courseObj =
+      raw.courseId && typeof raw.courseId === 'object' && raw.courseId._id
         ? {
             id: extractObjectId(raw.courseId._id),
             code: raw.courseId.code,
             title: raw.courseId.title,
           }
-        : extractObjectId(raw.courseId)
-      : undefined;
+        : undefined;
+    const courseIdStr = courseObj ? courseObj.id : extractObjectId(raw.courseId);
 
-    const exerciseId = raw.exerciseId
-      ? typeof raw.exerciseId === 'object' && raw.exerciseId._id
+    const exerciseObj =
+      raw.exerciseId && typeof raw.exerciseId === 'object' && raw.exerciseId._id
         ? {
             id: extractObjectId(raw.exerciseId._id),
             title: raw.exerciseId.title,
             type: raw.exerciseId.type,
           }
-        : extractObjectId(raw.exerciseId)
-      : undefined;
+        : undefined;
+    const exerciseIdStr = exerciseObj ? exerciseObj.id : extractObjectId(raw.exerciseId);
 
     const now = new Date();
     const lifecycleStatus = computeAssignmentLifecycleStatus(raw, now);
+    const idStr = extractObjectId(raw._id || raw.id);
 
     const res: any = {
-      id: extractObjectId(raw._id || raw.id),
-      courseId,
-      exerciseId,
+      id: idStr,
+      _id: idStr,
+      courseId: courseIdStr,
+      course: courseObj,
+      courseTitle: raw.courseTitle || courseObj?.title || '',
+      exerciseId: exerciseIdStr,
+      exercise: exerciseObj,
+      exerciseTitle: raw.exerciseTitle || exerciseObj?.title || raw.title || '',
+      exerciseType: raw.exerciseType || exerciseObj?.type || 'reading',
       exerciseVersion: raw.exerciseVersion,
       assignedBy: extractObjectId(raw.assignedBy),
       title: raw.title,
@@ -1379,27 +1442,40 @@ export class AssignmentsService {
       };
     }
 
+    const idStr = extractObjectId(raw._id || raw.id);
+    const saIdStr = extractObjectId(rawSa._id || rawSa.id);
+    const courseObj =
+      raw.courseId && typeof raw.courseId === 'object' && raw.courseId._id
+        ? {
+            id: extractObjectId(raw.courseId._id),
+            code: raw.courseId.code,
+            title: raw.courseId.title,
+          }
+        : undefined;
+    const courseIdStr = courseObj ? courseObj.id : extractObjectId(raw.courseId);
+
+    const exerciseObj =
+      raw.exerciseId && typeof raw.exerciseId === 'object' && raw.exerciseId._id
+        ? {
+            id: extractObjectId(raw.exerciseId._id),
+            title: raw.exerciseId.title,
+            type: raw.exerciseId.type,
+          }
+        : undefined;
+    const exerciseIdStr = exerciseObj ? exerciseObj.id : extractObjectId(raw.exerciseId);
+
     return {
-      id: extractObjectId(raw._id || raw.id),
-      studentAssignmentId: extractObjectId(rawSa._id || rawSa.id),
-      courseId: raw.courseId
-        ? typeof raw.courseId === 'object' && raw.courseId._id
-          ? {
-              id: extractObjectId(raw.courseId._id),
-              code: raw.courseId.code,
-              title: raw.courseId.title,
-            }
-          : extractObjectId(raw.courseId)
-        : undefined,
-      exerciseId: raw.exerciseId
-        ? typeof raw.exerciseId === 'object' && raw.exerciseId._id
-          ? {
-              id: extractObjectId(raw.exerciseId._id),
-              title: raw.exerciseId.title,
-              type: raw.exerciseId.type,
-            }
-          : extractObjectId(raw.exerciseId)
-        : undefined,
+      id: idStr,
+      _id: idStr,
+      assignmentId: idStr,
+      studentAssignmentId: saIdStr,
+      courseId: courseIdStr,
+      course: courseObj,
+      courseTitle: raw.courseTitle || courseObj?.title || '',
+      exerciseId: exerciseIdStr,
+      exercise: sanitizedExercise,
+      exerciseTitle: raw.exerciseTitle || exerciseObj?.title || raw.title || '',
+      exerciseType: raw.exerciseType || exerciseObj?.type || 'reading',
       exerciseVersion: raw.exerciseVersion,
       title: raw.title,
       requiredScope: raw.requiredScope || 'FULL',
@@ -1430,7 +1506,6 @@ export class AssignmentsService {
       isTargetAchieved: rawSa.isTargetAchieved ?? false,
       passedAt: rawSa.passedAt,
       lastSubmittedAt: rawSa.lastSubmittedAt,
-      exercise: sanitizedExercise,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
     };
