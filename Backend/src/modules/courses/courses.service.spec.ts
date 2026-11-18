@@ -221,6 +221,39 @@ describe('CoursesService', () => {
         ),
       ).rejects.toThrow(UnprocessableEntityException);
     });
+
+    it('should set status to ACTIVE when startDate is today or in the past', async () => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const result = await service.create(
+        {
+          code: 'IELTS-TODAY',
+          title: 'IELTS Starting Today',
+          startBand: 5.0,
+          targetBand: 6.5,
+          type: CourseType.GROUP,
+          teacherId: teacherAId.toHexString(),
+          startDate: todayStr,
+        },
+        adminId.toHexString(),
+      );
+      expect(result.status).toBe(CourseStatus.ACTIVE);
+    });
+
+    it('should preserve explicitly passed status (e.g. ACTIVE or UPCOMING)', async () => {
+      const result = await service.create(
+        {
+          code: 'IELTS-ACTIVE',
+          title: 'IELTS Explicit Active',
+          startBand: 5.0,
+          targetBand: 6.5,
+          type: CourseType.GROUP,
+          teacherId: teacherAId.toHexString(),
+          status: CourseStatus.ACTIVE,
+        },
+        adminId.toHexString(),
+      );
+      expect(result.status).toBe(CourseStatus.ACTIVE);
+    });
   });
 
   describe('RBAC & Ownership', () => {

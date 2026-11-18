@@ -31,6 +31,15 @@ export class PenaltyTransaction {
   @Prop({ default: false, index: true })
   isReversed: boolean;
 
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  reversedBy?: Types.ObjectId;
+
+  @Prop()
+  reversedAt?: Date;
+
+  @Prop()
+  reversalReason?: string;
+
   createdAt?: Date;
   updatedAt?: Date;
 }

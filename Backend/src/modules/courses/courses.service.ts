@@ -105,6 +105,18 @@ export class CoursesService {
       throw new BadRequestException('startAt must be before endAt');
     }
 
+    let courseStatus = dto.status;
+    if (!courseStatus) {
+      if (startAtDate) {
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10);
+        const startStr = startAtDate.toISOString().slice(0, 10);
+        courseStatus = startStr > todayStr ? CourseStatus.UPCOMING : CourseStatus.ACTIVE;
+      } else {
+        courseStatus = CourseStatus.ACTIVE;
+      }
+    }
+
     const course = new this.courseModel({
       ...dto,
       type: courseType,
@@ -113,6 +125,7 @@ export class CoursesService {
       createdBy: new Types.ObjectId(actorId),
       startAt: startAtDate,
       endAt: endAtDate,
+      status: courseStatus,
     });
 
     try {
@@ -146,8 +159,15 @@ export class CoursesService {
         conditions.push({
           $or: [
             { status: CourseStatus.UPCOMING },
-            { status: CourseStatus.DRAFT },
+            { status: CourseStatus.DRAFT, startAt: { $gt: new Date() } },
             { startAt: { $gt: new Date() }, status: { $ne: CourseStatus.ARCHIVED } },
+          ],
+        });
+      } else if (query.status === CourseStatus.ACTIVE) {
+        conditions.push({
+          $or: [
+            { status: CourseStatus.ACTIVE },
+            { status: CourseStatus.DRAFT, startAt: { $lte: new Date() } },
           ],
         });
       } else {
@@ -183,11 +203,20 @@ export class CoursesService {
           : teacher?.toString() || '';
       const teacherNameStr =
         teacher && typeof teacher === 'object' ? teacher.fullName : undefined;
+      let displayStatus = raw.status;
+      if (
+        displayStatus === CourseStatus.DRAFT &&
+        raw.startAt &&
+        new Date(raw.startAt) <= new Date()
+      ) {
+        displayStatus = CourseStatus.ACTIVE;
+      }
       return {
         ...raw,
         id: (raw._id || raw.id)?.toString(),
         teacherId: teacherIdStr,
         teacherName: teacherNameStr,
+        status: displayStatus,
       };
     });
 
@@ -211,8 +240,15 @@ export class CoursesService {
         conditions.push({
           $or: [
             { status: CourseStatus.UPCOMING },
-            { status: CourseStatus.DRAFT },
+            { status: CourseStatus.DRAFT, startAt: { $gt: new Date() } },
             { startAt: { $gt: new Date() }, status: { $ne: CourseStatus.ARCHIVED } },
+          ],
+        });
+      } else if (query.status === CourseStatus.ACTIVE) {
+        conditions.push({
+          $or: [
+            { status: CourseStatus.ACTIVE },
+            { status: CourseStatus.DRAFT, startAt: { $lte: new Date() } },
           ],
         });
       } else {
@@ -248,11 +284,20 @@ export class CoursesService {
           : teacher?.toString() || '';
       const teacherNameStr =
         teacher && typeof teacher === 'object' ? teacher.fullName : undefined;
+      let displayStatus = raw.status;
+      if (
+        displayStatus === CourseStatus.DRAFT &&
+        raw.startAt &&
+        new Date(raw.startAt) <= new Date()
+      ) {
+        displayStatus = CourseStatus.ACTIVE;
+      }
       return {
         ...raw,
         id: (raw._id || raw.id)?.toString(),
         teacherId: teacherIdStr,
         teacherName: teacherNameStr,
+        status: displayStatus,
       };
     });
 

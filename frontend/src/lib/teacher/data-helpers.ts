@@ -169,6 +169,15 @@ export async function fetchTeacherTranslationQueue(): Promise<TranslationQueueIt
 }
 
 export async function fetchAllPenaltiesForAudit(): Promise<PenaltyRecord[]> {
+  try {
+    const res = await penaltiesApi.list({ limit: 100 });
+    if (res && Array.isArray(res.items)) {
+      return res.items;
+    }
+  } catch {
+    // Fallback to per-student fetch if listing is unavailable
+  }
+
   const studentIds = new Set<string>();
 
   try {
@@ -196,7 +205,8 @@ export async function fetchAllPenaltiesForAudit(): Promise<PenaltyRecord[]> {
   const records = new Map<string, PenaltyRecord>();
   for (const summary of summaries) {
     if (!summary) continue;
-    for (const rec of summary.records) {
+    const items = summary.records || (summary as unknown as { items?: PenaltyRecord[] }).items || [];
+    for (const rec of items) {
       records.set(rec.id, rec);
     }
   }

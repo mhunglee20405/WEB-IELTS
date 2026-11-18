@@ -370,18 +370,30 @@ export class DashboardService {
     const active = penalties.filter((p) => !p.isReversed && p.deltaPoints > 0);
     const totalPoints = Math.max(0, penalties.reduce((sum, p) => sum + p.deltaPoints, 0));
 
-    return {
-      totalPoints,
-      activePenaltiesCount: active.length,
-      records: penalties.map((p) => ({
+    const records = penalties.map((p) => {
+      const isReversed = Boolean(p.isReversed || p.deltaPoints < 0 || p.reversedTransactionId);
+      return {
         id: extractObjectId(p._id),
         studentId: extractObjectId(p.studentId),
         studentAssignmentId: p.studentAssignmentId ? extractObjectId(p.studentAssignmentId) : undefined,
-        points: p.deltaPoints,
+        points: Math.abs(p.deltaPoints ?? 1),
+        deltaPoints: p.deltaPoints,
         reason: p.reason,
-        reversed: p.isReversed,
+        reversed: isReversed,
+        isReversed,
         createdAt: p.createdAt ? p.createdAt.toISOString() : undefined,
-      })),
+        occurredAt: p.createdAt ? p.createdAt.toISOString() : undefined,
+        reversedAt: p.reversedAt ? p.reversedAt.toISOString() : (isReversed && p.updatedAt ? p.updatedAt.toISOString() : undefined),
+        reversalReason: p.reversalReason,
+      };
+    });
+
+    return {
+      totalPoints,
+      totalActivePoints: totalPoints,
+      activePenaltiesCount: active.length,
+      records,
+      items: records,
     };
   }
 }

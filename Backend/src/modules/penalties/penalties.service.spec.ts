@@ -125,6 +125,87 @@ describe('PenaltiesService', () => {
     });
   });
 
+  describe('findAll', () => {
+    it('returns formatted penalty items and records for Admin with empty list', async () => {
+      const adminActor = {
+        _id: new Types.ObjectId(),
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      } as unknown as UserDocument;
+
+      penaltyModel.find.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          skip: jest.fn().mockReturnValue({
+            limit: jest.fn().mockReturnValue({
+              sort: jest.fn().mockReturnValue({
+                exec: jest.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      penaltyModel.countDocuments.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(0),
+      });
+
+      const res = await service.findAll(adminActor, { status: 'all', page: 1, limit: 20 });
+
+      expect(res.items).toEqual([]);
+      expect(res.records).toEqual([]);
+      expect(res.total).toBe(0);
+    });
+
+    it('filters active penalties for Admin when status=active', async () => {
+      const adminActor = {
+        _id: new Types.ObjectId(),
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      } as unknown as UserDocument;
+
+      const mockDoc: any = {
+        _id: transactionId,
+        studentId: { _id: studentId, fullName: 'Nguyen Van A', email: 'a@test.com' },
+        studentAssignmentId: {
+          _id: studentAssignmentId,
+          assignmentId: { _id: new Types.ObjectId(), title: 'IELTS Reading Test 1' },
+        },
+        deltaPoints: 1,
+        reason: 'Overdue deadline',
+        isReversed: false,
+        createdAt: new Date('2026-11-18T10:00:00.000Z'),
+        toObject: function () {
+          return this;
+        },
+      };
+
+      penaltyModel.find.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          skip: jest.fn().mockReturnValue({
+            limit: jest.fn().mockReturnValue({
+              sort: jest.fn().mockReturnValue({
+                exec: jest.fn().mockResolvedValue([mockDoc]),
+              }),
+            }),
+          }),
+        }),
+      });
+
+      penaltyModel.countDocuments.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(1),
+      });
+
+      const res = await service.findAll(adminActor, { status: 'active' });
+
+      expect(res.items.length).toBe(1);
+      expect(res.items[0].points).toBe(1);
+      expect(res.items[0].reversed).toBe(false);
+      expect(res.items[0].studentName).toBe('Nguyen Van A');
+      expect(res.items[0].assignmentTitle).toBe('IELTS Reading Test 1');
+      expect(res.records).toBe(res.items);
+    });
+  });
+
   describe('reverse', () => {
     it('creates compensating transaction (-1 pt) and updates profile penaltyPointsCache', async () => {
       const originalPenaltyDoc: any = {

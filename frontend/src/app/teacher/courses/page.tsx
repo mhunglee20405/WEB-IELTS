@@ -21,12 +21,13 @@ import {
 import { coursesApi } from "@/lib/api/endpoints";
 import { teacherKeys } from "@/lib/api/query-keys";
 
-type CourseFilter = "all" | "active" | "upcoming" | "archived";
+type CourseFilter = "all" | "active" | "upcoming" | "draft" | "archived";
 
 const COURSE_TABS: readonly TabItem<CourseFilter>[] = [
   { id: "all", label: "Tất cả" },
   { id: "active", label: "Đang hoạt động" },
   { id: "upcoming", label: "Sắp mở" },
+  { id: "draft", label: "Bản nháp" },
   { id: "archived", label: "Lưu trữ" },
 ];
 
