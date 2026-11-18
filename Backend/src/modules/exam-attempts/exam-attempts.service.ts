@@ -440,6 +440,28 @@ export class ExamAttemptsService {
       return this.buildResultPayload(attempt, test);
     }
 
+    // Merge any latest answers or flagged questions provided in submit payload
+    if (dto.answers) {
+      const currentMap = attempt.savedAnswers instanceof Map
+        ? attempt.savedAnswers
+        : new Map(Object.entries(attempt.savedAnswers || {}));
+
+      const answersList = Array.isArray(dto.answers)
+        ? dto.answers
+        : Object.entries(dto.answers || {}).map(([questionId, value]) => ({ questionId, value }));
+
+      for (const ans of answersList) {
+        if (ans && ans.questionId !== undefined) {
+          currentMap.set(ans.questionId.toString(), ans.value);
+        }
+      }
+      attempt.savedAnswers = currentMap;
+    }
+
+    if (dto.flaggedQuestionIds && Array.isArray(dto.flaggedQuestionIds)) {
+      attempt.flaggedQuestionIds = dto.flaggedQuestionIds;
+    }
+
     // Collect questions in attempt scope
     const questionMap = new Map<string, any>();
     for (const part of test.parts || []) {

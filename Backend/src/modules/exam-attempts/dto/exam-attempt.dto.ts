@@ -101,5 +101,19 @@ export class SubmitAttemptDto {
   @IsOptional()
   @IsNumber()
   expectedRevision?: number;
+
+  @ApiPropertyOptional({
+    description: 'Optional latest answers map or array to persist before grading',
+  })
+  @IsOptional()
+  answers?: any;
+
+  @ApiPropertyOptional({
+    description: 'Optional list of flagged question IDs',
+    example: ['1', '5'],
+  })
+  @IsOptional()
+  @IsArray()
+  flaggedQuestionIds?: string[];
 }
 

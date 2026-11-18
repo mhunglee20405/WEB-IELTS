@@ -36,12 +36,12 @@ export function ListeningExamView({
   if (!activePart) return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-4 sm:px-6">
+    <div className="mx-auto flex h-full max-h-full w-full max-w-5xl min-h-0 flex-1 flex-col gap-4 px-4 pt-3 pb-2 sm:px-6 overflow-hidden">
       {/* Section Tabs */}
       <div
         role="tablist"
         aria-label="Danh sách phần nghe"
-        className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+        className="flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
       >
         {parts.map((part) => {
           const totalInPart = part.questionGroups.reduce(
@@ -94,7 +94,11 @@ export function ListeningExamView({
             key={part.id}
             role="tabpanel"
             aria-label={part.title}
-            className={isCurrent ? "space-y-4" : "hidden"}
+            className={
+              isCurrent
+                ? "space-y-4 min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                : "hidden"
+            }
           >
             <ExamListeningPlayer
               sectionTitle={part.title}

@@ -336,6 +336,53 @@ describe('ExamAttemptsService', () => {
       expect(res.translation.available).toBe(true);
       expect(res.translation.unlockedPassageIds).toEqual([part1Id.toHexString()]);
     });
+
+    it('merges answers and flaggedQuestionIds passed in submit dto before grading', async () => {
+      const attemptDoc = {
+        _id: new Types.ObjectId(),
+        studentId,
+        testId,
+        skill: ExamSkill.READING,
+        mode: ExamMode.PART,
+        partId: part1Id.toHexString(),
+        status: AttemptStatus.IN_PROGRESS,
+        scopeQuestionIds: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+        savedAnswers: new Map([
+          ['1', 'WRONG'],
+          ['2', 'WRONG'],
+        ]),
+        flaggedQuestionIds: [] as string[],
+        save: jest.fn().mockImplementation(function (this: any) {
+          return Promise.resolve(this);
+        }),
+      };
+      examAttemptModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(attemptDoc),
+      });
+
+      const res = await service.submitAttempt(
+        attemptDoc._id.toHexString(),
+        {
+          expectedRevision: 5,
+          answers: {
+            '1': 'TRUE',
+            '2': 'FALSE',
+            '3': 'NOT GIVEN',
+            '4': 'TRUE',
+            '5': 'FALSE',
+            '6': 'TRUE',
+            '7': 'TRUE',
+          },
+          flaggedQuestionIds: ['1', '7'],
+        },
+        student,
+      );
+      expect(res.correctCount).toBe(7);
+      expect(res.scorePercent).toBe(70);
+      expect(res.passed).toBe(true);
+      expect(attemptDoc.flaggedQuestionIds).toEqual(['1', '7']);
+      expect(attemptDoc.savedAnswers.get('1')).toBe('TRUE');
+    });
   });
 
   describe('getReview', () => {

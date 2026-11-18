@@ -66,11 +66,15 @@ export const examAttemptsApi = {
     payload: SubmitExamAttemptRequest,
     idempotencyKey?: string,
   ): Promise<ExamResultResponse> {
-    const raw = await apiRequest<ExamResultResponse, SubmitExamAttemptRequest>({
+    const finalIdemKey = idempotencyKey ?? (payload as any)?.idempotencyKey ?? createIdempotencyKey();
+    const raw = await apiRequest<ExamResultResponse, Record<string, unknown>>({
       method: "POST",
       path: `/exam-attempts/${encodeURIComponent(attemptId)}/submit`,
-      body: payload,
-      idempotencyKey: idempotencyKey ?? createIdempotencyKey(),
+      body: {
+        ...payload,
+        ...(finalIdemKey ? { idempotencyKey: finalIdemKey } : {}),
+      },
+      idempotencyKey: finalIdemKey,
     });
     return ExamResultResponseSchema.parse(raw);
   },
