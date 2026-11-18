@@ -44,6 +44,7 @@ import {
 } from "@/lib/student/draft-storage";
 import { useNowMs } from "@/lib/time/use-now";
 import { formatDateKeyVi, formatVnDateTime, formatVnTime } from "@/lib/time/vn-time";
+import { cn } from "@/lib/utils/cn";
 
 interface ExerciseRunnerProps {
   detail: StudentAssignmentDetail;
@@ -69,9 +70,10 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
   );
 
   const totalQuestions = detail.exercise.questions.length;
-  const answeredCount = detail.exercise.questions.filter(
-    (q) => (answers[q.id] ?? "").trim().length > 0,
-  ).length;
+  const answeredCount = detail.exercise.questions.filter((q: any) => {
+    const qKey = q.id || q.questionId;
+    return (answers[qKey] ?? "").trim().length > 0;
+  }).length;
   const unansweredCount = Math.max(0, totalQuestions - answeredCount);
 
   const handleAnswerChange = (questionId: string, nextValue: string) => {
@@ -92,10 +94,13 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
       studentAssignmentsApi.submitAnswers(
         detail.studentAssignmentId,
         {
-          answers: detail.exercise.questions.map((q) => ({
-            questionId: q.id,
-            value: (answers[q.id] ?? "").trim(),
-          })),
+          answers: detail.exercise.questions.map((q: any) => {
+            const qKey = q.id || q.questionId;
+            return {
+              questionId: qKey,
+              value: (answers[qKey] ?? "").trim(),
+            };
+          }),
         },
         idempotencyKey,
       ),
@@ -168,15 +173,21 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
         ) : null}
       </div>
 
-      {detail.exercise.questions.map((question) => (
-        <QuestionRenderer
-          key={question.id}
-          question={question}
-          value={answers[question.id] ?? ""}
-          disabled={submitMutation.isPending || isDeadlinePassed}
-          onChange={(nextVal) => handleAnswerChange(question.id, nextVal)}
-        />
-      ))}
+      {detail.exercise.questions.map((question: any, idx: number) => {
+        const qKey = question.id || question.questionId || `q-${idx + 1}`;
+        return (
+          <QuestionRenderer
+            key={qKey}
+            question={{
+              ...question,
+              id: qKey,
+            }}
+            value={answers[qKey] ?? ""}
+            disabled={submitMutation.isPending || isDeadlinePassed}
+            onChange={(nextVal) => handleAnswerChange(qKey, nextVal)}
+          />
+        );
+      })}
 
       {isDeadlinePassed ? (
         <div
@@ -354,7 +365,7 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
           leftContent={
             <SafeHtml
               html={
-                detail.exercise.passageHtml ?? "<p>Không có nội dung bài đọc.</p>"
+                detail.exercise.passageHtml || (detail.exercise as any).passage || "<p>Không có nội dung bài đọc.</p>"
               }
               lang="en"
               preset="richText"
@@ -364,9 +375,9 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
         />
       ) : (
         <div className="space-y-6">
-          {detail.exercise.audioAssetId ? (
+          {detail.exercise.audioAssetId || (detail.exercise as any).audioUrl ? (
             <SignedAudioPlayer
-              assetId={detail.exercise.audioAssetId}
+              assetId={detail.exercise.audioAssetId || (detail.exercise as any).audioUrl}
               title={detail.exercise.title}
             />
           ) : null}
@@ -386,29 +397,54 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
             Bạn chưa có lượt nộp nào cho bài tập này.
           </div>
         ) : (
-          <div className="lms-table-wrapper">
-            <table className="lms-table">
+          <div className="lms-table-wrapper rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+            <table className="lms-table w-full">
               <thead>
-                <tr>
-                  <th scope="col">Lần thử</th>
-                  <th scope="col">Thời gian nộp (GMT+7)</th>
-                  <th scope="col">Điểm số</th>
-                  <th scope="col">Trạng thái</th>
+                <tr className="border-b border-slate-200 bg-slate-50/80 text-xs text-slate-700">
+                  <th scope="col" className="w-28 px-4 py-3 text-center font-semibold">
+                    Lần thử
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-start font-semibold">
+                    Thời gian nộp (GMT+7)
+                  </th>
+                  <th scope="col" className="w-32 px-4 py-3 text-center font-semibold">
+                    Điểm số
+                  </th>
+                  <th scope="col" className="w-44 px-4 py-3 text-center font-semibold">
+                    Trạng thái
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100 text-sm">
                 {submissions.map((item) => (
-                  <tr key={item.submissionId}>
-                    <td className="font-semibold">#{item.attemptNo}</td>
-                    <td>{formatVnDateTime(item.submittedAt)}</td>
-                    <td className="font-semibold tabular-nums">{item.score}%</td>
-                    <td>
-                      <StatusBadge
-                        status={item.passed ? "passed" : "submitted"}
-                        labelOverride={
-                          item.passed ? "Đạt (>=70%)" : "Chưa đạt"
-                        }
-                      />
+                  <tr key={item.submissionId} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="w-28 px-4 py-3.5 text-center font-semibold text-slate-900 align-middle">
+                      <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
+                        #{item.attemptNo}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-start font-medium text-slate-700 align-middle">
+                      {formatVnDateTime(item.submittedAt)}
+                    </td>
+                    <td className="w-32 px-4 py-3.5 text-center font-bold tabular-nums align-middle">
+                      <span
+                        className={cn(
+                          "text-base font-bold",
+                          item.passed ? "text-emerald-700" : "text-slate-800",
+                        )}
+                      >
+                        {item.score}%
+                      </span>
+                    </td>
+                    <td className="w-44 px-4 py-3.5 text-center align-middle">
+                      <div className="flex items-center justify-center">
+                        <StatusBadge
+                          status={item.passed ? "passed" : "submitted"}
+                          labelOverride={
+                            item.passed ? "Đạt (≥70%)" : "Chưa đạt"
+                          }
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}

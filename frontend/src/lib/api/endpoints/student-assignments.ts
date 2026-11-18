@@ -88,10 +88,15 @@ export const studentAssignmentsApi = {
     translationId: string,
     payload: ReviewTranslationRequest,
   ): Promise<TranslationWorkspace> {
-    return apiRequest<TranslationWorkspace, ReviewTranslationRequest>({
+    const body = {
+      decision: payload.decision,
+      feedback: payload.feedback,
+      teacherComment: payload.feedback,
+    };
+    return apiRequest<TranslationWorkspace, typeof body>({
       method: "PATCH",
       path: `/translations/${encodeURIComponent(translationId)}/review`,
-      body: payload,
+      body,
     });
   },
 };

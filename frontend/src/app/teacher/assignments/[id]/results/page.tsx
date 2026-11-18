@@ -41,19 +41,26 @@ export default function TeacherAssignmentResultsPage() {
     {
       key: "student",
       header: "Học viên",
-      renderCell: (row) =>
-        row.studentId ? (
+      renderCell: (row) => {
+        const studentDisplayName =
+          row.studentName ||
+          (row as any).student?.name ||
+          (row as any).student?.fullName ||
+          row.studentId ||
+          "Học viên";
+        return row.studentId ? (
           <Link
             href={`/teacher/students/${encodeURIComponent(row.studentId)}`}
             className="font-semibold text-blue-800 hover:underline"
           >
-            {row.studentName ?? row.studentId}
+            {studentDisplayName}
           </Link>
         ) : (
           <span className="font-semibold text-slate-950">
-            {row.studentName ?? row.studentAssignmentId}
+            {studentDisplayName}
           </span>
-        ),
+        );
+      },
     },
     {
       key: "status",
@@ -63,7 +70,11 @@ export default function TeacherAssignmentResultsPage() {
     {
       key: "attempts",
       header: "Số lần nộp",
-      renderCell: (row) => <span className="tabular-nums">{row.attemptsCount}</span>,
+      renderCell: (row) => (
+        <span className="tabular-nums">
+          {row.attemptsCount ?? (row as any).submissionsCount ?? 0}
+        </span>
+      ),
     },
     {
       key: "score",
@@ -73,7 +84,7 @@ export default function TeacherAssignmentResultsPage() {
           {row.bestScore !== null ? `${row.bestScore}%` : "—"}
           {row.passed ? (
             <CheckCircle2 className="h-4 w-4 text-emerald-700" aria-label="Đạt" />
-          ) : row.attemptsCount > 0 ? (
+          ) : (row.attemptsCount ?? 0) > 0 ? (
             <XCircle className="h-4 w-4 text-amber-700" aria-label="Chưa đạt" />
           ) : null}
         </span>
@@ -82,7 +93,8 @@ export default function TeacherAssignmentResultsPage() {
     {
       key: "effectiveDue",
       header: "Hạn hiệu lực",
-      renderCell: (row) => formatVnDateTime(row.effectiveDueAt),
+      renderCell: (row) =>
+        formatVnDateTime(row.effectiveDueAt || (row as any).effectiveDeadlineAt),
     },
     {
       key: "translation",
@@ -114,7 +126,7 @@ export default function TeacherAssignmentResultsPage() {
           assignment
             ? `${assignment.courseTitle ?? ""} · Ngày giao ${formatDateKeyVi(
                 assignment.assignedDate,
-              )} · Ngưỡng đạt ${assignment.passThreshold}%`
+              )} · Ngưỡng đạt ${assignment.passThreshold ?? (assignment as any).targetScorePercent ?? 70}%`
             : undefined
         }
         actions={
@@ -151,7 +163,7 @@ export default function TeacherAssignmentResultsPage() {
           caption={`Kết quả theo từng học viên (${resultsQuery.data?.total ?? rows.length})`}
           columns={columns}
           rows={rows}
-          getRowKey={(row) => row.studentAssignmentId}
+          getRowKey={(row) => row.studentAssignmentId || (row as any).id || (row as any)._id}
           emptyTitle="Chưa có học viên nào được gán bài này"
           emptyDescription="Kiểm tra danh sách ghi danh của khóa học tương ứng."
         />
@@ -159,7 +171,13 @@ export default function TeacherAssignmentResultsPage() {
         {resultsQuery.data ? (
           <Pagination
             page={resultsQuery.data.page}
-            totalPages={resultsQuery.data.totalPages}
+            totalPages={
+              resultsQuery.data.totalPages ||
+              Math.ceil(
+                (resultsQuery.data.total || 1) / (resultsQuery.data.limit || 25),
+              ) ||
+              1
+            }
             totalItems={resultsQuery.data.total}
             onPageChange={setPage}
           />

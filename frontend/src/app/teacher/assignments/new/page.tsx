@@ -38,6 +38,7 @@ export default function TeacherNewAssignmentPage() {
   const [requiredPartId, setRequiredPartId] = useState("");
   const [durationMinutesOverride, setDurationMinutesOverride] = useState("");
   const [maxAttempts, setMaxAttempts] = useState("");
+  const [allowRetake, setAllowRetake] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const coursesQuery = useQuery({
@@ -156,6 +157,7 @@ export default function TeacherNewAssignmentPage() {
       allowedModes: selectedV2Test ? [requiredScope] : undefined,
       durationSecondsOverride: durationSecs ?? null,
       maxAttempts: maxAttemptsNum ?? null,
+      allowRetake,
     });
 
     if (!parsed.success) {
@@ -187,6 +189,7 @@ export default function TeacherNewAssignmentPage() {
       allowedModes: parsed.data.allowedModes,
       durationSecondsOverride: parsed.data.durationSecondsOverride ?? undefined,
       maxAttempts: parsed.data.maxAttempts ?? undefined,
+      allowRetake: parsed.data.allowRetake ?? allowRetake,
     });
   };
 
@@ -458,9 +461,32 @@ export default function TeacherNewAssignmentPage() {
                       max={20}
                       placeholder="Không giới hạn"
                       value={maxAttempts}
-                      onChange={(e) => setMaxAttempts(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMaxAttempts(val);
+                        if (val.trim() === "1") {
+                          setAllowRetake(false);
+                        } else if (!val.trim() || Number(val) > 1) {
+                          setAllowRetake(true);
+                        }
+                      }}
                       className="mt-1.5 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm"
                     />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={allowRetake}
+                        onChange={(e) => setAllowRetake(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>Cho phép học viên làm lại bài (Retake)</span>
+                    </label>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      Khi bật, học viên có thể làm lại bài nhiều lần (hoặc theo số lượt tối đa) để cải thiện điểm số &ge; 70%.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -471,10 +497,15 @@ export default function TeacherNewAssignmentPage() {
                   {requiredScope === "FULL"
                     ? `toàn bộ ${effectivePartCount} phần (${effectiveTotalQuestions} câu)`
                     : (selectedV2Test.parts || []).find((p: any) => (p.id || p._id) === requiredPartId)?.title ??
-                      "1 phần chỉ định"}
+                    "1 phần chỉ định"}
                 </strong>
                 {durationMinutesOverride ? ` trong ${durationMinutesOverride} phút` : ""}
-                {maxAttempts ? `, tối đa ${maxAttempts} lượt thi` : ""}.
+                {!allowRetake
+                  ? ", chỉ thi 1 lần (không cho làm lại)"
+                  : maxAttempts
+                    ? `, tối đa ${maxAttempts} lượt thi`
+                    : ", cho phép làm lại không giới hạn"}
+                .
               </p>
             </section>
           ) : null}

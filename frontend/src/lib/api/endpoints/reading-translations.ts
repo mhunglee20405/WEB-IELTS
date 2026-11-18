@@ -69,10 +69,15 @@ export const readingTranslationsApi = {
     translationId: string,
     payload: ReviewReadingTranslationRequest,
   ): Promise<TeacherReadingTranslationItem> {
-    return apiRequest<TeacherReadingTranslationItem, ReviewReadingTranslationRequest>({
+    const body = {
+      decision: payload.decision,
+      feedback: payload.feedback,
+      teacherComment: payload.feedback,
+    };
+    return apiRequest<TeacherReadingTranslationItem, typeof body>({
       method: "POST",
       path: `/teacher/reading-translations/${encodeURIComponent(translationId)}/review`,
-      body: payload,
+      body,
     });
   },
 };

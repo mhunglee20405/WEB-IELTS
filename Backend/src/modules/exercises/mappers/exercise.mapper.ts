@@ -1,6 +1,10 @@
 import { ExerciseDocument } from 'src/database/schemas/exercise.schema';
 import { ExerciseStatus, ExerciseType, QuestionType } from 'src/database/schemas/enums';
 import { Types } from 'mongoose';
+import {
+  normalizeQuestionType,
+  normalizeQuestionOptions,
+} from 'src/modules/submissions/submissions.service';
 
 export interface SanitizedQuestion {
   questionId: string;
@@ -48,14 +52,22 @@ export class ExerciseMapper {
     const raw = typeof doc.toObject === 'function' ? doc.toObject() : doc;
     const id = raw._id ? (raw._id instanceof Types.ObjectId ? raw._id.toHexString() : String(raw._id)) : raw.id;
 
-    const questions: any[] = (raw.questions || []).map((q: any) => ({
-      questionId: q.questionId || (q.number !== undefined ? String(q.number) : undefined),
-      number: q.number,
-      type: q.type,
-      prompt: q.prompt,
-      options: q.options ? q.options.map((opt: any) => ({ key: opt.key, text: opt.text })) : undefined,
-      points: q.points,
-    }));
+    const questions: any[] = (raw.questions || []).map((q: any, idx: number) => {
+      const qId = String(
+        q.questionId || (q.number !== undefined ? String(q.number) : undefined) || q.id || `q-${idx + 1}`,
+      );
+      return {
+        id: qId,
+        questionId: qId,
+        number: q.number ?? (idx + 1),
+        orderIndex: q.orderIndex ?? q.number ?? (idx + 1),
+        type: normalizeQuestionType(q.type) as any,
+        rawType: q.type,
+        prompt: q.prompt || '',
+        options: normalizeQuestionOptions(q.options),
+        points: q.points ?? 1,
+      };
+    });
 
     return {
       id,

@@ -39,7 +39,12 @@ import { ExtensionsService } from 'src/modules/extensions/extensions.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { CreateExtensionRequestDto } from 'src/modules/extensions/dto/create-extension-request.dto';
 import { formatVnDateTime } from 'src/common/utils/timezone.util';
-import { extractObjectId } from './submissions.service';
+import {
+  extractObjectId,
+  normalizeQuestionType,
+  normalizeQuestionOptions,
+  gradeExamQuestion,
+} from './submissions.service';
 
 @ApiTags('Student Assignments')
 @Controller('student-assignments')
@@ -107,15 +112,24 @@ export class StudentAssignmentsController {
     const rawQuestions = snapshot?.questions || exercise?.questions || [];
     const sanitizedQuestions = isLocked
       ? []
-      : rawQuestions.map((q: any, idx: number) => ({
-          id: q.questionId || `q-${idx + 1}`,
-          questionId: q.questionId || `q-${idx + 1}`,
-          orderIndex: q.orderIndex ?? (idx + 1),
-          prompt: q.prompt || '',
-          type: q.type,
-          points: q.points ?? 1,
-          options: q.options || [],
-        }));
+      : rawQuestions.map((q: any, idx: number) => {
+          const raw = typeof q.toObject === 'function' ? q.toObject() : q;
+          const qId = String(
+            raw.questionId || (raw.number !== undefined ? String(raw.number) : undefined) || raw.id || `q-${idx + 1}`,
+          );
+          const normType = normalizeQuestionType(raw.type);
+          return {
+            id: qId,
+            questionId: qId,
+            orderIndex: raw.orderIndex ?? (raw.number !== undefined ? raw.number : idx + 1),
+            prompt: raw.prompt || '',
+            type: normType,
+            rawType: raw.type,
+            multiple: raw.type === 'MULTIPLE_CHOICE_MULTIPLE' || Boolean(raw.multiple),
+            points: raw.points ?? 1,
+            options: normalizeQuestionOptions(raw.options),
+          };
+        });
 
     const exercisePublic = {
       id: extractObjectId(exercise?._id || assignment._id),
@@ -126,6 +140,7 @@ export class StudentAssignmentsController {
       instructions: isLocked ? '' : (snapshot?.instructions || exercise?.instructions || ''),
       passageHtml: isLocked ? '' : (snapshot?.passage || exercise?.passage || ''),
       audioAssetId: isLocked ? undefined : (snapshot?.audioAssets?.[0]?.objectKey || exercise?.audioAssetId || undefined),
+      audioUrl: isLocked ? undefined : (snapshot?.audioAssets?.[0]?.url || undefined),
       durationMinutes: exercise?.durationMinutes || undefined,
       passThreshold: assignment.targetScorePercent ?? 70,
       questions: sanitizedQuestions,
@@ -299,26 +314,44 @@ export class StudentAssignmentsController {
 
     const questions = assignment.exerciseSnapshot.questions || [];
     const items = questions.map((q: any, idx: number) => {
-      const studentAnswer = studentAnswersMap.get(q.questionId) || '';
-      const exactMatch = q.answerSpecification?.exactMatch;
-      const acceptedAnswers = q.answerSpecification?.acceptedAnswers || [];
-      const correctAnswer =
-        exactMatch ||
-        acceptedAnswers[0] ||
-        (q.options ? q.options.find((o: any) => o.isCorrect)?.text : '') ||
+      const raw = typeof q.toObject === 'function' ? q.toObject() : q;
+      const qId = String(
+        raw.questionId || (raw.number !== undefined ? String(raw.number) : undefined) || raw.id || `q-${idx + 1}`,
+      );
+      const studentAnswer =
+        studentAnswersMap.get(qId) ||
+        (raw.questionId ? studentAnswersMap.get(raw.questionId) : '') ||
         '';
-      const isCorrect = acceptedAnswers.length > 0
-        ? acceptedAnswers.some((a: string) => a.trim().toLowerCase() === studentAnswer.trim().toLowerCase())
-        : studentAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+      let isCorrect = false;
+      let correctAnswer = '';
+
+      if (raw.grading && raw.grading.acceptedKeys && raw.grading.acceptedKeys.length > 0) {
+        const gradeRes = gradeExamQuestion(raw.type, studentAnswer, raw.grading, raw.points ?? 1);
+        isCorrect = gradeRes.isCorrect;
+        correctAnswer = raw.grading.acceptedKeys.join(' / ');
+      } else {
+        const exactMatch = raw.answerSpecification?.exactMatch;
+        const acceptedAnswers = raw.answerSpecification?.acceptedAnswers || [];
+        const correctKey = raw.answerSpecification?.correctKey;
+        correctAnswer =
+          correctKey ||
+          exactMatch ||
+          acceptedAnswers[0] ||
+          (raw.options ? raw.options.find((o: any) => o.isCorrect)?.text : '') ||
+          '';
+        isCorrect = acceptedAnswers.length > 0
+          ? acceptedAnswers.some((a: string) => a.trim().toLowerCase() === studentAnswer.trim().toLowerCase())
+          : studentAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+      }
 
       return {
-        questionId: q.questionId || `q-${idx + 1}`,
-        orderIndex: q.orderIndex ?? (idx + 1),
-        prompt: q.prompt || '',
+        questionId: qId,
+        orderIndex: raw.orderIndex ?? (raw.number !== undefined ? raw.number : idx + 1),
+        prompt: raw.prompt || '',
         studentAnswer,
         correctAnswer,
         isCorrect,
-        explanation: q.explanation || '',
+        explanation: raw.explanation || raw.grading?.explanation || '',
       };
     });
 

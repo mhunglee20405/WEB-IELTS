@@ -6,6 +6,7 @@ import {
   ConflictException,
   Optional,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -18,6 +19,11 @@ import {
   StudentAssignment,
   StudentAssignmentDocument,
 } from 'src/database/schemas/student-assignment.schema';
+import { Submission, SubmissionDocument } from 'src/database/schemas/submission.schema';
+import {
+  TranslationSubmission,
+  TranslationSubmissionDocument,
+} from 'src/database/schemas/translation-submission.schema';
 import { UserDocument } from 'src/database/schemas/user.schema';
 import {
   AssignmentStatus,
@@ -131,7 +137,7 @@ export function computeStudentAssignmentLifecycleStatus(
 }
 
 @Injectable()
-export class AssignmentsService {
+export class AssignmentsService implements OnModuleInit {
   private readonly logger = new Logger(AssignmentsService.name);
 
   constructor(
@@ -142,9 +148,31 @@ export class AssignmentsService {
     @InjectModel(StudentAssignment.name)
     private studentAssignmentModel: Model<StudentAssignmentDocument>,
     @InjectModel(ExamTest.name) @Optional() private examTestModel?: Model<ExamTestDocument>,
+    @InjectModel(Submission.name) @Optional() private submissionModel?: Model<SubmissionDocument>,
+    @InjectModel(TranslationSubmission.name) @Optional() private translationModel?: Model<TranslationSubmissionDocument>,
     @Optional() private notificationsService?: NotificationsService,
     @Optional() private auditService?: AuditService,
   ) {}
+
+  async onModuleInit() {
+    try {
+      // Auto-heal existing assignments where allowRetake defaulted to false
+      // and maxAttempts was either not set or set to > 1
+      await this.assignmentModel.updateMany(
+        {
+          allowRetake: false,
+          $or: [
+            { maxAttempts: { $gt: 1 } },
+            { maxAttempts: { $exists: false } },
+            { maxAttempts: null },
+          ],
+        },
+        { $set: { allowRetake: true } },
+      );
+    } catch (err: any) {
+      this.logger.warn(`Failed to auto-heal existing assignments allowRetake: ${err.message}`);
+    }
+  }
 
   async validateAssignment(dto: CreateAssignmentDto, actor: UserDocument): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
@@ -723,7 +751,12 @@ export class AssignmentsService {
       selectedQuestionGroupIds: dto.selectedQuestionGroupIds || [],
       targetScorePercent: dto.targetScorePercent ?? 70,
       idempotencyKey: dto.idempotencyKey,
-      allowRetake: dto.allowRetake ?? false,
+      allowRetake:
+        dto.allowRetake !== undefined
+          ? dto.allowRetake
+          : dto.maxAttempts !== undefined && dto.maxAttempts !== null
+            ? dto.maxAttempts > 1
+            : true,
       maxAttempts: dto.maxAttempts,
       requiredScope: dto.requiredScope || 'FULL',
       requiredPartId: dto.requiredPartId,
@@ -1186,7 +1219,7 @@ export class AssignmentsService {
     const [docs, total] = await Promise.all([
       this.studentAssignmentModel
         .find({ assignmentId: assignment._id })
-        .populate('studentId', 'name email avatar status')
+        .populate('studentId', 'fullName name email avatar status')
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum)
         .sort({ createdAt: -1 })
@@ -1194,34 +1227,127 @@ export class AssignmentsService {
       this.studentAssignmentModel.countDocuments({ assignmentId: assignment._id }).exec(),
     ]);
 
-    const items = docs.map((doc: any) => ({
-      id: extractObjectId(doc._id),
-      student: doc.studentId
-        ? {
-            id: extractObjectId(doc.studentId._id || doc.studentId),
-            name: doc.studentId.name,
-            email: doc.studentId.email,
-            avatar: doc.studentId.avatar,
-            status: doc.studentId.status,
-          }
-        : undefined,
-      originalDeadlineAt: doc.originalDeadlineAt,
-      originalDeadlineAtVn: doc.originalDeadlineAt ? formatVnDateTime(doc.originalDeadlineAt) : undefined,
-      effectiveDeadlineAt: doc.effectiveDeadlineAt,
-      effectiveDeadlineAtVn: formatVnDateTime(doc.effectiveDeadlineAt),
-      status: doc.status,
-      bestScore: doc.bestScore,
-      passedAt: doc.passedAt,
-      lastSubmittedAt: doc.lastSubmittedAt,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-    }));
+    const saIds = docs.map((d: any) => d._id);
+
+    const attemptsCountMap: Record<string, number> = {};
+    if (this.submissionModel && saIds.length > 0) {
+      try {
+        const counts = await this.submissionModel.aggregate([
+          { $match: { studentAssignmentId: { $in: saIds } } },
+          { $group: { _id: '$studentAssignmentId', count: { $sum: 1 } } },
+        ]);
+        for (const item of counts) {
+          attemptsCountMap[extractObjectId(item._id)] = item.count;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to aggregate submission counts: ${err?.message}`);
+      }
+    }
+
+    const translationStatusMap: Record<string, string> = {};
+    if (this.translationModel && saIds.length > 0) {
+      try {
+        const translations = await this.translationModel
+          .find({
+            $or: [
+              { studentAssignmentId: { $in: saIds } },
+              { assignmentId: assignment._id },
+            ],
+          })
+          .select('studentId studentAssignmentId status')
+          .exec();
+        for (const tr of translations) {
+          const sId = tr.studentId ? extractObjectId(tr.studentId) : '';
+          const saId = tr.studentAssignmentId ? extractObjectId(tr.studentAssignmentId) : '';
+          const trStatus = tr.status || 'not_started';
+          if (saId) translationStatusMap[saId] = trStatus;
+          if (sId) translationStatusMap[sId] = trStatus;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to query translations: ${err?.message}`);
+      }
+    }
+
+    const asg = assignment as any;
+    const passThreshold = asg.targetScorePercent ?? asg.passScore ?? 70;
+
+    const items = docs.map((doc: any) => {
+      const saIdStr = extractObjectId(doc._id);
+      const studentUser = doc.studentId;
+      const studentIdStr = studentUser ? extractObjectId(studentUser._id || studentUser) : '';
+      const studentName = studentUser?.fullName || studentUser?.name || 'Học viên';
+      const studentEmail = studentUser?.email || '';
+
+      const attemptsCount =
+        attemptsCountMap[saIdStr] ??
+        doc.attemptsCount ??
+        (doc.lastSubmittedAt ? 1 : 0);
+
+      const effectiveDueAt = doc.effectiveDeadlineAt || doc.originalDeadlineAt || asg.deadlineAt;
+      const isPassed = Boolean(
+        doc.isTargetAchieved ||
+        doc.status === StudentAssignmentStatus.PASSED ||
+        (doc.bestScore !== undefined && doc.bestScore !== null && doc.bestScore >= passThreshold),
+      );
+
+      const trStatus =
+        translationStatusMap[saIdStr] ||
+        translationStatusMap[studentIdStr] ||
+        doc.translationStatus ||
+        'not_started';
+
+      return {
+        id: saIdStr,
+        _id: saIdStr,
+        studentAssignmentId: saIdStr,
+        assignmentId: extractObjectId(asg._id),
+        courseId: extractObjectId(asg.courseId),
+        courseTitle: course?.title || '',
+        studentId: studentIdStr,
+        studentName,
+        studentEmail,
+        student: studentUser
+          ? {
+              id: studentIdStr,
+              name: studentName,
+              fullName: studentName,
+              email: studentEmail,
+              avatar: studentUser.avatar,
+              status: studentUser.status,
+            }
+          : undefined,
+        title: asg.title,
+        exerciseType: asg.exerciseType || 'reading',
+        assignedDate: asg.assignedDate || (asg.openAt ? formatVnDateTime(asg.openAt).slice(0, 10) : ''),
+        openAt: asg.openAt,
+        dueAt: asg.deadlineAt,
+        originalDeadlineAt: doc.originalDeadlineAt,
+        originalDeadlineAtVn: doc.originalDeadlineAt ? formatVnDateTime(doc.originalDeadlineAt) : undefined,
+        effectiveDeadlineAt: doc.effectiveDeadlineAt,
+        effectiveDeadlineAtVn: formatVnDateTime(doc.effectiveDeadlineAt),
+        effectiveDueAt,
+        timezone: asg.timezone || 'Asia/Ho_Chi_Minh',
+        status: doc.status,
+        attemptsCount,
+        bestScore: doc.bestScore ?? null,
+        passed: isPassed,
+        answerReviewUnlocked: isPassed,
+        translationAvailable: Boolean(asg.exerciseType === 'reading'),
+        translationStatus: trStatus,
+        penaltyApplied: Boolean(doc.penaltyAppliedAt),
+        passedAt: doc.passedAt,
+        lastSubmittedAt: doc.lastSubmittedAt,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      };
+    });
 
     return {
       items,
       total,
       page: pageNum,
       limit: limitNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
     };
   }
 
@@ -1389,7 +1515,8 @@ export class AssignmentsService {
       durationSecondsOverride: raw.durationSecondsOverride || null,
       assignedDate: raw.assignedDate || formatVnDateTime(raw.openAt).slice(0, 10),
       selectedQuestionGroupIds: raw.selectedQuestionGroupIds || [],
-      targetScorePercent: raw.targetScorePercent ?? 70,
+      targetScorePercent: raw.targetScorePercent ?? raw.passThreshold ?? 70,
+      passThreshold: raw.passThreshold ?? raw.targetScorePercent ?? 70,
       openAt: raw.openAt,
       openAtVn: formatVnDateTime(raw.openAt),
       availableAt: raw.openAt,
@@ -1483,7 +1610,8 @@ export class AssignmentsService {
       allowedModes: raw.allowedModes || ['PART', 'FULL'],
       durationSecondsOverride: raw.durationSecondsOverride || null,
       assignedDate: raw.assignedDate || formatVnDateTime(raw.openAt).slice(0, 10),
-      targetScorePercent: raw.targetScorePercent ?? 70,
+      targetScorePercent: raw.targetScorePercent ?? raw.passThreshold ?? 70,
+      passThreshold: raw.passThreshold ?? raw.targetScorePercent ?? 70,
       openAt: raw.openAt,
       openAtVn: formatVnDateTime(raw.openAt),
       availableAt: raw.openAt,
