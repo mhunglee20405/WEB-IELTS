@@ -120,7 +120,14 @@ export function createInitialMockState(): MockStoreState {
   const tomorrowKey = addDaysToDateKey(todayKey, 1);
   const inThreeDaysKey = addDaysToDateKey(todayKey, 3);
 
-  const todayWindow = getVnDailyWindowSync(todayKey);
+  const rawTodayWindow = getVnDailyWindowSync(todayKey);
+  const todayOpenAt = new Date(
+    Math.min(Date.parse(rawTodayWindow.startUtcIso), Date.now() - 300_000),
+  ).toISOString();
+  const todayWindow = {
+    ...rawTodayWindow,
+    startUtcIso: todayOpenAt,
+  };
   const yesterdayWindow = getVnDailyWindowSync(yesterdayKey);
   const twoDaysAgoWindow = getVnDailyWindowSync(twoDaysAgoKey);
   const tomorrowWindow = getVnDailyWindowSync(tomorrowKey);

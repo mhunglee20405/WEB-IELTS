@@ -1,8 +1,8 @@
 import { apiRequest, buildQueryString } from "../client";
 import {
   ExamPartPublicSchema,
-  ExamTestDetailStudentSchema,
 } from "../schemas";
+import { normalizeStudentTestDetail } from "./teacher-exam-tests";
 import type {
   ExamMode,
   ExamPartPublic,
@@ -31,11 +31,11 @@ export const examTestsApi = {
   },
 
   async getById(testId: string): Promise<ExamTestDetailStudent> {
-    const raw = await apiRequest<ExamTestDetailStudent>({
+    const raw = await apiRequest<any>({
       method: "GET",
       path: `/exam-tests/${encodeURIComponent(testId)}`,
     });
-    return ExamTestDetailStudentSchema.parse(raw);
+    return normalizeStudentTestDetail(raw);
   },
 
   async getPart(testId: string, partId: string): Promise<ExamPartPublic> {

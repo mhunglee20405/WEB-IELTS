@@ -90,11 +90,18 @@ export function ExamQuestionGroupRenderer({
       className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs"
     >
       <header className="mb-4 border-b border-slate-100 pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-bold text-slate-900">
-            {group.title ? `${group.title} (${rangeLabel})` : rangeLabel}
-          </h3>
-          <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="whitespace-pre-line text-base font-bold text-slate-900 leading-snug">
+              {group.title ? group.title : rangeLabel}
+            </h3>
+            {group.title && (
+              <span className="mt-1 inline-block text-xs font-semibold text-slate-500">
+                {rangeLabel}
+              </span>
+            )}
+          </div>
+          <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
             {EXAM_QUESTION_TYPE_LABELS[group.questionType]}
           </span>
         </div>
@@ -210,7 +217,7 @@ function ExamSingleQuestionItem({
             {question.questionNumber}
           </span>
           <div className="space-y-1">
-            <p className="text-sm leading-relaxed font-medium text-slate-900">
+            <p className="text-sm leading-relaxed font-medium text-slate-900 whitespace-pre-line">
               {question.prompt}
             </p>
             {(question.blankLabel || effectiveMaxWords) && (

@@ -1381,7 +1381,7 @@ function finalizeMockAttemptSubmission(
   const totalQuestions = Math.max(1, allQuestions.length);
   const scorePercent = Math.round((totalCorrect / totalQuestions) * 100);
   const passed = scorePercent >= PASS_SCORE_THRESHOLD;
-  const answerReviewAvailable = passed;
+  const answerReviewAvailable = true;
   const submittedAt = attempt.submittedAt ?? new Date().toISOString();
 
   // Unlock translation passages strictly on backend threshold rule (>= 70% Reading)
@@ -1419,10 +1419,8 @@ function finalizeMockAttemptSubmission(
     passed,
     passThresholdPercent: PASS_SCORE_THRESHOLD,
     ieltsBandEstimate: estimateBand(scorePercent),
-    answerReviewAvailable,
-    answerReviewLockedReason: answerReviewAvailable
-      ? null
-      : "Bạn cần đạt tối thiểu 70% số câu đúng để mở khóa đáp án chi tiết và giải thích.",
+    answerReviewAvailable: true,
+    answerReviewLockedReason: null,
     translationEligible: attempt.skill === "READING" && passed,
     translationEligibilityHint:
       attempt.skill === "READING"
@@ -1755,15 +1753,6 @@ export function dispatchExamV2MockRequest<T>(
 
     if (subRoute === "review" && method === "GET") {
       if (!attempt.result) mockNotFound("Chưa có kết quả cho lượt làm bài này.");
-      if (!attempt.result.answerReviewAvailable) {
-        throw new ApiError({
-          statusCode: 403,
-          code: "ANSWER_REVIEW_LOCKED",
-          message:
-            attempt.result.answerReviewLockedReason ??
-            "Đáp án và giải thích chỉ mở khóa khi đạt từ 70% trở lên.",
-        });
-      }
       return {
         handled: true,
         data: {
@@ -2298,6 +2287,13 @@ export function dispatchExamV2MockRequest<T>(
 
     if (!action && method === "GET") {
       return { handled: true, data: test as T };
+    }
+    if (!action && method === "DELETE") {
+      const idx = state.tests.findIndex((t) => t.id === teacherActionMatch[1]);
+      if (idx !== -1) {
+        state.tests.splice(idx, 1);
+      }
+      return { handled: true, data: { ok: true, message: "Đã xóa đề thi thành công" } as T };
     }
     if (!action && method === "PATCH") {
       if (test.status === "PUBLISHED") {

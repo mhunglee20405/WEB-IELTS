@@ -59,6 +59,7 @@ describe('ExamTestsService', () => {
 
     examTestModel = jest.fn().mockImplementation((dto) => mockDoc(dto));
     examTestModel.findById = jest.fn();
+    examTestModel.findByIdAndDelete = jest.fn();
     examTestModel.find = jest.fn();
     examTestModel.countDocuments = jest.fn();
 
@@ -301,6 +302,53 @@ describe('ExamTestsService', () => {
       const preview = await service.preview(testDoc._id.toHexString(), teacherA, ExamMode.PART, testDoc.parts[0]._id.toHexString());
       expect(preview).toBeDefined();
       expect((preview as any).questionGroups[0].questions[0]).not.toHaveProperty('grading');
+    });
+  });
+
+  describe('deleteTest', () => {
+    it('deletes test successfully when teacher owns it', async () => {
+      const testDoc = {
+        _id: new Types.ObjectId(),
+        title: 'Draft Test To Delete',
+        createdBy: teacherAId,
+        status: ExamTestStatus.DRAFT,
+      };
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(testDoc),
+      });
+      examTestModel.findByIdAndDelete.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(testDoc),
+      });
+
+      const res = await service.deleteTest(testDoc._id.toHexString(), teacherA);
+      expect(res.ok).toBe(true);
+      expect(examTestModel.findByIdAndDelete).toHaveBeenCalledWith(testDoc._id.toHexString());
+    });
+
+    it('rejects deletion with 403 when teacher does not own the test', async () => {
+      const testDoc = {
+        _id: new Types.ObjectId(),
+        title: 'Teacher A Test',
+        createdBy: teacherAId,
+        status: ExamTestStatus.DRAFT,
+      };
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(testDoc),
+      });
+
+      await expect(
+        service.deleteTest(testDoc._id.toHexString(), teacherB),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws 404 if test does not exist', async () => {
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      await expect(
+        service.deleteTest(new Types.ObjectId().toHexString(), teacherA),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

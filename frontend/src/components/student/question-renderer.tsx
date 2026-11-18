@@ -53,7 +53,7 @@ export function QuestionRenderer({
     return (
       <fieldset className="lms-card space-y-3" disabled={disabled}>
         <legend className="flex w-full items-start justify-between gap-3 text-sm font-semibold text-slate-900">
-          <span>
+          <span className="whitespace-pre-line">
             <span className="mr-1.5 inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-800">
               Câu {question.orderIndex}
             </span>
@@ -107,7 +107,7 @@ export function QuestionRenderer({
     return (
       <div className="lms-card space-y-2.5">
         <div className="flex items-start justify-between gap-2">
-          <label htmlFor={controlId} className="text-sm font-semibold text-slate-900">
+          <label htmlFor={controlId} className="text-sm font-semibold text-slate-900 whitespace-pre-line">
             <span className="mr-1.5 inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-800">
               Câu {question.orderIndex}
             </span>
@@ -141,7 +141,7 @@ export function QuestionRenderer({
   return (
     <div className="lms-card space-y-2.5">
       <div className="flex items-start justify-between gap-2">
-        <label htmlFor={controlId} className="text-sm font-semibold text-slate-900">
+        <label htmlFor={controlId} className="text-sm font-semibold text-slate-900 whitespace-pre-line">
           <span className="mr-1.5 inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-800">
             Câu {question.orderIndex}
           </span>

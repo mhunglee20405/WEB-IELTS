@@ -33,7 +33,7 @@ export default function StudentExamResultPage() {
   const reviewQuery = useQuery({
     queryKey: examKeys.attemptReview(attemptId),
     queryFn: () => examAttemptsApi.getReview(attemptId),
-    enabled: Boolean(result?.answerReviewAvailable),
+    enabled: Boolean(result?.answerReviewAvailable ?? true),
   });
 
   const eligibilityQuery = useQuery({
@@ -293,7 +293,7 @@ export default function StudentExamResultPage() {
                     Đáp án &amp; Giải thích chi tiết
                   </h2>
                   <p className="text-xs text-slate-600">
-                    Hiển thị khi đạt tối thiểu {result.passThresholdPercent}% theo quy định mở khóa đáp án.
+                    Đối chiếu câu trả lời của bạn với đáp án chuẩn và lời giải chi tiết.
                   </p>
                 </div>
 
@@ -370,7 +370,7 @@ export default function StudentExamResultPage() {
                           )}
                         >
                           <div className="flex flex-wrap items-start justify-between gap-2">
-                            <p className="text-sm font-semibold text-slate-900">
+                            <p className="whitespace-pre-line text-sm font-semibold text-slate-900 leading-snug">
                               <span className="mr-2 inline-flex h-6 min-w-6 items-center justify-center rounded bg-slate-900 px-1.5 text-xs text-white">
                                 {item.questionNumber}
                               </span>

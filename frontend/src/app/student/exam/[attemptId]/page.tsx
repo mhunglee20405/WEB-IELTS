@@ -149,7 +149,7 @@ function ActiveExamWorkspace({
   const answeredCount = countAnsweredQuestions(autosave.answers);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen max-h-screen flex-col overflow-hidden bg-slate-50">
       <ExamHeader
         title={attempt.testTitle}
         skill={attempt.skill}
@@ -213,7 +213,7 @@ function ActiveExamWorkspace({
         </div>
       )}
 
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {attempt.skill === "READING" ? (
           <ReadingExamView
             parts={attempt.parts}

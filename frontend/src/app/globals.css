@@ -332,6 +332,15 @@ dialog.lms-drawer[open]::backdrop {
   border-color: #15803d;
 }
 
+/* Hide scrollbar across Chrome, Edge, Safari, Firefox while retaining mousewheel/trackpad scroll */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Accessible horizontal tablist per modern-web-guidance `tabs` */
 .lms-tablist {
   display: flex;

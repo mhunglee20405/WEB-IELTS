@@ -98,6 +98,212 @@ function uploadFileToSignedUrl(
   });
 }
 
+export function normalizeStudentTestDetail(raw: any): ExamTestDetailStudent {
+  if (!raw) return raw;
+
+  const duration =
+    raw.totalDurationSeconds ??
+    raw.fullDurationSeconds ??
+    (raw.skill === "READING" ? 3600 : 1800);
+
+  const parts = (raw.parts || []).map((p: any, pIdx: number) => {
+    let qMin = Infinity;
+    let qMax = -Infinity;
+    let totalQuestions = 0;
+
+    const questionGroups = (p.questionGroups || []).map((g: any, gIdx: number) => {
+      const gQuestions = (g.questions || []).map((q: any) => {
+        const qNum = Number(q.questionNumber ?? q.number ?? 1);
+        if (qNum < qMin) qMin = qNum;
+        if (qNum > qMax) qMax = qNum;
+        totalQuestions++;
+        return {
+          id: String(q.id || q.number || `q-${qNum}`),
+          groupId: String(q.groupId || g.id || `grp-${gIdx + 1}`),
+          questionNumber: qNum,
+          prompt: q.prompt || "",
+          questionType: q.questionType || q.type || g.questionType || g.type,
+          options: (q.options || []).map((o: any) => ({
+            key: o.key || o.id || "A",
+            text: o.text || "",
+          })),
+          blankLabel: q.blankLabel,
+          maxSelections: q.maxSelections ?? 1,
+          maxWords: q.maxWords ?? g.maxWords,
+        };
+      });
+
+      return {
+        id: String(g.id || `grp-${gIdx + 1}`),
+        partId: String(p.id || `part-${pIdx + 1}`),
+        groupNumber: g.groupNumber ?? g.order ?? gIdx + 1,
+        title: g.title,
+        instructionHtml: g.instructionHtml ?? g.instruction ?? "",
+        questionType: g.questionType ?? g.type,
+        questionNumberStart: gQuestions.length > 0 ? gQuestions[0].questionNumber : 1,
+        questionNumberEnd:
+          gQuestions.length > 0 ? gQuestions[gQuestions.length - 1].questionNumber : 1,
+        sharedOptions: g.sharedOptions,
+        maxWords: g.maxWords,
+        questions: gQuestions,
+      };
+    });
+
+    if (qMin > qMax) {
+      qMin = 1;
+      qMax = Math.max(1, totalQuestions);
+    }
+
+    return {
+      id: String(p.id || `part-${pIdx + 1}`),
+      partNumber: p.partNumber ?? p.ordinal ?? pIdx + 1,
+      partType: p.partType ?? (p.type || "PASSAGE").toUpperCase(),
+      title: p.title || `Part ${pIdx + 1}`,
+      instructions: p.instructions,
+      passageTitle: p.passageTitle ?? p.title,
+      passageHtml: p.passageHtml ?? p.contentHtml ?? "",
+      paragraphs: p.paragraphs,
+      audioAsset: p.audioAsset ?? (p.audioAssetId ? { assetId: p.audioAssetId } : undefined),
+      durationSeconds: p.durationSeconds,
+      questionCount: p.questionCount ?? totalQuestions,
+      questionNumberRange: p.questionNumberRange ?? { start: qMin, end: qMax },
+      questionGroups,
+    };
+  });
+
+  const normalized = {
+    id: String(raw.id),
+    title: raw.title || "",
+    subtitle: raw.subtitle,
+    skill: raw.skill,
+    status: raw.status || "DRAFT",
+    version: raw.version || 1,
+    partCount: raw.partCount ?? parts.length,
+    totalQuestions:
+      raw.totalQuestions ?? parts.reduce((acc: number, p: any) => acc + (p.questionCount || 0), 0),
+    totalDurationSeconds: duration,
+    difficulty: raw.difficulty,
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    allowedModes:
+      Array.isArray(raw.allowedModes) && raw.allowedModes.length > 0
+        ? raw.allowedModes
+        : ["PART", "FULL"],
+    createdBy: raw.createdBy,
+    instructions: raw.instructions ?? raw.description,
+    parts,
+    activeAttempt: raw.activeAttempt ?? null,
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt).toISOString() : new Date().toISOString(),
+    publishedAt: raw.publishedAt ? new Date(raw.publishedAt).toISOString() : undefined,
+  };
+
+  return ExamTestDetailStudentSchema.parse(normalized);
+}
+
+export function normalizeTeacherTestDetail(raw: any): ExamTestDetailAuthoring {
+  if (!raw) return raw;
+
+  const duration =
+    raw.totalDurationSeconds ??
+    raw.fullDurationSeconds ??
+    (raw.skill === "READING" ? 3600 : 1800);
+
+  const parts = (raw.parts || []).map((p: any, pIdx: number) => {
+    let qMin = Infinity;
+    let qMax = -Infinity;
+    let totalQuestions = 0;
+
+    const questionGroups = (p.questionGroups || []).map((g: any, gIdx: number) => {
+      const gQuestions = (g.questions || []).map((q: any) => {
+        const qNum = Number(q.questionNumber ?? q.number ?? 1);
+        if (qNum < qMin) qMin = qNum;
+        if (qNum > qMax) qMax = qNum;
+        totalQuestions++;
+        const accepted =
+          q.acceptedAnswers ??
+          (Array.isArray(q.grading?.acceptedKeys) ? q.grading.acceptedKeys : undefined);
+        const correct =
+          q.correctAnswer ??
+          (Array.isArray(q.grading?.acceptedKeys) ? q.grading.acceptedKeys[0] : q.grading?.acceptedKeys);
+
+        return {
+          id: String(q.id || q.number || `q-${qNum}`),
+          questionNumber: qNum,
+          prompt: q.prompt || "",
+          questionType: q.questionType ?? q.type ?? g.questionType ?? g.type,
+          options: (q.options || []).map((o: any) => ({
+            key: o.key || o.id || "A",
+            text: o.text || "",
+          })),
+          correctAnswer: correct ?? "",
+          acceptedAnswers: accepted,
+          maxSelections: q.maxSelections ?? 1,
+          maxWords: q.maxWords ?? g.maxWords,
+          referenceParagraph: q.referenceParagraph,
+          explanation: q.explanation,
+        };
+      });
+
+      return {
+        id: String(g.id || `grp-${gIdx + 1}`),
+        groupNumber: g.groupNumber ?? g.order ?? gIdx + 1,
+        title: g.title,
+        instructionHtml: g.instructionHtml ?? g.instruction ?? "",
+        questionType: g.questionType ?? g.type,
+        sharedOptions: g.sharedOptions,
+        maxWords: g.maxWords,
+        maxSelections: g.maxSelections,
+        questions: gQuestions,
+      };
+    });
+
+    if (qMin > qMax) {
+      qMin = 1;
+      qMax = Math.max(1, totalQuestions);
+    }
+
+    return {
+      id: String(p.id || `part-${pIdx + 1}`),
+      partNumber: p.partNumber ?? p.ordinal ?? pIdx + 1,
+      partType: p.partType ?? (p.type || "PASSAGE").toUpperCase(),
+      title: p.title || `Part ${pIdx + 1}`,
+      instructions: p.instructions,
+      passageTitle: p.passageTitle ?? p.title,
+      passageHtml: p.passageHtml ?? p.contentHtml ?? "",
+      paragraphs: p.paragraphs,
+      audioAsset: p.audioAsset ?? (p.audioAssetId ? { assetId: p.audioAssetId } : undefined),
+      durationSeconds: p.durationSeconds,
+      transcript: p.transcript,
+      questionCount: p.questionCount ?? totalQuestions,
+      questionNumberRange: p.questionNumberRange ?? { start: qMin, end: qMax },
+      questionGroups,
+    };
+  });
+
+  return {
+    id: String(raw.id),
+    title: raw.title || "",
+    subtitle: raw.subtitle,
+    skill: raw.skill,
+    status: raw.status || "DRAFT",
+    version: raw.version || 1,
+    partCount: raw.partCount ?? parts.length,
+    totalQuestions:
+      raw.totalQuestions ?? parts.reduce((acc: number, p: any) => acc + (p.questionCount || 0), 0),
+    totalDurationSeconds: duration,
+    difficulty: raw.difficulty,
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    allowedModes:
+      Array.isArray(raw.allowedModes) && raw.allowedModes.length > 0
+        ? raw.allowedModes
+        : ["PART", "FULL"],
+    createdBy: raw.createdBy,
+    instructions: raw.instructions ?? raw.description,
+    parts,
+    updatedAt: raw.updatedAt ? new Date(raw.updatedAt).toISOString() : new Date().toISOString(),
+    publishedAt: raw.publishedAt ? new Date(raw.publishedAt).toISOString() : undefined,
+  };
+}
+
 export const teacherExamTestsApi = {
   list(query: ListTeacherExamTestsQuery = {}): Promise<PaginatedResponse<ExamTestSummary>> {
     const qs = buildQueryString({ ...query });
@@ -137,11 +343,12 @@ export const teacherExamTestsApi = {
     });
   },
 
-  getById(testId: string): Promise<ExamTestDetailAuthoring> {
-    return apiRequest<ExamTestDetailAuthoring>({
+  async getById(testId: string): Promise<ExamTestDetailAuthoring> {
+    const raw = await apiRequest<ExamTestDetailAuthoring>({
       method: "GET",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}`,
     });
+    return normalizeTeacherTestDetail(raw);
   },
 
   update(
@@ -402,19 +609,29 @@ export const teacherExamTestsApi = {
     });
   },
 
-  validate(testId: string): Promise<ValidateExamTestResponse> {
-    return apiRequest<ValidateExamTestResponse>({
+  async validate(testId: string): Promise<ValidateExamTestResponse> {
+    const raw = await apiRequest<any>({
       method: "POST",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}/validate`,
     });
+    const isValid =
+      raw?.valid ?? raw?.isValid ?? (Array.isArray(raw?.errors) ? raw.errors.length === 0 : false);
+    const errors = (raw?.errors || []).map((err: any) =>
+      typeof err === "string" ? { message: err } : err,
+    );
+    return {
+      valid: Boolean(isValid),
+      errors,
+      warnings: raw?.warnings || [],
+    };
   },
 
   async preview(testId: string): Promise<ExamTestDetailStudent> {
-    const raw = await apiRequest<ExamTestDetailStudent>({
+    const raw = await apiRequest<any>({
       method: "GET",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}/preview`,
     });
-    return ExamTestDetailStudentSchema.parse(raw);
+    return normalizeStudentTestDetail(raw);
   },
 
   publish(testId: string): Promise<ExamTestDetailAuthoring> {
@@ -435,6 +652,13 @@ export const teacherExamTestsApi = {
     return apiRequest<ExamTestDetailAuthoring>({
       method: "POST",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}/archive`,
+    });
+  },
+
+  delete(testId: string): Promise<{ ok: boolean; message?: string }> {
+    return apiRequest<{ ok: boolean; message?: string }>({
+      method: "DELETE",
+      path: `/teacher/exam-tests/${encodeURIComponent(testId)}`,
     });
   },
 

@@ -50,9 +50,9 @@ export function ReadingExamView({
   if (!activePart) return null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-3 px-4 py-4 sm:px-6">
+    <div className="mx-auto flex h-full max-h-full w-full max-w-[1440px] min-h-0 flex-1 flex-col gap-3 px-4 pt-3 pb-2 sm:px-6 overflow-hidden">
       {/* Passage Tabs & Controls Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-2xs">
         <div
           role="tablist"
           aria-label="Danh sách bài đọc"
@@ -132,7 +132,7 @@ export function ReadingExamView({
       </div>
 
       {/* Mobile Tab Toggle */}
-      <div className="grid grid-cols-2 gap-2 lg:hidden" role="tablist" aria-label="Chế độ xem trên di động">
+      <div className="grid shrink-0 grid-cols-2 gap-2 lg:hidden" role="tablist" aria-label="Chế độ xem trên di động">
         <button
           type="button"
           role="tab"
@@ -168,15 +168,15 @@ export function ReadingExamView({
       {/* Independent Scrollable Two-Pane Workspace */}
       <div
         className={cn(
-          "grid flex-1 gap-4 lg:h-[calc(100vh-14.5rem)] lg:overflow-hidden",
+          "grid min-h-0 flex-1 gap-4 overflow-hidden lg:h-full",
           SPLIT_GRID_CLASS[splitRatio],
         )}
       >
-        {/* Left Pane: Passage */}
+        {/* Left Pane: Passage (Independent Scroll & Hidden Scrollbar) */}
         <article
           aria-label={activePart.passageTitle ?? activePart.title}
           className={cn(
-            "rounded-xl border border-slate-200 bg-white p-5 shadow-xs lg:h-full lg:overflow-y-auto",
+            "h-full min-h-0 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-5 shadow-xs scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
             mobileTab === "passage" ? "block" : "hidden lg:block",
           )}
         >
@@ -194,7 +194,7 @@ export function ReadingExamView({
 
           <div
             className={cn(
-              "select-text space-y-4 leading-relaxed text-slate-800",
+              "select-text space-y-4 leading-relaxed text-slate-800 pb-28",
               largeFont ? "text-base leading-7" : "text-[15px] leading-7",
             )}
           >
@@ -215,10 +215,10 @@ export function ReadingExamView({
           </div>
         </article>
 
-        {/* Right Pane: Question Groups */}
+        {/* Right Pane: Question Groups (Independent Scroll & Hidden Scrollbar) */}
         <div
           className={cn(
-            "space-y-4 lg:h-full lg:overflow-y-auto lg:pr-1",
+            "h-full min-h-0 space-y-4 overflow-y-auto overscroll-contain pb-28 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:pr-1",
             mobileTab === "questions" ? "block" : "hidden lg:block",
           )}
         >

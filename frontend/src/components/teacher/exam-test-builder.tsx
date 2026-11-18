@@ -109,12 +109,13 @@ function toDraftPart(part: ExamPartAuthoring): DraftPart {
     passageTitle: part.passageTitle ?? part.title,
     passageHtml:
       part.passageHtml ??
+      (part as any).contentHtml ??
       (part.paragraphs
         ? part.paragraphs.map((p) => `<p><strong>Paragraph ${p.label}.</strong> ${p.text}</p>`).join("")
         : ""),
     instructions: part.instructions ?? "",
-    durationMinutes: Math.max(1, Math.round((part.durationSeconds ?? 1200) / 60)),
-    audioAssetId: part.audioAsset?.assetId ?? "",
+    durationMinutes: Math.max(1, Math.round(((part.durationSeconds ?? (part as any).fullDurationSeconds) ?? 1200) / 60)),
+    audioAssetId: part.audioAsset?.assetId ?? (part as any).audioAssetId ?? "",
     audioAllowPause: part.audioAsset?.allowPause ?? true,
     audioAllowSeek: part.audioAsset?.allowSeek ?? true,
     audioMaxPlayCount:
@@ -122,28 +123,34 @@ function toDraftPart(part: ExamPartAuthoring): DraftPart {
         ? String(part.audioAsset.maxPlayCount)
         : "",
     transcript: part.transcript ?? "",
-    groups: part.questionGroups.map((g: ExamQuestionGroupAuthoring) => ({
+    groups: (part.questionGroups || []).map((g: any) => ({
       id: g.id,
       title: g.title ?? "",
-      instructionHtml: g.instructionHtml,
-      questionType: g.questionType,
+      instructionHtml: g.instructionHtml ?? g.instruction ?? "",
+      questionType: g.questionType ?? g.type,
       sharedOptionsText: formatOptionsToText(g.sharedOptions),
       maxWords: g.maxWords ?? 2,
       maxSelections: g.maxSelections ?? 2,
-      questions: g.questions.map((q: ExamQuestionAuthoring) => ({
-        id: q.id,
-        prompt: q.prompt,
-        questionType: q.questionType,
-        optionsText: formatOptionsToText(q.options),
-        maxWords: q.maxWords ?? g.maxWords ?? 2,
-        maxSelections: q.maxSelections ?? g.maxSelections ?? 2,
-        correctAnswerText: Array.isArray(q.correctAnswer)
-          ? q.correctAnswer.join(", ")
-          : (q.correctAnswer ?? ""),
-        acceptedAnswersText: (q.acceptedAnswers ?? []).join(", "),
-        referenceParagraph: q.referenceParagraph ?? "",
-        explanation: q.explanation ?? "",
-      })),
+      questions: (g.questions || []).map((q: any) => {
+        const correctKeys = Array.isArray(q.correctAnswer)
+          ? q.correctAnswer
+          : q.correctAnswer
+            ? [q.correctAnswer]
+            : (q.grading?.acceptedKeys || []);
+        const accepted = q.acceptedAnswers ?? (Array.isArray(q.grading?.acceptedKeys) ? q.grading.acceptedKeys : []);
+        return {
+          id: q.id,
+          prompt: q.prompt || "",
+          questionType: q.questionType ?? q.type ?? g.questionType ?? g.type,
+          optionsText: formatOptionsToText(q.options),
+          maxWords: q.maxWords ?? g.maxWords ?? 2,
+          maxSelections: q.maxSelections ?? g.maxSelections ?? 2,
+          correctAnswerText: correctKeys.join(", "),
+          acceptedAnswersText: accepted.join(", "),
+          referenceParagraph: q.referenceParagraph ?? "",
+          explanation: q.explanation ?? "",
+        };
+      }),
     })),
   };
 }
@@ -1015,79 +1022,54 @@ export function ExamTestBuilder({
                   key={groupIdx}
                   className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4"
                 >
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">
-                        Tiêu đề nhóm
-                      </label>
-                      <input
-                        disabled={isPublishedLocked}
-                        value={group.title}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setParts((prev) =>
-                            prev.map((p, pi) =>
-                              pi === partIdx
-                                ? {
-                                    ...p,
-                                    groups: p.groups.map((g, gi) =>
-                                      gi === groupIdx ? { ...g, title: v } : g,
-                                    ),
-                                  }
-                                : p,
-                            ),
-                          );
-                          markDirty();
-                        }}
-                        className="lms-input w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">
-                        Dạng câu hỏi mặc định
-                      </label>
-                      <select
-                        disabled={isPublishedLocked}
-                        value={group.questionType}
-                        onChange={(e) => {
-                          const nextType = e.target.value as ExamQuestionType;
-                          setParts((prev) =>
-                            prev.map((p, pi) =>
-                              pi === partIdx
-                                ? {
-                                    ...p,
-                                    groups: p.groups.map((g, gi) =>
-                                      gi === groupIdx
-                                        ? {
-                                            ...g,
-                                            questionType: nextType,
-                                            questions: g.questions.map((q) => ({
-                                              ...q,
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div className="w-full sm:w-72">
+                        <label className="mb-1 block text-xs font-semibold text-slate-700">
+                          Dạng câu hỏi mặc định
+                        </label>
+                        <select
+                          disabled={isPublishedLocked}
+                          value={group.questionType}
+                          onChange={(e) => {
+                            const nextType = e.target.value as ExamQuestionType;
+                            setParts((prev) =>
+                              prev.map((p, pi) =>
+                                pi === partIdx
+                                  ? {
+                                      ...p,
+                                      groups: p.groups.map((g, gi) =>
+                                        gi === groupIdx
+                                          ? {
+                                              ...g,
                                               questionType: nextType,
-                                            })),
-                                          }
-                                        : g,
-                                    ),
-                                  }
-                                : p,
-                            ),
-                          );
-                          markDirty();
-                        }}
-                        className="lms-input w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
-                      >
-                        {(
-                          Object.entries(EXAM_QUESTION_TYPE_LABELS) as Array<
-                            [ExamQuestionType, string]
-                          >
-                        ).map(([val, label]) => (
-                          <option key={val} value={val}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-end justify-end">
+                                              questions: g.questions.map((q) => ({
+                                                ...q,
+                                                questionType: nextType,
+                                              })),
+                                            }
+                                          : g,
+                                      ),
+                                    }
+                                  : p,
+                              ),
+                            );
+                            markDirty();
+                          }}
+                          className="lms-input w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs"
+                        >
+                          {(
+                            Object.entries(EXAM_QUESTION_TYPE_LABELS) as Array<
+                              [ExamQuestionType, string]
+                            >
+                          ).map(([val, label]) => (
+                            <option key={val} value={val}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
                       {!isPublishedLocked && part.groups.length > 1 && (
                         <Button
                           size="sm"
@@ -1110,6 +1092,35 @@ export function ExamTestBuilder({
                           Xóa nhóm
                         </Button>
                       )}
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-700">
+                        Tiêu đề nhóm / Hướng dẫn
+                      </label>
+                      <textarea
+                        rows={3}
+                        disabled={isPublishedLocked}
+                        value={group.title}
+                        placeholder="Nhập tiêu đề nhóm hoặc hướng dẫn làm bài (hỗ trợ xuống dòng nhiều dòng)..."
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setParts((prev) =>
+                            prev.map((p, pi) =>
+                              pi === partIdx
+                                ? {
+                                    ...p,
+                                    groups: p.groups.map((g, gi) =>
+                                      gi === groupIdx ? { ...g, title: v } : g,
+                                    ),
+                                  }
+                                : p,
+                            ),
+                          );
+                          markDirty();
+                        }}
+                        className="lms-input w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs leading-relaxed focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                      />
                     </div>
                   </div>
 
@@ -1186,7 +1197,8 @@ export function ExamTestBuilder({
                           )}
                         </div>
 
-                        <input
+                        <textarea
+                          rows={3}
                           disabled={isPublishedLocked}
                           placeholder="Nội dung câu hỏi..."
                           value={q.prompt}
@@ -1213,7 +1225,7 @@ export function ExamTestBuilder({
                             );
                             markDirty();
                           }}
-                          className="lms-input w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                          className="lms-input w-full rounded-lg border border-slate-300 p-2.5 text-sm leading-relaxed"
                         />
 
                         {(q.questionType === "MULTIPLE_CHOICE_SINGLE" ||

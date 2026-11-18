@@ -36,6 +36,7 @@ import {
   UserRole,
   StudentAssignmentStatus,
   AssignmentStatus,
+  ExamQuestionType,
 } from 'src/database/schemas/enums';
 import {
   CreateExamAttemptDto,
@@ -440,6 +441,28 @@ export class ExamAttemptsService {
       return this.buildResultPayload(attempt, test);
     }
 
+    // Merge any latest answers or flagged questions provided in submit payload
+    if (dto.answers) {
+      const currentMap = attempt.savedAnswers instanceof Map
+        ? attempt.savedAnswers
+        : new Map(Object.entries(attempt.savedAnswers || {}));
+
+      const answersList = Array.isArray(dto.answers)
+        ? dto.answers
+        : Object.entries(dto.answers || {}).map(([questionId, value]) => ({ questionId, value }));
+
+      for (const ans of answersList) {
+        if (ans && ans.questionId !== undefined) {
+          currentMap.set(ans.questionId.toString(), ans.value);
+        }
+      }
+      attempt.savedAnswers = currentMap;
+    }
+
+    if (dto.flaggedQuestionIds && Array.isArray(dto.flaggedQuestionIds)) {
+      attempt.flaggedQuestionIds = dto.flaggedQuestionIds;
+    }
+
     // Collect questions in attempt scope
     const questionMap = new Map<string, any>();
     for (const part of test.parts || []) {
@@ -601,13 +624,13 @@ export class ExamAttemptsService {
     // Grade and check PASS status
     const result = await this.buildResultPayload(attempt, test);
 
-    // ZERO LEAKAGE: If student has not passed, review is locked (403 ANSWER_REVIEW_LOCKED)
-    if (actor.role === UserRole.STUDENT && !result.passed) {
+    // Prevent viewing review if attempt is still in progress
+    if (actor.role === UserRole.STUDENT && attempt.status === AttemptStatus.IN_PROGRESS) {
       throw new ForbiddenException({
         statusCode: 403,
         error: 'Forbidden',
-        code: 'ANSWER_REVIEW_LOCKED',
-        message: 'Đáp án và lời giải chỉ được mở khóa khi bạn đạt điểm PASS (>= 70%)',
+        code: 'ATTEMPT_IN_PROGRESS',
+        message: 'Bạn cần nộp bài thi trước khi xem đáp án chi tiết.',
       });
     }
 
@@ -657,12 +680,15 @@ export class ExamAttemptsService {
     return {
       attemptId: extractObjectId(attempt._id),
       testId: extractObjectId(test._id),
+      testTitle: test.title,
       skill: attempt.skill,
       mode: attempt.mode,
       partId: attempt.partId,
       scorePercent: result.scorePercent,
       passed: result.passed,
+      answerReviewAvailable: true,
       questions: reviewQuestions,
+      items: reviewQuestions,
     };
   }
 
@@ -761,7 +787,7 @@ export class ExamAttemptsService {
         for (const q of group.questions || []) {
           const qNum = q.number.toString();
           if (attempt.scopeQuestionIds.includes(qNum)) {
-            const qType = q.type || group.type || 'MULTIPLE_CHOICE';
+            const qType = q.type || group.type || ExamQuestionType.MULTIPLE_CHOICE_SINGLE;
             if (!typeStatsMap.has(qType)) {
               typeStatsMap.set(qType, { correctCount: 0, totalCount: 0 });
             }
@@ -811,6 +837,13 @@ export class ExamAttemptsService {
     const attemptId = extractObjectId(attempt._id);
     const testId = extractObjectId(test._id);
 
+    const submittedAtDate = attempt.submittedAt || new Date();
+    const startedAtDate = attempt.startedAt || new Date();
+    const timeSpentSeconds = Math.max(
+      0,
+      Math.round((submittedAtDate.getTime() - startedAtDate.getTime()) / 1000),
+    );
+
     return {
       attemptId,
       id: attemptId,
@@ -818,7 +851,7 @@ export class ExamAttemptsService {
       testTitle: test.title || 'IELTS Exam Test',
       submissionId: submissionId || null,
       studentAssignmentId: attempt.studentAssignmentId ? extractObjectId(attempt.studentAssignmentId) : null,
-      status: attempt.status,
+      status: attempt.status === AttemptStatus.AUTO_SUBMITTED ? 'SUBMITTED' : attempt.status,
       skill: attempt.skill,
       mode: attempt.mode,
       partId: attempt.partId ? extractObjectId(attempt.partId) : null,
@@ -832,8 +865,8 @@ export class ExamAttemptsService {
       questionCount: attempt.scopeQuestionIds.length,
       totalQuestions: attempt.scopeQuestionIds.length,
       ieltsBandEstimate,
-      answerReviewAvailable: Boolean(isPassed),
-      answerReviewLockedReason: isPassed ? null : 'Cần đạt từ 70% trở lên để mở khóa xem đáp án và giải thích.',
+      answerReviewAvailable: true,
+      answerReviewLockedReason: null,
       translationEligible: isReading && Boolean(isPassed),
       translationEligibilityHint: isReading && isPassed ? 'Đã mở khóa dịch bài đọc tiếng Việt' : null,
       translation: {
@@ -842,7 +875,8 @@ export class ExamAttemptsService {
       },
       partBreakdown,
       questionTypeBreakdown,
-      submittedAt: attempt.submittedAt ? attempt.submittedAt.toISOString() : null,
+      timeSpentSeconds,
+      submittedAt: submittedAtDate.toISOString(),
     };
   }
 
