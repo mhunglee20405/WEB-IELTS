@@ -23,9 +23,15 @@ export class CreateAssignmentDto {
   @IsMongoId()
   courseId: string;
 
-  @ApiProperty({ description: 'Published Exercise or ExamTest ObjectId' })
+  @ApiPropertyOptional({ description: 'Published Exercise or ExamTest ObjectId' })
+  @IsOptional()
   @IsMongoId()
-  exerciseId: string;
+  exerciseId?: string;
+
+  @ApiPropertyOptional({ description: 'ExamTest ObjectId alias for exerciseId' })
+  @IsOptional()
+  @IsMongoId()
+  examTestId?: string;
 
   @ApiPropertyOptional({ example: 'Reading Day 1: Glass History' })
   @IsOptional()
@@ -58,6 +64,16 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsDateString()
   deadlineAt?: string;
+
+  @ApiPropertyOptional({ example: '2026-11-21T06:00:00.000Z', description: 'Explicit UTC deadline/due timestamp alias' })
+  @IsOptional()
+  @IsDateString()
+  dueAt?: string;
+
+  @ApiPropertyOptional({ example: 'Asia/Ho_Chi_Minh', description: 'Local timezone' })
+  @IsOptional()
+  @IsString()
+  timezone?: string;
 
   @ApiPropertyOptional({ default: false, description: 'Allow retaking exercise' })
   @IsOptional()

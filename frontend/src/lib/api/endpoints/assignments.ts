@@ -17,10 +17,35 @@ export interface ListAssignmentsQuery {
 
 export const assignmentsApi = {
   create(payload: CreateAssignmentRequest): Promise<Assignment> {
-    return apiRequest<Assignment, CreateAssignmentRequest>({
+    const rawPayload = payload as unknown as Record<string, unknown>;
+    const exerciseId = (payload.exerciseId || payload.examTestId || rawPayload.exerciseId || rawPayload.examTestId) as string;
+    const body: Record<string, unknown> = {
+      courseId: payload.courseId,
+      exerciseId,
+      title: payload.title,
+      assignedDate: payload.assignedDate,
+    };
+    if (payload.examTestId) body.examTestId = payload.examTestId;
+    if (payload.openAt) body.openAt = payload.openAt;
+    if (payload.dueAt) body.dueAt = payload.dueAt;
+    if (payload.timezone) body.timezone = payload.timezone;
+    if (payload.requiredScope) body.requiredScope = payload.requiredScope;
+    if (payload.requiredScope === "PART" && payload.requiredPartId) {
+      body.requiredPartId = payload.requiredPartId;
+    }
+    if (payload.allowedModes && payload.allowedModes.length > 0) {
+      body.allowedModes = payload.allowedModes;
+    }
+    if (typeof payload.durationSecondsOverride === "number" && !isNaN(payload.durationSecondsOverride)) {
+      body.durationSecondsOverride = payload.durationSecondsOverride;
+    }
+    if (typeof payload.maxAttempts === "number" && !isNaN(payload.maxAttempts)) {
+      body.maxAttempts = payload.maxAttempts;
+    }
+    return apiRequest<Assignment, typeof body>({
       method: "POST",
       path: "/assignments",
-      body: payload,
+      body,
     });
   },
 

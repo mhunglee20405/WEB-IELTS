@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CalendarClock, Send } from "lucide-react";
 import { PageHeader, QueryState } from "@/components/ui";
@@ -78,10 +78,34 @@ export default function TeacherNewAssignmentPage() {
     () => examTestsQuery.data?.items ?? [],
     [examTestsQuery.data?.items],
   );
-  const selectedV2Test = useMemo(
+  const selectedV2TestFromList = useMemo(
     () => publishedExamTests.find((t) => t.id === exerciseId) ?? null,
     [publishedExamTests, exerciseId],
   );
+  const selectedTestDetailQuery = useQuery({
+    queryKey: ["teacher", "exam-tests", "detail", exerciseId],
+    queryFn: () => teacherExamTestsApi.getById(exerciseId),
+    enabled: Boolean(exerciseId && selectedV2TestFromList),
+  });
+  const selectedV2Test = selectedTestDetailQuery.data ?? selectedV2TestFromList;
+
+  const effectivePartCount =
+    selectedV2Test?.parts?.length ?? selectedV2Test?.partCount ?? 0;
+  const effectiveTotalQuestions =
+    selectedV2Test?.totalQuestions ??
+    (selectedV2Test?.parts || []).reduce(
+      (sum: number, p: any) => sum + (p.questionCount ?? 0),
+      0,
+    );
+
+  useEffect(() => {
+    if (selectedV2Test && requiredScope === "PART" && !requiredPartId) {
+      const firstPart = selectedV2Test.parts?.[0];
+      if (firstPart?.id) {
+        setRequiredPartId(firstPart.id);
+      }
+    }
+  }, [selectedV2Test, requiredScope, requiredPartId]);
 
   const handleExerciseChange = (nextId: string) => {
     setExerciseId(nextId);
@@ -152,10 +176,13 @@ export default function TeacherNewAssignmentPage() {
       timezone: DEFAULT_TIMEZONE,
       examTestId: parsed.data.examTestId,
       requiredScope: parsed.data.requiredScope,
-      requiredPartId: parsed.data.requiredPartId,
+      requiredPartId:
+        parsed.data.requiredScope === "PART"
+          ? parsed.data.requiredPartId || undefined
+          : undefined,
       allowedModes: parsed.data.allowedModes,
-      durationSecondsOverride: parsed.data.durationSecondsOverride,
-      maxAttempts: parsed.data.maxAttempts,
+      durationSecondsOverride: parsed.data.durationSecondsOverride ?? undefined,
+      maxAttempts: parsed.data.maxAttempts ?? undefined,
     });
   };
 
@@ -314,7 +341,7 @@ export default function TeacherNewAssignmentPage() {
                   Cấu hình phạm vi đề thi IELTS v2 ({selectedV2Test.skill})
                 </h2>
                 <span className="rounded bg-white px-2 py-0.5 text-xs font-semibold text-indigo-800 ring-1 ring-indigo-200">
-                  {selectedV2Test.partCount} phần · {selectedV2Test.totalQuestions} câu
+                  {effectivePartCount} phần · {effectiveTotalQuestions} câu
                 </span>
               </div>
 
@@ -370,12 +397,21 @@ export default function TeacherNewAssignmentPage() {
                       onChange={(e) => setRequiredPartId(e.target.value)}
                       className="mt-1.5 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
                     >
-                      {selectedV2Test.parts.map((part) => (
-                        <option key={part.id} value={part.id}>
-                          {part.partType === "PASSAGE" ? "Passage" : "Section"} {part.partNumber}:{" "}
-                          {part.title} ({part.questionCount} câu)
-                        </option>
-                      ))}
+                      {(selectedV2Test.parts || []).map((part: any, idx: number) => {
+                        const pId = part.id || part._id;
+                        const pType =
+                          part.partType === "PASSAGE" || part.type === "PASSAGE"
+                            ? "Passage"
+                            : "Section";
+                        const pNum = part.partNumber ?? part.ordinal ?? idx + 1;
+                        const pTitle = part.title || `${pType} ${pNum}`;
+                        const pQuestions = part.questionCount ?? 0;
+                        return (
+                          <option key={pId || idx} value={pId}>
+                            {pType} {pNum}: {pTitle} ({pQuestions} câu)
+                          </option>
+                        );
+                      })}
                     </select>
                     {fieldErrors.requiredPartId && (
                       <p className="mt-1 text-xs font-medium text-red-700">
@@ -429,9 +465,9 @@ export default function TeacherNewAssignmentPage() {
                 Tóm tắt giao bài: Học viên sẽ làm{" "}
                 <strong>
                   {requiredScope === "FULL"
-                    ? `toàn bộ ${selectedV2Test.partCount} phần (${selectedV2Test.totalQuestions} câu)`
-                    : selectedV2Test.parts.find((p) => p.id === requiredPartId)?.title ??
-                    "1 phần chỉ định"}
+                    ? `toàn bộ ${effectivePartCount} phần (${effectiveTotalQuestions} câu)`
+                    : (selectedV2Test.parts || []).find((p: any) => (p.id || p._id) === requiredPartId)?.title ??
+                      "1 phần chỉ định"}
                 </strong>
                 {durationMinutesOverride ? ` trong ${durationMinutesOverride} phút` : ""}
                 {maxAttempts ? `, tối đa ${maxAttempts} lượt thi` : ""}.

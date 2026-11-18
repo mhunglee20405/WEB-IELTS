@@ -92,8 +92,9 @@ describe("CourseForm — Course Status and Date Interaction", () => {
     fireEvent.click(submitBtn);
 
     expect(onSubmit).toHaveBeenCalled();
-    const submittedPayload = onSubmit.mock.calls[0][0];
-    expect(submittedPayload.status).toBe("active");
-    expect(submittedPayload.code).toBe("IELTS-ACT-01");
+    const submittedPayload = onSubmit.mock.calls[0]?.[0];
+    expect(submittedPayload).toBeDefined();
+    expect(submittedPayload?.status).toBe("active");
+    expect(submittedPayload?.code).toBe("IELTS-ACT-01");
   });
 });

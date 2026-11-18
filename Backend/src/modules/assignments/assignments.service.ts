@@ -177,11 +177,12 @@ export class AssignmentsService {
     let resolvedExamTest: any = null;
     let questionsInScope: any[] = [];
 
-    if (!dto.exerciseId || !Types.ObjectId.isValid(dto.exerciseId)) {
-      errors.push('exerciseId is missing or invalid');
+    const targetExerciseId = dto.exerciseId || dto.examTestId;
+    if (!targetExerciseId || !Types.ObjectId.isValid(targetExerciseId)) {
+      errors.push('exerciseId or examTestId is missing or invalid');
     } else {
       const exercise = await this.exerciseModel
-        .findById(dto.exerciseId)
+        .findById(targetExerciseId)
         .select('+questions.answerSpecification +questions.explanation')
         .exec();
 
@@ -191,7 +192,7 @@ export class AssignmentsService {
         }
         questionsInScope = exercise.questions || [];
       } else if (this.examTestModel) {
-        resolvedExamTest = await this.examTestModel.findById(dto.exerciseId).exec();
+        resolvedExamTest = await this.examTestModel.findById(targetExerciseId).exec();
         if (!resolvedExamTest) {
           errors.push('Selected exercise or exam test was not found');
         } else {
@@ -350,7 +351,8 @@ export class AssignmentsService {
     let durationSeconds = dto.durationSecondsOverride || 3600;
 
     let previewPassage: string | undefined = undefined;
-    const examTest = this.examTestModel ? await this.examTestModel.findById(dto.exerciseId).exec() : null;
+    const targetExerciseId = dto.exerciseId || dto.examTestId;
+    const examTest = this.examTestModel && targetExerciseId ? await this.examTestModel.findById(targetExerciseId).exec() : null;
     if (examTest) {
       if (!title) title = examTest.title;
       skill = examTest.skill;
@@ -395,8 +397,8 @@ export class AssignmentsService {
           }
         }
       }
-    } else {
-      const ex = await this.exerciseModel.findById(dto.exerciseId).select('+questions.answerSpecification +questions.explanation').exec();
+    } else if (targetExerciseId) {
+      const ex = await this.exerciseModel.findById(targetExerciseId).select('+questions.answerSpecification +questions.explanation').exec();
       if (ex) {
         if (!title) title = ex.title;
         skill = ex.type.toUpperCase();
@@ -501,10 +503,11 @@ export class AssignmentsService {
       throw new ForbiddenException('Students cannot create assignments');
     }
 
+    const targetExerciseId = dto.exerciseId || dto.examTestId;
     if (!dto.courseId || !Types.ObjectId.isValid(dto.courseId)) {
       throw new BadRequestException('Invalid courseId');
     }
-    if (!dto.exerciseId || !Types.ObjectId.isValid(dto.exerciseId)) {
+    if (!targetExerciseId || !Types.ObjectId.isValid(targetExerciseId)) {
       throw new BadRequestException('Invalid exerciseId');
     }
 
@@ -554,7 +557,7 @@ export class AssignmentsService {
     let exerciseSnapshot: any = null;
 
     const exercise = await this.exerciseModel
-      .findById(dto.exerciseId)
+      .findById(targetExerciseId)
       .select('+questions.answerSpecification +questions.explanation')
       .exec();
 
@@ -572,7 +575,7 @@ export class AssignmentsService {
         version: exercise.version,
       };
     } else if (this.examTestModel) {
-      examTest = await this.examTestModel.findById(dto.exerciseId).exec();
+      examTest = await this.examTestModel.findById(targetExerciseId).exec();
       if (!examTest) {
         throw new NotFoundException('Exercise not found');
       }
@@ -649,17 +652,17 @@ export class AssignmentsService {
       openAt = bounds.availableAt;
       deadlineAt = bounds.dueAt;
       assignedDate = bounds.assignedDate;
-    } else if (dto.openAt && dto.deadlineAt) {
+    } else if (dto.openAt && (dto.deadlineAt || dto.dueAt)) {
       openAt = new Date(dto.openAt);
-      deadlineAt = new Date(dto.deadlineAt);
+      deadlineAt = new Date((dto.deadlineAt || dto.dueAt)!);
       assignedDate = formatVnDateTime(openAt).slice(0, 10);
-    } else if (dto.openAt && !dto.deadlineAt) {
+    } else if (dto.openAt && !dto.deadlineAt && !dto.dueAt) {
       openAt = new Date(dto.openAt);
       const bounds = createVnDailyAssignmentBounds(openAt);
       deadlineAt = bounds.dueAt;
       assignedDate = bounds.assignedDate;
-    } else if (!dto.openAt && dto.deadlineAt) {
-      deadlineAt = new Date(dto.deadlineAt);
+    } else if (!dto.openAt && (dto.deadlineAt || dto.dueAt)) {
+      deadlineAt = new Date((dto.deadlineAt || dto.dueAt)!);
       const bounds = createVnDailyAssignmentBounds(deadlineAt);
       openAt = bounds.availableAt;
       assignedDate = bounds.assignedDate;
@@ -674,7 +677,7 @@ export class AssignmentsService {
     if (typeof this.assignmentModel.findOne === 'function') {
       const q = this.assignmentModel.findOne({
         courseId: course._id,
-        exerciseId: new Types.ObjectId(dto.exerciseId),
+        exerciseId: new Types.ObjectId(targetExerciseId),
         openAt,
         status: { $nin: [AssignmentStatus.ARCHIVED, AssignmentStatus.CLOSED] },
       });
@@ -709,7 +712,7 @@ export class AssignmentsService {
 
     const assignment = new this.assignmentModel({
       courseId: course._id,
-      exerciseId: new Types.ObjectId(dto.exerciseId),
+      exerciseId: new Types.ObjectId(targetExerciseId),
       exerciseVersion,
       exerciseSnapshot,
       assignedBy: actor._id,

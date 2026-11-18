@@ -314,6 +314,34 @@ describe('AssignmentsService', () => {
       expect(res.deadlineAtVn).toContain('2026-11-21T06:00:00+07:00');
       expect(res.scheduleStatus).toBe('SCHEDULED');
     });
+
+    it('creates assignment using examTestId alias, accepting dueAt and timezone', async () => {
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleCourse),
+      });
+      exerciseModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue(sampleExercise),
+      });
+      enrollmentModel.find.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([]),
+      });
+
+      const res = await service.create(
+        {
+          courseId: courseId.toHexString(),
+          examTestId: exerciseId.toHexString(),
+          assignedDate: '2026-11-20',
+          dueAt: '2026-11-21T06:00:00.000Z',
+          timezone: 'Asia/Ho_Chi_Minh',
+        },
+        teacherAActor,
+      );
+
+      expect(res).toBeDefined();
+      expect(res.assignedDate).toBe('2026-11-20');
+    });
   });
 
   describe('findById & Answer Protection', () => {
