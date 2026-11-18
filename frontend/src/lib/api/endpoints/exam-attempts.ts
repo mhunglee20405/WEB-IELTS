@@ -100,11 +100,24 @@ export const examAttemptsApi = {
     return normalizeExamResult(raw);
   },
 
-  getReview(attemptId: string): Promise<ExamReviewResponse> {
-    return apiRequest<ExamReviewResponse>({
+  async getReview(attemptId: string): Promise<ExamReviewResponse> {
+    const raw = await apiRequest<unknown>({
       method: "GET",
       path: `/exam-attempts/${encodeURIComponent(attemptId)}/review`,
     });
+    const unwrapped =
+      raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)
+        ? (raw as Record<string, unknown>).data
+        : raw;
+    const target = (unwrapped ?? {}) as Record<string, unknown>;
+    return {
+      attemptId: (target.attemptId as string) ?? attemptId,
+      testId: (target.testId as string) ?? "",
+      testTitle: (target.testTitle as string) ?? "",
+      skill: target.skill as any,
+      answerReviewAvailable: true,
+      items: (target.items ?? target.questions ?? []) as any,
+    };
   },
 };
 

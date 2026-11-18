@@ -293,7 +293,7 @@ describe('ExamAttemptsService', () => {
       expect(res.correctCount).toBe(6);
       expect(res.scorePercent).toBe(60);
       expect(res.passed).toBe(false);
-      expect(res.answerReviewAvailable).toBe(false);
+      expect(res.answerReviewAvailable).toBe(true);
       expect(res.translation.available).toBe(false);
       expect(res.translation.unlockedPassageIds).toHaveLength(0);
     });
@@ -386,7 +386,7 @@ describe('ExamAttemptsService', () => {
   });
 
   describe('getReview', () => {
-    it('throws 403 ANSWER_REVIEW_LOCKED if attempt score < 70%', async () => {
+    it('allows student to review answers even if attempt score < 70%', async () => {
       const attemptDoc = {
         _id: new Types.ObjectId(),
         studentId,
@@ -400,6 +400,25 @@ describe('ExamAttemptsService', () => {
           ['1', 'WRONG'],
           ['2', 'WRONG'],
         ]),
+      };
+      examAttemptModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(attemptDoc),
+      });
+
+      const review = await service.getReview(attemptDoc._id.toHexString(), student);
+      expect(review.items).toBeDefined();
+    });
+
+    it('throws 403 if attempt is still IN_PROGRESS', async () => {
+      const attemptDoc = {
+        _id: new Types.ObjectId(),
+        studentId,
+        testId,
+        skill: ExamSkill.READING,
+        mode: ExamMode.PART,
+        partId: part1Id.toHexString(),
+        status: AttemptStatus.IN_PROGRESS,
+        scopeQuestionIds: ['1', '2'],
       };
       examAttemptModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue(attemptDoc),

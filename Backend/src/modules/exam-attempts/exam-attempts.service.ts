@@ -624,13 +624,13 @@ export class ExamAttemptsService {
     // Grade and check PASS status
     const result = await this.buildResultPayload(attempt, test);
 
-    // ZERO LEAKAGE: If student has not passed, review is locked (403 ANSWER_REVIEW_LOCKED)
-    if (actor.role === UserRole.STUDENT && !result.passed) {
+    // Prevent viewing review if attempt is still in progress
+    if (actor.role === UserRole.STUDENT && attempt.status === AttemptStatus.IN_PROGRESS) {
       throw new ForbiddenException({
         statusCode: 403,
         error: 'Forbidden',
-        code: 'ANSWER_REVIEW_LOCKED',
-        message: 'Đáp án và lời giải chỉ được mở khóa khi bạn đạt điểm PASS (>= 70%)',
+        code: 'ATTEMPT_IN_PROGRESS',
+        message: 'Bạn cần nộp bài thi trước khi xem đáp án chi tiết.',
       });
     }
 
@@ -680,12 +680,15 @@ export class ExamAttemptsService {
     return {
       attemptId: extractObjectId(attempt._id),
       testId: extractObjectId(test._id),
+      testTitle: test.title,
       skill: attempt.skill,
       mode: attempt.mode,
       partId: attempt.partId,
       scorePercent: result.scorePercent,
       passed: result.passed,
+      answerReviewAvailable: true,
       questions: reviewQuestions,
+      items: reviewQuestions,
     };
   }
 
@@ -862,8 +865,8 @@ export class ExamAttemptsService {
       questionCount: attempt.scopeQuestionIds.length,
       totalQuestions: attempt.scopeQuestionIds.length,
       ieltsBandEstimate,
-      answerReviewAvailable: Boolean(isPassed),
-      answerReviewLockedReason: isPassed ? null : 'Cần đạt từ 70% trở lên để mở khóa xem đáp án và giải thích.',
+      answerReviewAvailable: true,
+      answerReviewLockedReason: null,
       translationEligible: isReading && Boolean(isPassed),
       translationEligibilityHint: isReading && isPassed ? 'Đã mở khóa dịch bài đọc tiếng Việt' : null,
       translation: {

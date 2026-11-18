@@ -9,6 +9,7 @@ import {
 import type {
   ExamAttemptDetail,
   ExamResultResponse,
+  ExamReviewResponse,
   ExamTestDetailAuthoring,
   ReadingTranslationEligibilityResponse,
   SaveExamAnswersResponse,
@@ -152,7 +153,7 @@ describe("Phase 9 Exam Modes v2 Contracts, Security & State Machine", () => {
       code: "ANSWERS_REVISION_CONFLICT",
     });
 
-    // Submit with only wrong answers -> FAIL (< 70%), review & translation stay locked
+    // Submit with only wrong answers -> FAIL (< 70%), answer review is available, but translation stays locked
     const failResult = await dispatchMockRequest<ExamResultResponse>({
       method: "POST",
       path: `/exam-attempts/${attempt.attemptId}/submit`,
@@ -160,7 +161,7 @@ describe("Phase 9 Exam Modes v2 Contracts, Security & State Machine", () => {
       body: { expectedRevision: 2 },
     });
     expect(failResult.passed).toBe(false);
-    expect(failResult.answerReviewAvailable).toBe(false);
+    expect(failResult.answerReviewAvailable).toBe(true);
     expect(failResult.translationEligible).toBe(false);
 
     // Same idempotency key returns identical result
@@ -172,14 +173,14 @@ describe("Phase 9 Exam Modes v2 Contracts, Security & State Machine", () => {
     });
     expect(replayResult.submittedAt).toBe(failResult.submittedAt);
 
-    // Locked review & passage 2 translation throw 403
-    await expect(
-      dispatchMockRequest({
-        method: "GET",
-        path: `/exam-attempts/${attempt.attemptId}/review`,
-      }),
-    ).rejects.toMatchObject({ statusCode: 403, code: "ANSWER_REVIEW_LOCKED" });
+    // Answer review is accessible for submitted IELTS attempt
+    const review = await dispatchMockRequest<ExamReviewResponse>({
+      method: "GET",
+      path: `/exam-attempts/${attempt.attemptId}/review`,
+    });
+    expect(review.items).toBeDefined();
 
+    // Passage 2 translation stays locked (< 70%) and throws 403
     await expect(
       dispatchMockRequest({
         method: "GET",

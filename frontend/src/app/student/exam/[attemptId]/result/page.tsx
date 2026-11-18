@@ -33,7 +33,7 @@ export default function StudentExamResultPage() {
   const reviewQuery = useQuery({
     queryKey: examKeys.attemptReview(attemptId),
     queryFn: () => examAttemptsApi.getReview(attemptId),
-    enabled: Boolean(result?.answerReviewAvailable),
+    enabled: Boolean(result?.answerReviewAvailable ?? true),
   });
 
   const eligibilityQuery = useQuery({
@@ -293,7 +293,7 @@ export default function StudentExamResultPage() {
                     Đáp án &amp; Giải thích chi tiết
                   </h2>
                   <p className="text-xs text-slate-600">
-                    Hiển thị khi đạt tối thiểu {result.passThresholdPercent}% theo quy định mở khóa đáp án.
+                    Đối chiếu câu trả lời của bạn với đáp án chuẩn và lời giải chi tiết.
                   </p>
                 </div>
 
