@@ -9,6 +9,7 @@
 /build/
 next-env.d.ts
 *.tsbuildinfo
+/public/tinymce
 
 # Local env files
 .env*.local

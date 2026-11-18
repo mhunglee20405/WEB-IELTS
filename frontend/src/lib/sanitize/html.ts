@@ -27,8 +27,9 @@ const SANITIZE_CONFIGS: Record<
       "th",
       "td",
       "span",
+      "div",
     ],
-    attributes: ["class"],
+    attributes: ["class", "style"],
   },
   inline: {
     elements: ["b", "strong", "i", "em", "u", "br", "span"],

@@ -19,6 +19,11 @@ export { PageHeader, type PageHeaderProps } from "./page-header";
 export { Pagination, type PaginationProps } from "./pagination";
 export { QueryState, type QueryStateProps } from "./query-state";
 export { SafeHtml, type SafeHtmlProps } from "./safe-html";
+export {
+  RichTextEditor,
+  normalizeReadingHtml,
+  type RichTextEditorProps,
+} from "./rich-text-editor";
 export { StatusBadge, type BadgeStatus, type StatusBadgeProps } from "./status-badge";
 export {
   Tabs,

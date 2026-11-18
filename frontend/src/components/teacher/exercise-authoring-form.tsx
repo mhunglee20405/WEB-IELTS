@@ -14,12 +14,13 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { SignedAudioPlayer } from "@/components/student/signed-audio-player";
-import { SafeHtml, StatusBadge } from "@/components/ui";
+import { RichTextEditor, SafeHtml, StatusBadge } from "@/components/ui";
 import { exercisesApi } from "@/lib/api/endpoints";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
 import { teacherKeys } from "@/lib/api/query-keys";
 import { ExerciseFormSchema } from "@/lib/api/schemas";
 import type {
+  CreateExerciseRequest,
   ExerciseAuthoringDetail,
   ExerciseType,
   QuestionOption,
@@ -29,6 +30,57 @@ import {
   uploadPrivateListeningAudio,
   validateAudioFile,
 } from "@/lib/teacher/data-helpers";
+
+export function normalizeUiQuestionTypeToBackend(type: string): string {
+  switch (type) {
+    case "mcq":
+      return "multiple_choice";
+    case "tfng":
+      return "true_false_not_given";
+    case "ynng":
+      return "yes_no_not_given";
+    case "matching":
+      return "matching";
+    case "fill_blank":
+    case "fill_in_the_blank":
+      return "fill_blank";
+    case "short_answer":
+      return "short_answer";
+    case "matching_headings":
+      return "matching_headings";
+    case "matching_information":
+      return "matching_information";
+    case "sentence_completion":
+      return "sentence_completion";
+    case "summary_completion":
+      return "summary_completion";
+    default:
+      return type;
+  }
+}
+
+export function normalizeBackendQuestionTypeToUi(type: string): QuestionType {
+  switch (type) {
+    case "multiple_choice":
+      return "mcq";
+    case "true_false_not_given":
+      return "tfng";
+    case "yes_no_not_given":
+      return "ynng";
+    case "matching":
+    case "matching_headings":
+    case "matching_information":
+      return "matching";
+    case "fill_blank":
+    case "sentence_completion":
+    case "summary_completion":
+      return "fill_blank";
+    case "short_answer":
+      return "short_answer";
+    default:
+      return (type as QuestionType) || "mcq";
+  }
+}
 
 interface DraftQuestion {
   localId: string;
@@ -89,24 +141,43 @@ export function ExerciseAuthoringForm({
   const [title, setTitle] = useState(() => initialExercise?.title ?? "");
   const [type, setType] = useState<ExerciseType>(() => initialExercise?.type ?? "reading");
   const [instructions, setInstructions] = useState(
-    () => initialExercise?.instructions ?? "",
+    () => initialExercise?.instructions ?? (initialExercise as any)?.description ?? "",
   );
   const [durationMinutes, setDurationMinutes] = useState(() =>
-    String(initialExercise?.durationMinutes ?? 20),
+    String(
+      initialExercise?.durationMinutes ??
+        ((initialExercise as any)?.audioAssets?.[0]?.durationSeconds
+          ? Math.round((initialExercise as any).audioAssets[0].durationSeconds / 60)
+          : 20),
+    ),
   );
-  const [passageHtml, setPassageHtml] = useState(() => initialExercise?.passageHtml ?? "");
+  const [passageHtml, setPassageHtml] = useState(
+    () => (initialExercise as any)?.passage ?? initialExercise?.passageHtml ?? "",
+  );
   const [audioAssetId, setAudioAssetId] = useState(
-    () => initialExercise?.audioAssetId ?? "",
+    () =>
+      (initialExercise as any)?.audioAssets?.[0]?.objectKey ??
+      initialExercise?.audioAssetId ??
+      "",
   );
   const [questions, setQuestions] = useState<DraftQuestion[]>(() =>
     initialExercise?.questions.length
-      ? initialExercise.questions.map((q, idx) => ({
-          localId: q.id || `q-${idx + 1}`,
+      ? initialExercise.questions.map((q: any, idx) => ({
+          localId: q.id || q.questionId || `q-${idx + 1}`,
           prompt: q.prompt,
-          type: q.type,
-          options: q.options?.map((o) => ({ ...o })) ?? [],
+          type: normalizeBackendQuestionTypeToUi(q.type),
+          options:
+            q.options?.map((o: any) => ({
+              id: o.key ?? o.id ?? o.label ?? "A",
+              label: o.key ?? o.label ?? o.id ?? "A",
+              text: o.text ?? "",
+            })) ?? [],
           points: q.points ?? 1,
-          correctAnswer: q.correctAnswer,
+          correctAnswer:
+            q.correctAnswer ??
+            q.answerSpecification?.correctKey ??
+            q.answerSpecification?.acceptedAnswers?.[0] ??
+            "",
           explanation: q.explanation ?? "",
         }))
       : [createEmptyQuestion(1, "reading")],
@@ -165,7 +236,7 @@ export function ExerciseAuthoringForm({
     setQuestions((prev) => prev.map((q) => (q.localId === localId ? updater(q) : q)));
   };
 
-  const buildValidatedPayload = () => {
+  const buildValidatedPayload = (): CreateExerciseRequest | null => {
     const candidate = {
       title,
       type,
@@ -173,8 +244,7 @@ export function ExerciseAuthoringForm({
       passageHtml: type === "reading" ? passageHtml : undefined,
       audioAssetId: type === "listening" ? audioAssetId : undefined,
       durationMinutes: Number(durationMinutes),
-      questions: questions.map((q, idx) => ({
-        orderIndex: idx + 1,
+      questions: questions.map((q) => ({
         prompt: q.prompt,
         type: q.type,
         options:
@@ -194,13 +264,102 @@ export function ExerciseAuthoringForm({
     }
 
     setFieldErrorSummary(null);
-    return {
-      ...parsed.data,
-      questions: parsed.data.questions.map((q, idx) => ({
-        ...q,
-        orderIndex: idx + 1,
-      })),
+
+    const mappedQuestions = parsed.data.questions.map((q, idx) => {
+      const backendType = normalizeUiQuestionTypeToBackend(q.type);
+
+      let answerSpecification: {
+        correctKey?: string;
+        acceptedAnswers?: string[];
+        caseSensitive?: boolean;
+      };
+
+      if (
+        backendType === "multiple_choice" ||
+        backendType === "true_false_not_given" ||
+        backendType === "yes_no_not_given" ||
+        backendType === "matching" ||
+        backendType === "matching_headings" ||
+        backendType === "matching_information"
+      ) {
+        answerSpecification = {
+          correctKey: (q.correctAnswer || "A").trim(),
+        };
+      } else {
+        const parts = q.correctAnswer
+          ? q.correctAnswer
+              .split(/[,;\n]/)
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        answerSpecification = {
+          acceptedAnswers: parts.length > 0 ? parts : [q.correctAnswer.trim()],
+          caseSensitive: false,
+        };
+      }
+
+      const hasOptions =
+        backendType === "multiple_choice" ||
+        backendType === "matching" ||
+        backendType === "matching_headings" ||
+        backendType === "matching_information";
+
+      const options =
+        hasOptions && q.options && q.options.length > 0
+          ? q.options
+              .filter((opt) => opt.text.trim() || opt.label.trim())
+              .map((opt) => ({
+                key: (opt.label || opt.id || "A").trim(),
+                text: (opt.text || opt.label || "").trim(),
+              }))
+          : undefined;
+
+      const qDto: any = {
+        type: backendType,
+        prompt: q.prompt.trim(),
+        answerSpecification,
+        points: q.points ?? 1,
+      };
+
+      const origLocalId = questions[idx]?.localId;
+      if (origLocalId && !origLocalId.startsWith("draft-")) {
+        qDto.questionId = origLocalId;
+      }
+
+      if (options && options.length > 0) {
+        qDto.options = options;
+      }
+      if (q.explanation?.trim()) {
+        qDto.explanation = q.explanation.trim();
+      }
+
+      return qDto;
+    });
+
+    const backendPayload: CreateExerciseRequest = {
+      title: parsed.data.title.trim(),
+      type: parsed.data.type,
+      questions: mappedQuestions,
+      passScore: 70,
+      status: "draft",
     };
+
+    if (parsed.data.instructions?.trim()) {
+      backendPayload.description = parsed.data.instructions.trim();
+    }
+    if (parsed.data.type === "reading" && parsed.data.passageHtml?.trim()) {
+      backendPayload.passage = parsed.data.passageHtml.trim();
+    }
+    if (parsed.data.type === "listening" && parsed.data.audioAssetId?.trim()) {
+      backendPayload.audioAssets = [
+        {
+          objectKey: parsed.data.audioAssetId.trim(),
+          durationSeconds: (parsed.data.durationMinutes || 20) * 60,
+        },
+      ];
+    }
+
+    return backendPayload;
   };
 
   const saveMutation = useMutation({
@@ -419,32 +578,18 @@ export function ExerciseAuthoringForm({
       {type === "reading" ? (
         <section className="lms-card space-y-4">
           <h2 className="text-lg font-semibold text-slate-950">2. Nội dung bài đọc Reading</h2>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <label htmlFor="ex-passage" className="block text-sm font-medium text-slate-900">
-                Văn bản học thuật (hỗ trợ thẻ HTML cơ bản) <span className="text-red-700">*</span>
-              </label>
-              <textarea
-                id="ex-passage"
-                rows={10}
-                readOnly={isPublishedLocked}
-                value={passageHtml}
-                onChange={(e) => setPassageHtml(e.target.value)}
-                placeholder="<h3>Tiêu đề bài đọc</h3><p>Đoạn văn thứ nhất...</p>"
-                className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-sm text-slate-950 read-only:bg-slate-100"
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-medium text-slate-900">Xem trước (đã làm sạch XSS)</p>
-              <div className="lms-scroll-pane mt-1.5 h-[242px] overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800">
-                {passageHtml.trim() ? (
-                  <SafeHtml html={passageHtml} preset="richText" />
-                ) : (
-                  <p className="text-slate-700">Chưa có nội dung bài đọc...</p>
-                )}
-              </div>
-            </div>
+          <div>
+            <label htmlFor="ex-passage" className="mb-2 block text-sm font-medium text-slate-900">
+              Văn bản học thuật (Định dạng trực quan với TinyMCE) <span className="text-red-700">*</span>
+            </label>
+            <RichTextEditor
+              id="ex-passage"
+              disabled={isPublishedLocked}
+              value={passageHtml}
+              onChange={(val) => setPassageHtml(val)}
+              placeholder="Nhập nội dung bài đọc Reading, định dạng in đậm Paragraph A, B, C, tiêu đề, bảng..."
+              height={360}
+            />
           </div>
         </section>
       ) : (

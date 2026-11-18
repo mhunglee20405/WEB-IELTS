@@ -559,12 +559,25 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
       type: body.type,
       status: "draft" as const,
       version: 1,
-      instructions: body.instructions,
-      passageHtml: body.passageHtml,
-      audioAssetId: body.audioAssetId,
-      durationMinutes: body.durationMinutes,
+      instructions: body.instructions ?? body.description,
+      passageHtml: body.passageHtml ?? body.passage,
+      audioAssetId: body.audioAssetId ?? body.audioAssets?.[0]?.objectKey,
+      durationMinutes:
+        body.durationMinutes ??
+        (body.audioAssets?.[0]?.durationSeconds
+          ? Math.round(body.audioAssets[0].durationSeconds / 60)
+          : 20),
       passThreshold: PASS_SCORE_THRESHOLD,
-      questions: body.questions.map((q, idx) => ({ ...q, id: `q-${Date.now()}-${idx}` })),
+      questions: body.questions.map((q: any, idx: number) => ({
+        ...q,
+        id: q.id || q.questionId || `q-${Date.now()}-${idx}`,
+        orderIndex: q.orderIndex ?? idx + 1,
+        correctAnswer:
+          q.correctAnswer ??
+          q.answerSpecification?.correctKey ??
+          q.answerSpecification?.acceptedAnswers?.[0] ??
+          "",
+      })),
       createdAt: new Date().toISOString(),
     };
     mockState.exercises.unshift(created);
@@ -582,7 +595,9 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
         exercise.status === "published" &&
         (body.questions !== undefined ||
           body.passageHtml !== undefined ||
+          body.passage !== undefined ||
           body.audioAssetId !== undefined ||
+          body.audioAssets !== undefined ||
           body.type !== undefined ||
           body.durationMinutes !== undefined)
       ) {
@@ -594,10 +609,20 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
           requestId: `mock-${Date.now()}`,
         });
       }
+      if (body.passage !== undefined) exercise.passageHtml = body.passage;
+      if (body.description !== undefined) exercise.instructions = body.description;
+      if (body.audioAssets?.[0]?.objectKey !== undefined)
+        exercise.audioAssetId = body.audioAssets[0].objectKey;
       if (body.questions) {
-        exercise.questions = body.questions.map((q, idx) => ({
+        exercise.questions = body.questions.map((q: any, idx: number) => ({
           ...q,
-          id: `q-${exercise.id}-${idx + 1}`,
+          id: q.id || q.questionId || `q-${exercise.id}-${idx + 1}`,
+          orderIndex: q.orderIndex ?? idx + 1,
+          correctAnswer:
+            q.correctAnswer ??
+            q.answerSpecification?.correctKey ??
+            q.answerSpecification?.acceptedAnswers?.[0] ??
+            "",
         }));
       }
       const { questions: _ignoredQuestions, ...rest } = body;

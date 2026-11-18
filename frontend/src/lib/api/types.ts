@@ -258,11 +258,31 @@ export interface ExerciseAuthoringDetail extends Omit<ExercisePublic, "questions
 export interface CreateExerciseRequest {
   title: string;
   type: ExerciseType;
+  description?: string;
   instructions?: string;
+  passage?: string;
   passageHtml?: string;
+  audioAssets?: { objectKey: string; durationSeconds?: number; url?: string }[];
   audioAssetId?: string;
   durationMinutes?: number;
-  questions: Omit<ExerciseQuestionAuthoring, "id">[];
+  passScore?: number;
+  status?: ExerciseStatus;
+  questions: Array<{
+    questionId?: string;
+    id?: string;
+    orderIndex?: number;
+    prompt: string;
+    type: string;
+    options?: Array<{ key?: string; id?: string; label?: string; text: string }>;
+    answerSpecification?: {
+      correctKey?: string;
+      acceptedAnswers?: string[];
+      caseSensitive?: boolean;
+    };
+    points: number;
+    correctAnswer?: string;
+    explanation?: string;
+  }>;
 }
 
 export type UpdateExerciseRequest = Partial<CreateExerciseRequest>;
@@ -976,22 +996,30 @@ export interface ValidateExamTestResponse {
 
 export interface CreateTeacherExamTestRequest {
   title: string;
-  subtitle?: string;
   skill: ExamSkill;
+  description?: string;
+  allowedModes?: ExamMode[];
+  passScore?: number;
+  fullDurationSeconds?: number;
+  translationEnabled?: boolean;
+  subtitle?: string;
   difficulty?: ExamDifficulty | string;
   tags?: string[];
   totalDurationSeconds?: number;
-  allowedModes?: ExamMode[];
   instructions?: string;
 }
 
 export interface UpdateTeacherExamTestRequest {
   title?: string;
+  description?: string;
+  allowedModes?: ExamMode[];
+  passScore?: number;
+  fullDurationSeconds?: number;
+  translationEnabled?: boolean;
   subtitle?: string;
   difficulty?: ExamDifficulty | string;
   tags?: string[];
   totalDurationSeconds?: number;
-  allowedModes?: ExamMode[];
   instructions?: string;
 }
 

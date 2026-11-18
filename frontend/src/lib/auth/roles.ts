@@ -37,7 +37,7 @@ const PORTAL_NAV_ITEMS: Record<PortalRole, PortalNavEntry[]> = {
     { href: "/teacher/students", label: "Học viên" },
     { href: "/teacher/courses", label: "Khóa học" },
     { href: "/teacher/question-bank", label: "Kho đề thi IELTS" },
-    { href: "/teacher/exercises", label: "Ngân hàng đề" },
+    // { href: "/teacher/exercises", label: "Ngân hàng đề" }, // Tạm ẩn menu Ngân hàng đề, ưu tiên Kho đề thi IELTS
     { href: "/teacher/assignments", label: "Giao bài tập" },
     { href: "/teacher/extensions", label: "Duyệt gia hạn" },
     { href: "/teacher/translations", label: "Chấm bài dịch" },
