@@ -33,7 +33,7 @@ export default function TeacherDashboardPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/teacher/exercises/new"
+              href="/teacher/question-bank/new"
               className={buttonVariants({ variant: "secondary" })}
             >
               <FilePlus2 className="h-4 w-4" aria-hidden={true} />

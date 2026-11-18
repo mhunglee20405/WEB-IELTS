@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { FilePlus2, Headphones, BookOpen, Pencil } from "lucide-react";
 import {
@@ -32,6 +33,12 @@ const STATUS_TABS: readonly TabItem<StatusFilter>[] = [
 ];
 
 export default function TeacherExercisesPage() {
+  const router = useRouter();
+  useEffect(() => {
+    // Tạm chuyển hướng về Kho đề thi IELTS
+    router.replace("/teacher/question-bank");
+  }, [router]);
+
   const tabsPrefix = useId();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");

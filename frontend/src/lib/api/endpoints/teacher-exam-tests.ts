@@ -108,10 +108,32 @@ export const teacherExamTestsApi = {
   },
 
   create(payload: CreateTeacherExamTestRequest): Promise<ExamTestDetailAuthoring> {
-    return apiRequest<ExamTestDetailAuthoring, CreateTeacherExamTestRequest>({
+    const isMock = isMockApiMode();
+    const body: Record<string, unknown> = {
+      title: payload.title.trim(),
+      skill: payload.skill,
+      description: payload.description || payload.instructions || payload.subtitle || undefined,
+      allowedModes: payload.allowedModes ?? ["PART", "FULL"],
+      passScore: payload.passScore ?? 70,
+      fullDurationSeconds:
+        payload.fullDurationSeconds ??
+        payload.totalDurationSeconds ??
+        (payload.skill === "READING" ? 3600 : 1800),
+      translationEnabled: payload.translationEnabled ?? (payload.skill === "READING"),
+    };
+
+    if (isMock) {
+      if (payload.subtitle) body.subtitle = payload.subtitle;
+      if (payload.difficulty) body.difficulty = payload.difficulty;
+      if (payload.tags) body.tags = payload.tags;
+      if (payload.totalDurationSeconds) body.totalDurationSeconds = payload.totalDurationSeconds;
+      if (payload.instructions) body.instructions = payload.instructions;
+    }
+
+    return apiRequest<ExamTestDetailAuthoring, typeof body>({
       method: "POST",
       path: "/teacher/exam-tests",
-      body: payload,
+      body,
     });
   },
 
@@ -126,19 +148,110 @@ export const teacherExamTestsApi = {
     testId: string,
     payload: UpdateTeacherExamTestRequest,
   ): Promise<ExamTestDetailAuthoring> {
-    return apiRequest<ExamTestDetailAuthoring, UpdateTeacherExamTestRequest>({
+    const isMock = isMockApiMode();
+    const body: Record<string, unknown> = {};
+    if (payload.title) body.title = payload.title.trim();
+    if (payload.description || payload.instructions || payload.subtitle) {
+      body.description = payload.description || payload.instructions || payload.subtitle;
+    }
+    if (payload.allowedModes) body.allowedModes = payload.allowedModes;
+    if (payload.passScore !== undefined) body.passScore = payload.passScore;
+    if (payload.fullDurationSeconds || payload.totalDurationSeconds) {
+      body.fullDurationSeconds = payload.fullDurationSeconds ?? payload.totalDurationSeconds;
+    }
+    if (payload.translationEnabled !== undefined) {
+      body.translationEnabled = payload.translationEnabled;
+    }
+
+    if (isMock) {
+      if (payload.subtitle) body.subtitle = payload.subtitle;
+      if (payload.difficulty) body.difficulty = payload.difficulty;
+      if (payload.tags) body.tags = payload.tags;
+      if (payload.totalDurationSeconds) body.totalDurationSeconds = payload.totalDurationSeconds;
+      if (payload.instructions) body.instructions = payload.instructions;
+    }
+
+    return apiRequest<ExamTestDetailAuthoring, typeof body>({
       method: "PATCH",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}`,
-      body: payload,
+      body,
     });
   },
 
-  createPart(testId: string, payload: UpsertExamPartInput): Promise<ExamPartAuthoring> {
-    return apiRequest<ExamPartAuthoring, UpsertExamPartInput>({
+  async createPart(testId: string, payload: UpsertExamPartInput): Promise<ExamPartAuthoring> {
+    if (isMockApiMode()) {
+      return apiRequest<ExamPartAuthoring, UpsertExamPartInput>({
+        method: "POST",
+        path: `/teacher/exam-tests/${encodeURIComponent(testId)}/parts`,
+        body: payload,
+      });
+    }
+
+    // Backend CreateExamPartDto: { type, ordinal, title, contentHtml, audioAssetId, durationSeconds }
+    const partDto = {
+      type: payload.partType || (payload as any).type || "PASSAGE",
+      ordinal: payload.partNumber || (payload as any).ordinal || 1,
+      title: payload.title.trim(),
+      contentHtml: payload.passageHtml || (payload as any).contentHtml || undefined,
+      audioAssetId: payload.audioAsset?.assetId || (payload as any).audioAssetId || undefined,
+      durationSeconds: payload.durationSeconds,
+    };
+
+    const updatedTest = await apiRequest<any>({
       method: "POST",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}/parts`,
-      body: payload,
+      body: partDto,
     });
+
+    const partsList = updatedTest?.parts || [];
+    const createdPart =
+      partsList[partsList.length - 1] ||
+      partsList.find((p: any) => p.ordinal === partDto.ordinal) ||
+      updatedTest;
+
+    const partId = createdPart?.id || createdPart?._id;
+
+    if (partId && payload.questionGroups && payload.questionGroups.length > 0) {
+      for (let gIdx = 0; gIdx < payload.questionGroups.length; gIdx++) {
+        const g = payload.questionGroups[gIdx]!;
+        const groupDto = {
+          title: g.title || undefined,
+          instruction: g.instructionHtml || undefined,
+          type: g.questionType,
+          order: g.groupNumber || gIdx + 1,
+          sharedOptions: g.sharedOptions?.map((o) => ({ key: o.key || (o as any).id || "", text: o.text })),
+          maxWords: g.maxWords,
+          questions: g.questions.map((q) => {
+            const acceptedKeys = Array.isArray(q.correctAnswer)
+              ? q.correctAnswer
+              : q.acceptedAnswers && q.acceptedAnswers.length > 0
+                ? q.acceptedAnswers
+                : [String(q.correctAnswer || "")];
+
+            return {
+              number: q.questionNumber,
+              prompt: q.prompt,
+              type: q.questionType || g.questionType,
+              points: 1,
+              options: q.options?.map((o) => ({ key: o.key || (o as any).id || "", text: o.text })),
+              grading: {
+                acceptedKeys,
+                caseSensitive: (q as any).caseSensitive ?? false,
+                maxWords: q.maxWords,
+              },
+            };
+          }),
+        };
+
+        await apiRequest({
+          method: "POST",
+          path: `/teacher/exam-tests/${encodeURIComponent(testId)}/parts/${encodeURIComponent(partId)}/question-groups`,
+          body: groupDto,
+        });
+      }
+    }
+
+    return createdPart;
   },
 
   updatePart(
@@ -146,10 +259,25 @@ export const teacherExamTestsApi = {
     partId: string,
     payload: Partial<UpsertExamPartInput>,
   ): Promise<ExamPartAuthoring> {
-    return apiRequest<ExamPartAuthoring, Partial<UpsertExamPartInput>>({
+    if (isMockApiMode()) {
+      return apiRequest<ExamPartAuthoring, Partial<UpsertExamPartInput>>({
+        method: "PATCH",
+        path: `/teacher/exam-tests/${encodeURIComponent(testId)}/parts/${encodeURIComponent(partId)}`,
+        body: payload,
+      });
+    }
+
+    const body: Record<string, unknown> = {};
+    if (payload.title) body.title = payload.title.trim();
+    if (payload.partNumber !== undefined) body.ordinal = payload.partNumber;
+    if (payload.passageHtml !== undefined) body.contentHtml = payload.passageHtml;
+    if (payload.audioAsset?.assetId) body.audioAssetId = payload.audioAsset.assetId;
+    if (payload.durationSeconds !== undefined) body.durationSeconds = payload.durationSeconds;
+
+    return apiRequest<ExamPartAuthoring, typeof body>({
       method: "PATCH",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}/parts/${encodeURIComponent(partId)}`,
-      body: payload,
+      body,
     });
   },
 
@@ -165,10 +293,50 @@ export const teacherExamTestsApi = {
     partId: string,
     payload: UpsertExamQuestionGroupInput,
   ): Promise<ExamQuestionGroupAuthoring> {
-    return apiRequest<ExamQuestionGroupAuthoring, UpsertExamQuestionGroupInput>({
+    if (isMockApiMode()) {
+      return apiRequest<ExamQuestionGroupAuthoring, UpsertExamQuestionGroupInput>({
+        method: "POST",
+        path: `/teacher/exam-tests/${encodeURIComponent(testId)}/parts/${encodeURIComponent(partId)}/question-groups`,
+        body: payload,
+      });
+    }
+
+    const body = {
+      title: payload.title?.trim() || undefined,
+      instruction: payload.instructionHtml || undefined,
+      type: payload.questionType,
+      order: payload.groupNumber || 1,
+      sharedOptions: payload.sharedOptions?.map((o) => ({
+        key: o.key || (o as any).id || "",
+        text: o.text,
+      })),
+      maxWords: payload.maxWords,
+      questions: payload.questions.map((q) => {
+        const acceptedKeys = Array.isArray(q.correctAnswer)
+          ? q.correctAnswer
+          : q.acceptedAnswers && q.acceptedAnswers.length > 0
+            ? q.acceptedAnswers
+            : [String(q.correctAnswer || "")];
+
+        return {
+          number: q.questionNumber,
+          prompt: q.prompt,
+          type: q.questionType || payload.questionType,
+          points: 1,
+          options: q.options?.map((o) => ({ key: o.key || (o as any).id || "", text: o.text })),
+          grading: {
+            acceptedKeys,
+            caseSensitive: (q as any).caseSensitive ?? false,
+            maxWords: q.maxWords,
+          },
+        };
+      }),
+    };
+
+    return apiRequest<ExamQuestionGroupAuthoring, typeof body>({
       method: "POST",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}/parts/${encodeURIComponent(partId)}/question-groups`,
-      body: payload,
+      body,
     });
   },
 
@@ -177,10 +345,53 @@ export const teacherExamTestsApi = {
     groupId: string,
     payload: Partial<UpsertExamQuestionGroupInput>,
   ): Promise<ExamQuestionGroupAuthoring> {
-    return apiRequest<ExamQuestionGroupAuthoring, Partial<UpsertExamQuestionGroupInput>>({
+    if (isMockApiMode()) {
+      return apiRequest<ExamQuestionGroupAuthoring, Partial<UpsertExamQuestionGroupInput>>({
+        method: "PATCH",
+        path: `/teacher/exam-tests/${encodeURIComponent(testId)}/question-groups/${encodeURIComponent(groupId)}`,
+        body: payload,
+      });
+    }
+
+    const body: Record<string, unknown> = {};
+    if (payload.title !== undefined) body.title = payload.title?.trim() || undefined;
+    if (payload.instructionHtml !== undefined) body.instruction = payload.instructionHtml;
+    if (payload.questionType) body.type = payload.questionType;
+    if (payload.groupNumber !== undefined) body.order = payload.groupNumber;
+    if (payload.sharedOptions) {
+      body.sharedOptions = payload.sharedOptions.map((o) => ({
+        key: o.key || (o as any).id || "",
+        text: o.text,
+      }));
+    }
+    if (payload.maxWords !== undefined) body.maxWords = payload.maxWords;
+    if (payload.questions) {
+      body.questions = payload.questions.map((q) => {
+        const acceptedKeys = Array.isArray(q.correctAnswer)
+          ? q.correctAnswer
+          : q.acceptedAnswers && q.acceptedAnswers.length > 0
+            ? q.acceptedAnswers
+            : [String(q.correctAnswer || "")];
+
+        return {
+          number: q.questionNumber,
+          prompt: q.prompt,
+          type: q.questionType || payload.questionType,
+          points: 1,
+          options: q.options?.map((o) => ({ key: o.key || (o as any).id || "", text: o.text })),
+          grading: {
+            acceptedKeys,
+            caseSensitive: (q as any).caseSensitive ?? false,
+            maxWords: q.maxWords,
+          },
+        };
+      });
+    }
+
+    return apiRequest<ExamQuestionGroupAuthoring, typeof body>({
       method: "PATCH",
       path: `/teacher/exam-tests/${encodeURIComponent(testId)}/question-groups/${encodeURIComponent(groupId)}`,
-      body: payload,
+      body,
     });
   },
 

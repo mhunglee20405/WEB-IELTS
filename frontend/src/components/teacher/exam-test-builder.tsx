@@ -17,7 +17,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { Badge, Button, Card, SafeHtml } from "@/components/ui";
+import { Badge, Button, Card, RichTextEditor, SafeHtml } from "@/components/ui";
 import { teacherExamTestsApi } from "@/lib/api/endpoints/teacher-exam-tests";
 import { mediaApi } from "@/lib/api/endpoints/media";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
@@ -815,45 +815,25 @@ export function ExamTestBuilder({
             </div>
 
             {skill === "READING" ? (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label className="text-xs font-semibold text-slate-700">
-                    Nội dung bài đọc (HTML chuẩn / Paragraph)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowPassagePreview((prev) => ({
-                        ...prev,
-                        [partIdx]: !prev[partIdx],
-                      }))
-                    }
-                    className="text-xs font-semibold text-blue-700 hover:underline"
-                  >
-                    {showPassagePreview[partIdx] ? "Quay lại chỉnh sửa" : "Xem trước an toàn"}
-                  </button>
-                </div>
-                {showPassagePreview[partIdx] ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-                    <SafeHtml html={part.passageHtml} preset="richText" />
-                  </div>
-                ) : (
-                  <textarea
-                    rows={6}
-                    disabled={isPublishedLocked}
-                    value={part.passageHtml}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setParts((prev) =>
-                        prev.map((item, i) =>
-                          i === partIdx ? { ...item, passageHtml: v } : item,
-                        ),
-                      );
-                      markDirty();
-                    }}
-                    className="lms-input w-full rounded-lg border border-slate-300 p-3 font-mono text-xs"
-                  />
-                )}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-700">
+                  Nội dung bài đọc Reading (Hỗ trợ định dạng TinyMCE & Paragraph)
+                </label>
+                <RichTextEditor
+                  id={`passage-editor-${partIdx}`}
+                  disabled={isPublishedLocked}
+                  value={part.passageHtml}
+                  onChange={(v) => {
+                    setParts((prev) =>
+                      prev.map((item, i) =>
+                        i === partIdx ? { ...item, passageHtml: v } : item,
+                      ),
+                    );
+                    markDirty();
+                  }}
+                  placeholder="Nhập nội dung bài đọc Reading, định dạng in đậm Paragraph A, B, C, tiêu đề, bảng số liệu..."
+                  height={380}
+                />
               </div>
             ) : (
               <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">

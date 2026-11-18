@@ -14,6 +14,10 @@ import TeacherNewCoursePage from "@/app/teacher/courses/new/page";
 import TeacherDashboardPage from "@/app/teacher/dashboard/page";
 import TeacherEditExercisePage from "@/app/teacher/exercises/[id]/edit/page";
 import TeacherNewExercisePage from "@/app/teacher/exercises/new/page";
+import {
+  normalizeBackendQuestionTypeToUi,
+  normalizeUiQuestionTypeToBackend,
+} from "./exercise-authoring-form";
 import TeacherExtensionsPage from "@/app/teacher/extensions/page";
 import TeacherTranslationsPage from "@/app/teacher/translations/page";
 import {
@@ -314,5 +318,21 @@ describe("Phase 5 Teacher & Admin Portals", () => {
 
     createUserSpy.mockRestore();
     reverseSpy.mockRestore();
+  });
+
+  it("maps frontend UI question types to backend snake_case enums and back", () => {
+    expect(normalizeUiQuestionTypeToBackend("mcq")).toBe("multiple_choice");
+    expect(normalizeUiQuestionTypeToBackend("tfng")).toBe("true_false_not_given");
+    expect(normalizeUiQuestionTypeToBackend("ynng")).toBe("yes_no_not_given");
+    expect(normalizeUiQuestionTypeToBackend("matching")).toBe("matching");
+    expect(normalizeUiQuestionTypeToBackend("fill_blank")).toBe("fill_blank");
+    expect(normalizeUiQuestionTypeToBackend("short_answer")).toBe("short_answer");
+
+    expect(normalizeBackendQuestionTypeToUi("multiple_choice")).toBe("mcq");
+    expect(normalizeBackendQuestionTypeToUi("true_false_not_given")).toBe("tfng");
+    expect(normalizeBackendQuestionTypeToUi("yes_no_not_given")).toBe("ynng");
+    expect(normalizeBackendQuestionTypeToUi("matching")).toBe("matching");
+    expect(normalizeBackendQuestionTypeToUi("fill_blank")).toBe("fill_blank");
+    expect(normalizeBackendQuestionTypeToUi("short_answer")).toBe("short_answer");
   });
 });

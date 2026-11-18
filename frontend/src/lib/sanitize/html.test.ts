@@ -32,7 +32,7 @@ describe("HTML sanitization & URL validation", () => {
       expect(mockSetHTML.mock.calls[0]?.[1]).toMatchObject({
         sanitizer: {
           elements: expect.arrayContaining(["p", "strong"]),
-          attributes: ["class"],
+          attributes: expect.arrayContaining(["class", "style"]),
         },
       });
     } finally {

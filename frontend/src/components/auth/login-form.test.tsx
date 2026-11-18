@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api/error";
-import { authApi, systemApi } from "@/lib/api/endpoints";
+import { systemApi } from "@/lib/api/endpoints";
 import type { AuthContextValue } from "./auth-provider";
 import { LoginForm } from "./login-form";
 
@@ -157,24 +157,10 @@ describe("LoginForm", () => {
     });
   });
 
-  it("supports switching to forgot password view and calling forgotPassword endpoint", async () => {
-    const user = userEvent.setup();
-    const forgotSpy = vi.spyOn(authApi, "forgotPassword").mockResolvedValueOnce({ ok: true });
-
+  it("renders a clean login form without forgot password links", () => {
     renderWithClient(<LoginForm />);
-    await user.click(screen.getByRole("button", { name: "Quên mật khẩu?" }));
-
-    expect(screen.getByRole("heading", { name: "Khôi phục mật khẩu" })).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/Email tài khoản/i), "student@ielts.vn");
-    await user.click(
-      screen.getByRole("button", { name: "Gửi yêu cầu đặt lại mật khẩu" }),
-    );
-
-    await waitFor(() => {
-      expect(forgotSpy).toHaveBeenCalledWith({ email: "student@ielts.vn" });
-    });
-    expect(await screen.findByRole("status")).toHaveTextContent("hướng dẫn đặt lại mật khẩu");
-    forgotSpy.mockRestore();
+    expect(screen.queryByText(/Quên mật khẩu/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Đăng nhập" })).toBeInTheDocument();
   });
 
   it("displays setup banner when system has not been initialized with any administrator", async () => {
