@@ -45,6 +45,7 @@ export default function StudentReadingTranslationWorkspacePage() {
   const saveDraftMutation = useMutation({
     mutationFn: () =>
       readingTranslationsApi.saveDraft(passageId, {
+        testId,
         textVi,
         revision: detail?.revision ?? 1,
       }),
@@ -55,11 +56,15 @@ export default function StudentReadingTranslationWorkspacePage() {
       });
       setNotice("Đã lưu bản nháp tiếng Việt trên máy chủ.");
     },
+    onError: () => {
+      setNotice(null);
+    },
   });
 
   const submitMutation = useMutation({
     mutationFn: () =>
       readingTranslationsApi.submit(passageId, {
+        testId,
         textVi,
         revision: detail?.revision,
       }),
@@ -69,6 +74,9 @@ export default function StudentReadingTranslationWorkspacePage() {
         queryKey: examKeys.translationEligibility(testId),
       });
       setNotice("Đã nộp bài dịch thành công. Giảng viên sẽ xem xét và phản hồi.");
+    },
+    onError: () => {
+      setNotice(null);
     },
   });
 
@@ -242,6 +250,12 @@ export default function StudentReadingTranslationWorkspacePage() {
                       </span>
                     )}
                   </div>
+
+                  {textVi.trim().length > 0 && textVi.trim().length < 10 && (
+                    <p className="text-xs text-amber-700">
+                      * Bản dịch cần tối thiểu 10 ký tự để có thể lưu nháp hoặc nộp bài.
+                    </p>
+                  )}
 
                   {notice && (
                     <div

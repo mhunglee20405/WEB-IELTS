@@ -13,7 +13,6 @@ import {
   Headphones,
   Layers,
   Plus,
-  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import {
@@ -78,22 +77,6 @@ export default function TeacherQuestionBankPage() {
   const refreshAll = () => {
     void queryClient.invalidateQueries({ queryKey: examKeys.teacherBankRoot });
   };
-
-  const validateMutation = useMutation({
-    mutationFn: (testId: string) => teacherExamTestsApi.validate(testId),
-    onSuccess: (res) => {
-      setFeedback({
-        type: res.valid ? "success" : "error",
-        text: res.valid
-          ? "Đề thi đạt mọi điều kiện kiểm tra cấu trúc và đáp án."
-          : `Đề thi có ${res.errors.length} lỗi cần khắc phục trước khi xuất bản.`,
-        validation: res,
-      });
-    },
-    onError: (err) => {
-      setFeedback({ type: "error", text: getFriendlyErrorMessage(err) });
-    },
-  });
 
   const publishMutation = useMutation({
     mutationFn: (testId: string) => teacherExamTestsApi.publish(testId),
@@ -303,14 +286,13 @@ export default function TeacherQuestionBankPage() {
                       Xem trước
                     </Link>
 
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => validateMutation.mutate(test.id)}
+                    <Link
+                      href={`/teacher/question-bank/${encodeURIComponent(test.id)}/edit`}
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      Kiểm tra
-                    </Button>
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Sửa
+                    </Link>
 
                     {test.status === "DRAFT" && (
                       <Button

@@ -220,7 +220,7 @@ describe("Phase 9 Exam Modes v2 Contracts, Security & State Machine", () => {
     expect(elig.passages.find((p) => p.passageId === "part-r1-p3")?.eligible).toBe(false);
   });
 
-  it("never exposes translation eligibility for Listening exams & keeps published teacher tests immutable", async () => {
+  it("never exposes translation eligibility for Listening exams & allows published teacher tests to be updated", async () => {
     const listAttempt = await dispatchMockRequest<ExamAttemptDetail>({
       method: "POST",
       path: "/exam-attempts",
@@ -237,14 +237,14 @@ describe("Phase 9 Exam Modes v2 Contracts, Security & State Machine", () => {
     expect(listRes.passed).toBe(true);
     expect(listRes.translationEligible).toBe(false);
 
-    // Teacher published test PATCH throws 409 EXAM_VERSION_CONFLICT
-    await expect(
-      dispatchMockRequest<ExamTestDetailAuthoring>({
-        method: "PATCH",
-        path: "/teacher/exam-tests/exam-read-full-01",
-        body: { title: "Mutate published directly" },
-      }),
-    ).rejects.toMatchObject({ statusCode: 409, code: "EXAM_VERSION_CONFLICT" });
+    // Teacher can now update published tests directly
+    const updatedTest = await dispatchMockRequest<ExamTestDetailAuthoring>({
+      method: "PATCH",
+      path: "/teacher/exam-tests/exam-read-full-01",
+      body: { title: "Mutate published directly" },
+    });
+    expect(updatedTest.title).toBe("Mutate published directly");
+    expect(updatedTest.status).toBe("PUBLISHED");
   });
 
   it("maps Phase 9 v2 backend error codes to accessible Vietnamese feedback", () => {

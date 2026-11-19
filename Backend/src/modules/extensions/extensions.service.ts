@@ -423,6 +423,12 @@ export class ExtensionsService {
             ? new Date(dto.approvedDeadlineAt)
             : requestDoc.requestedDeadlineAt;
 
+          requestDoc.grantedDeadlineAt = approvedDeadline;
+
+          if (!studentAssignment.originalDeadlineAt) {
+            studentAssignment.originalDeadlineAt = studentAssignment.effectiveDeadlineAt;
+          }
+
           studentAssignment.effectiveDeadlineAt = approvedDeadline;
 
           // If assignment was previously marked OVERDUE, revert to appropriate in-progress status
@@ -555,7 +561,16 @@ export class ExtensionsService {
       requestedDeadlineAt: raw.requestedDeadlineAt,
       requestedDeadlineAtVn: formatVnDateTime(raw.requestedDeadlineAt),
       requestedDueAt: raw.requestedDeadlineAt ? new Date(raw.requestedDeadlineAt).toISOString() : undefined,
-      originalDueAt: studentAssignment?.originalDeadlineAt ? new Date(studentAssignment.originalDeadlineAt).toISOString() : undefined,
+      currentDueAt: studentAssignment?.originalDeadlineAt
+        ? new Date(studentAssignment.originalDeadlineAt).toISOString()
+        : studentAssignment?.effectiveDeadlineAt
+          ? new Date(studentAssignment.effectiveDeadlineAt).toISOString()
+          : (raw.requestedDeadlineAt ? new Date(raw.requestedDeadlineAt).toISOString() : new Date().toISOString()),
+      originalDueAt: studentAssignment?.originalDeadlineAt
+        ? new Date(studentAssignment.originalDeadlineAt).toISOString()
+        : studentAssignment?.effectiveDeadlineAt
+          ? new Date(studentAssignment.effectiveDeadlineAt).toISOString()
+          : undefined,
       grantedDueAt: raw.grantedDeadlineAt ? new Date(raw.grantedDeadlineAt).toISOString() : undefined,
       status: raw.status,
       reviewedBy: raw.reviewedBy ? extractObjectId(raw.reviewedBy) : undefined,

@@ -61,7 +61,9 @@ const EXTENSION_COLUMNS: DataTableColumn<ExtensionRequestItem>[] = [
           Hạn cũ: <span className="font-medium">{formatVnDateTime(row.currentDueAt)}</span>
         </p>
         <p className="font-semibold text-blue-900">
-          Xin dời đến: {formatVnDateTime(row.requestedDueAt)}
+          {row.status === "approved"
+            ? `Hạn mới duyệt: ${formatVnDateTime(row.grantedDueAt || row.requestedDueAt)}`
+            : `Xin dời đến: ${formatVnDateTime(row.requestedDueAt)}`}
         </p>
       </div>
     ),
@@ -176,6 +178,7 @@ function ExtensionRequestForm({
         queryClient.invalidateQueries({ queryKey: ["student", "extensions"] }),
         queryClient.invalidateQueries({ queryKey: studentKeys.profile }),
         queryClient.invalidateQueries({ queryKey: studentKeys.dashboard }),
+        queryClient.invalidateQueries({ queryKey: ["student", "assignments"] }),
       ]);
     },
     onError: (err) => {
@@ -185,8 +188,6 @@ function ExtensionRequestForm({
   });
 
   const isQuotaExhausted = usedThisMonth >= maxPerMonth;
-  const effectiveDateValue =
-    requestedDate >= minTargetDate ? requestedDate : minTargetDate;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -197,8 +198,14 @@ function ExtensionRequestForm({
       setValidationError("Vui lòng chọn một bài tập chưa đạt để xin gia hạn.");
       return;
     }
-    if (!effectiveDateValue || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDateValue)) {
+    if (!requestedDate || !/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) {
       setValidationError("Vui lòng chọn ngày hết hạn đề xuất hợp lệ.");
+      return;
+    }
+    if (requestedDate < minTargetDate) {
+      setValidationError(
+        `Hạn nộp mới phải sau hạn nộp hiện tại (tối thiểu từ ngày ${formatDateKeyVi(minTargetDate)}).`,
+      );
       return;
     }
     const trimmedReason = reason.trim();
@@ -212,7 +219,7 @@ function ExtensionRequestForm({
     }
 
     setValidationError(null);
-    const requestedDueAt = getVnDailyWindowSync(effectiveDateValue).endExclusiveUtcIso;
+    const requestedDueAt = getVnDailyWindowSync(requestedDate).endExclusiveUtcIso;
     requestMutation.mutate({
       studentAssignmentId: selectedAssignmentId,
       requestedDueAt,
@@ -296,7 +303,7 @@ function ExtensionRequestForm({
         </label>
         <p id="ext-date-hint" className="text-xs text-slate-600">
           Hạn nộp sau khi duyệt sẽ kéo dài tới hết 23:59 ngày{" "}
-          <strong>{formatDateKeyVi(effectiveDateValue)}</strong> (Asia/Ho_Chi_Minh).
+          <strong>{formatDateKeyVi(requestedDate || minTargetDate)}</strong> (Asia/Ho_Chi_Minh).
         </p>
         <input
           id="ext-date"
@@ -304,8 +311,11 @@ function ExtensionRequestForm({
           min={minTargetDate}
           disabled={isQuotaExhausted || eligibleAssignments.length === 0}
           aria-describedby="ext-date-hint"
-          value={effectiveDateValue}
-          onChange={(e) => setRequestedDate(e.target.value)}
+          value={requestedDate}
+          onChange={(e) => {
+            setRequestedDate(e.target.value);
+            setValidationError(null);
+          }}
           className="lms-input"
         />
       </div>

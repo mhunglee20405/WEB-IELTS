@@ -4,6 +4,7 @@ import { ApiError } from "../error";
 import { ExamTestDetailStudentSchema } from "../schemas";
 import type {
   ExamSkill,
+  ExamMode,
   ExamTestDetailAuthoring,
   ExamTestDetailStudent,
   ExamTestStatus,
@@ -22,6 +23,8 @@ import { mediaApi } from "./media";
 export interface ListTeacherExamTestsQuery {
   skill?: ExamSkill;
   status?: ExamTestStatus;
+  mode?: ExamMode;
+  difficulty?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -328,10 +331,11 @@ export const teacherExamTestsApi = {
       translationEnabled: payload.translationEnabled ?? (payload.skill === "READING"),
     };
 
+    if (payload.subtitle) body.subtitle = payload.subtitle;
+    if (payload.difficulty) body.difficulty = payload.difficulty;
+    if (payload.tags) body.tags = payload.tags;
+
     if (isMock) {
-      if (payload.subtitle) body.subtitle = payload.subtitle;
-      if (payload.difficulty) body.difficulty = payload.difficulty;
-      if (payload.tags) body.tags = payload.tags;
       if (payload.totalDurationSeconds) body.totalDurationSeconds = payload.totalDurationSeconds;
       if (payload.instructions) body.instructions = payload.instructions;
     }
@@ -370,10 +374,11 @@ export const teacherExamTestsApi = {
       body.translationEnabled = payload.translationEnabled;
     }
 
+    if (payload.subtitle) body.subtitle = payload.subtitle;
+    if (payload.difficulty) body.difficulty = payload.difficulty;
+    if (payload.tags) body.tags = payload.tags;
+
     if (isMock) {
-      if (payload.subtitle) body.subtitle = payload.subtitle;
-      if (payload.difficulty) body.difficulty = payload.difficulty;
-      if (payload.tags) body.tags = payload.tags;
       if (payload.totalDurationSeconds) body.totalDurationSeconds = payload.totalDurationSeconds;
       if (payload.instructions) body.instructions = payload.instructions;
     }
