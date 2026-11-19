@@ -54,20 +54,30 @@ const PENALTY_COLUMNS: DataTableColumn<PenaltyRecord>[] = [
   {
     key: "reason",
     header: "Lý do & Dấu vết kiểm toán",
-    renderCell: (row) => (
-      <div className="space-y-1 text-xs">
-        <p className="text-slate-800">{row.reason}</p>
-        {row.reversed ? (
-          <div className="rounded-md border border-teal-200 bg-teal-50 p-2 text-teal-950">
-            <p className="font-semibold">
-              Hoàn tác bởi: {row.reversedBy ?? "Quản trị viên"}
-              {row.reversedAt ? ` (${formatVnDateTime(row.reversedAt)})` : ""}
-            </p>
-            {row.reversalReason ? <p>Lý do hoàn tác: {row.reversalReason}</p> : null}
-          </div>
-        ) : null}
-      </div>
-    ),
+    renderCell: (row) => {
+      const raw = String(row.reason || "").trim();
+      const displayReason =
+        !raw ||
+        raw.toLowerCase().includes("overdue") ||
+        raw.toLowerCase().includes("deadline") ||
+        raw.toLowerCase().includes("assignment")
+          ? "Trễ deadline"
+          : raw;
+      return (
+        <div className="space-y-1 text-xs">
+          <p className="font-semibold text-slate-800">{displayReason}</p>
+          {row.reversed ? (
+            <div className="rounded-md border border-teal-200 bg-teal-50 p-2 text-teal-950">
+              <p className="font-semibold">
+                Hoàn tác bởi: {row.reversedBy ?? "Quản trị viên"}
+                {row.reversedAt ? ` (${formatVnDateTime(row.reversedAt)})` : ""}
+              </p>
+              {row.reversalReason ? <p>Lý do hoàn tác: {row.reversalReason}</p> : null}
+            </div>
+          ) : null}
+        </div>
+      );
+    },
   },
   {
     key: "status",

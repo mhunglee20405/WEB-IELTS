@@ -148,6 +148,10 @@ export class StudentAssignmentsController {
       isLocked,
     };
 
+    const actualAttemptsCount = await this.submissionModel
+      .countDocuments({ studentAssignmentId: sa._id })
+      .exec();
+
     return {
       id: extractObjectId(sa._id),
       studentAssignmentId: extractObjectId(sa._id),
@@ -163,12 +167,30 @@ export class StudentAssignmentsController {
       dueAt: new Date(dueAt).toISOString(),
       effectiveDueAt: new Date(effectiveDueAt).toISOString(),
       timezone: 'Asia/Ho_Chi_Minh',
-      status: sa.status,
-      attemptsCount: (sa as any).attemptsCount || (sa.lastSubmittedAt ? 1 : 0),
+      status:
+        sa.status === StudentAssignmentStatus.PASSED ||
+        Boolean(sa.isTargetAchieved) ||
+        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70)
+          ? StudentAssignmentStatus.PASSED
+          : sa.status,
+      attemptsCount: actualAttemptsCount || (sa as any).attemptsCount || (sa.lastSubmittedAt ? 1 : 0),
       bestScore: sa.bestScore ?? null,
-      passed: Boolean(sa.isTargetAchieved),
-      answerReviewUnlocked: Boolean(sa.isTargetAchieved),
-      translationAvailable: Boolean(sa.isTargetAchieved && exerciseType === 'reading'),
+      passed: Boolean(
+        sa.isTargetAchieved ||
+        sa.status === StudentAssignmentStatus.PASSED ||
+        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
+      ),
+      answerReviewUnlocked: Boolean(
+        sa.isTargetAchieved ||
+        sa.status === StudentAssignmentStatus.PASSED ||
+        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
+      ),
+      translationAvailable: Boolean(
+        (sa.isTargetAchieved ||
+          sa.status === StudentAssignmentStatus.PASSED ||
+          (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70)) &&
+        (exerciseType === 'reading' || !exerciseType),
+      ),
       translationStatus: (sa as any).translationStatus || 'not_started',
       penaltyApplied: Boolean((sa as any).penaltyApplied),
       exercise: exercisePublic,
@@ -295,7 +317,12 @@ export class StudentAssignmentsController {
       if (extractObjectId(sa.studentId) !== extractObjectId(user._id)) {
         throw new ForbiddenException('You cannot access another student’s review');
       }
-      if (!sa.isTargetAchieved && sa.status !== StudentAssignmentStatus.PASSED) {
+      const isPassed = Boolean(
+        sa.isTargetAchieved ||
+        sa.status === StudentAssignmentStatus.PASSED ||
+        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
+      );
+      if (!isPassed) {
         throw new ForbiddenException('Review is locked until you achieve a PASS score (>= 70%)');
       }
     }
@@ -357,7 +384,11 @@ export class StudentAssignmentsController {
 
     return {
       studentAssignmentId: extractObjectId(sa._id),
-      passed: Boolean(sa.isTargetAchieved),
+      passed: Boolean(
+        sa.isTargetAchieved ||
+        sa.status === StudentAssignmentStatus.PASSED ||
+        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
+      ),
       score: sa.bestScore ?? (submission?.scorePercent || 0),
       items,
     };
@@ -386,12 +417,39 @@ export class StudentAssignmentsController {
       .select('+exerciseSnapshot')
       .exec();
 
-    const passageHtml = assignment?.exerciseSnapshot?.passage || '';
-    const passageTitle = assignment?.exerciseSnapshot?.title || assignment?.title || 'Reading Passage';
+    const snapshot = (assignment?.exerciseSnapshot || {}) as any;
+    const targetTestId = (assignment as any)?.examTestId || (assignment as any)?.exerciseId;
 
     const existing = await this.translationModel
-      .findOne({ studentAssignmentId: sa._id })
+      .findOne({
+        $or: [
+          { studentAssignmentId: sa._id },
+          { studentId: sa.studentId, assignmentId: assignment?._id },
+          ...(targetTestId ? [{ studentId: sa.studentId, testId: targetTestId }] : []),
+          ...(snapshot?._id ? [{ studentId: sa.studentId, testId: snapshot._id }] : []),
+        ],
+      })
+      .sort({ updatedAt: -1 })
       .exec();
+
+    let passageHtml = snapshot.passage || '';
+    let passageTitle = snapshot.title || assignment?.title || 'Reading Passage';
+
+    if (snapshot.parts && snapshot.parts.length > 0) {
+      const part = existing?.passageId
+        ? snapshot.parts.find(
+            (p: any) =>
+              extractObjectId(p._id) === String(existing.passageId) ||
+              String(p.ordinal) === String(existing.passageId),
+          )
+        : snapshot.parts[0];
+      if (part) {
+        passageHtml = part.contentHtml || passageHtml;
+        passageTitle = part.title || (part.ordinal ? `Passage ${part.ordinal}` : passageTitle);
+      }
+    }
+
+    const trStatus = (existing?.status || 'not_started').toLowerCase();
 
     return {
       translationId: existing ? extractObjectId(existing._id) : extractObjectId(sa._id),
@@ -399,7 +457,7 @@ export class StudentAssignmentsController {
       passageTitle,
       passageHtml,
       draftText: existing?.translatedText || '',
-      status: existing?.status || 'not_started',
+      status: trStatus,
       teacherFeedback: existing?.teacherComment || undefined,
       submittedAt: existing?.submittedAt ? new Date(existing.submittedAt).toISOString() : undefined,
       reviewedAt: existing?.reviewedAt ? new Date(existing.reviewedAt).toISOString() : undefined,

@@ -395,7 +395,12 @@ export class PenaltiesService {
       courseTitle,
       deltaPoints: raw.deltaPoints,
       points: Math.abs(raw.deltaPoints ?? 1),
-      reason: raw.reason,
+      reason:
+        typeof raw.reason === 'string' &&
+        (raw.reason.startsWith('Assignment overdue beyond effective deadline') ||
+          raw.reason.toLowerCase().includes('overdue'))
+          ? 'Trễ deadline'
+          : raw.reason,
       occurredAt,
       reversed: isReversed,
       isReversed,

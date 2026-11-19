@@ -169,7 +169,7 @@ export class DeadlinesService {
               studentId: sa.studentId,
               studentAssignmentId: sa._id,
               deltaPoints: 1,
-              reason: `Assignment overdue beyond effective deadline ${new Date(sa.effectiveDeadlineAt).toISOString()}`,
+              reason: 'Trễ deadline',
               idempotencyKey,
             });
             await penalty.save({ session });

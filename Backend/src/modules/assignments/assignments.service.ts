@@ -169,6 +169,44 @@ export class AssignmentsService implements OnModuleInit {
         },
         { $set: { allowRetake: true } },
       );
+
+      // Auto-heal existing passed student_assignments
+      await this.studentAssignmentModel.updateMany(
+        {
+          $or: [
+            { status: StudentAssignmentStatus.PASSED },
+            { bestScore: { $gte: 70 } },
+          ],
+        },
+        {
+          $set: {
+            isTargetAchieved: true,
+            status: StudentAssignmentStatus.PASSED,
+          },
+        },
+      );
+
+      // Auto-heal attemptsCount from submissions
+      if (this.submissionModel) {
+        const counts = await this.submissionModel.aggregate([
+          { $group: { _id: '$studentAssignmentId', count: { $sum: 1 }, maxScore: { $max: '$scorePercent' } } },
+        ]);
+        for (const c of counts) {
+          if (c._id) {
+            await this.studentAssignmentModel.updateOne(
+              { _id: c._id },
+              {
+                $set: {
+                  attemptsCount: c.count,
+                  ...(c.maxScore !== undefined && c.maxScore >= 70
+                    ? { isTargetAchieved: true, status: StudentAssignmentStatus.PASSED }
+                    : {}),
+                },
+              },
+            );
+          }
+        }
+      }
     } catch (err: any) {
       this.logger.warn(`Failed to auto-heal existing assignments allowRetake: ${err.message}`);
     }
@@ -959,16 +997,49 @@ export class AssignmentsService implements OnModuleInit {
     const paginated = filtered.slice((page - 1) * limit, page * limit);
 
     const now = new Date();
+    const saIds = paginated.map((sa: any) => sa._id);
+    const attemptsCountMap: Record<string, number> = {};
+    if (this.submissionModel && saIds.length > 0) {
+      try {
+        const counts = await this.submissionModel.aggregate([
+          { $match: { studentAssignmentId: { $in: saIds } } },
+          { $group: { _id: '$studentAssignmentId', count: { $sum: 1 } } },
+        ]);
+        for (const item of counts) {
+          attemptsCountMap[extractObjectId(item._id)] = item.count;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to aggregate submission counts in findMine: ${err?.message}`);
+      }
+    }
+
     const items = paginated.map((sa: any) => {
       const assignment = sa.assignmentId;
       const studentLifecycle = computeStudentAssignmentLifecycleStatus(assignment, sa, now);
       const asgIdStr = extractObjectId(assignment._id);
       const saIdStr = extractObjectId(sa._id);
+      const isPassed = Boolean(
+        sa.isTargetAchieved ||
+        sa.status === StudentAssignmentStatus.PASSED ||
+        sa.status === 'passed' ||
+        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= (assignment.targetScorePercent ?? 70)),
+      );
+      const exType = assignment.exerciseId?.type || 'reading';
+      const isReadingEx = String(exType).toLowerCase() === 'reading';
+      const actualAttempts =
+        attemptsCountMap[saIdStr] ??
+        sa.attemptsCount ??
+        (sa.lastSubmittedAt ? 1 : 0);
+
       return {
         id: asgIdStr,
         _id: asgIdStr,
         studentAssignmentId: saIdStr,
         assignmentId: asgIdStr,
+        examTestId: assignment.examTestId ? extractObjectId(assignment.examTestId) : undefined,
+        requiredScope: assignment.requiredScope,
+        requiredPartId: assignment.requiredPartId,
+        durationSecondsOverride: assignment.durationSecondsOverride,
         title: assignment.title,
         course: assignment.courseId
           ? {
@@ -999,20 +1070,20 @@ export class AssignmentsService implements OnModuleInit {
         effectiveDeadlineAtVn: formatVnDateTime(sa.effectiveDeadlineAt),
         courseId: assignment.courseId ? extractObjectId(assignment.courseId._id || assignment.courseId) : '',
         courseTitle: assignment.courseId?.title || '',
-        exerciseType: assignment.exerciseId?.type || 'reading',
+        exerciseType: exType,
         effectiveDueAt: sa.effectiveDeadlineAt || assignment.deadlineAt,
-        passed: Boolean(sa.isTargetAchieved),
-        attemptsCount: sa.attemptsCount || (sa.lastSubmittedAt ? 1 : 0),
-        answerReviewUnlocked: Boolean(sa.isTargetAchieved),
-        translationAvailable: Boolean(sa.isTargetAchieved && assignment.exerciseId?.type === 'reading'),
+        passed: isPassed,
+        attemptsCount: actualAttempts,
+        answerReviewUnlocked: isPassed,
+        translationAvailable: Boolean(isPassed && isReadingEx),
         translationStatus: sa.translationStatus || 'not_started',
         penaltyApplied: Boolean(sa.penaltyApplied),
-        status: sa.status,
+        status: isPassed ? StudentAssignmentStatus.PASSED : sa.status,
         scheduleStatus: studentLifecycle.scheduleStatus,
         isAvailable: studentLifecycle.isAvailable,
         remainingSeconds: studentLifecycle.remainingSeconds,
         bestScore: sa.bestScore,
-        isTargetAchieved: sa.isTargetAchieved ?? false,
+        isTargetAchieved: isPassed,
         passedAt: sa.passedAt,
         lastSubmittedAt: sa.lastSubmittedAt,
         allowRetake: assignment.allowRetake,

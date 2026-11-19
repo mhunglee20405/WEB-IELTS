@@ -88,7 +88,18 @@ function ReversePenaltyModalForm({
           Học viên: <strong>{penalty.studentName ?? penalty.studentId}</strong> · Bài tập:{" "}
           <strong>{penalty.assignmentTitle}</strong> (+{penalty.points} điểm)
         </p>
-        <p>Lý do phạt ban đầu: {penalty.reason}</p>
+        <p>
+          Lý do phạt ban đầu:{" "}
+          {(() => {
+            const raw = String(penalty.reason || "").trim();
+            return !raw ||
+              raw.toLowerCase().includes("overdue") ||
+              raw.toLowerCase().includes("deadline") ||
+              raw.toLowerCase().includes("assignment")
+              ? "Trễ deadline"
+              : raw;
+          })()}
+        </p>
       </div>
 
       <div>
@@ -175,12 +186,22 @@ export default function AdminAuditPage() {
     {
       key: "reason",
       header: "Lý do ghi nhận",
-      renderCell: (row) => (
-        <div className="max-w-xs text-xs">
-          <p className="text-slate-800">{row.reason}</p>
-          <p className="mt-0.5 text-slate-600">{formatVnDateTime(row.occurredAt)}</p>
-        </div>
-      ),
+      renderCell: (row) => {
+        const raw = String(row.reason || "").trim();
+        const displayReason =
+          !raw ||
+          raw.toLowerCase().includes("overdue") ||
+          raw.toLowerCase().includes("deadline") ||
+          raw.toLowerCase().includes("assignment")
+            ? "Trễ deadline"
+            : raw;
+        return (
+          <div className="max-w-xs text-xs">
+            <p className="font-semibold text-slate-800">{displayReason}</p>
+            <p className="mt-0.5 text-slate-600">{formatVnDateTime(row.occurredAt)}</p>
+          </div>
+        );
+      },
     },
     {
       key: "audit",
