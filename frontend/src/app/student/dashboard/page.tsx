@@ -245,7 +245,12 @@ export default function StudentDashboardPage() {
                   </div>
                 ) : (
                   <ul className="space-y-3">
-                    {data.recentScores.map((scoreItem) => (
+                    {data.recentScores.map((scoreItem) => {
+                      const isItemPassed = Boolean(
+                        scoreItem.passed ||
+                        (scoreItem.score !== undefined && scoreItem.score !== null && scoreItem.score >= PASS_SCORE_THRESHOLD)
+                      );
+                      return (
                       <li key={scoreItem.studentAssignmentId} className="lms-card gap-2 p-4">
                         <div className="flex items-start justify-between gap-2">
                           <div className="space-y-0.5">
@@ -258,7 +263,7 @@ export default function StudentDashboardPage() {
                           </div>
                           <span
                             className={
-                              scoreItem.passed
+                              isItemPassed
                                 ? "rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-sm font-bold tabular-nums text-emerald-900"
                                 : "rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-sm font-bold tabular-nums text-amber-900"
                             }
@@ -267,19 +272,38 @@ export default function StudentDashboardPage() {
                           </span>
                         </div>
                         <p className="text-xs text-slate-600">
-                          {scoreItem.passed
+                          {isItemPassed
                             ? `Đạt ngưỡng >= ${PASS_SCORE_THRESHOLD}% · Đã mở đáp án`
                             : `Chưa đạt ngưỡng ${PASS_SCORE_THRESHOLD}% · Cần làm lại`}
                         </p>
-                        <Link
-                          href={`/student/assignments/${scoreItem.studentAssignmentId}`}
-                          className="text-xs font-semibold text-blue-700 hover:underline"
-                        >
-                          {scoreItem.passed ? "Xem đáp án chi tiết" : "Làm lại bài tập"}
-                          <span className="sr-only">: {scoreItem.title}</span>
-                        </Link>
+                        {isItemPassed ? (
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/student/assignments/${scoreItem.studentAssignmentId}/review`}
+                              className="text-xs font-semibold text-emerald-700 hover:underline"
+                            >
+                              Xem lại đáp án
+                            </Link>
+                            <span className="text-slate-300">·</span>
+                            <Link
+                              href={`/student/assignments/${scoreItem.studentAssignmentId}`}
+                              className="text-xs font-semibold text-blue-700 hover:underline"
+                            >
+                              Làm lại bài tập
+                            </Link>
+                          </div>
+                        ) : (
+                          <Link
+                            href={`/student/assignments/${scoreItem.studentAssignmentId}`}
+                            className="text-xs font-semibold text-blue-700 hover:underline"
+                          >
+                            Làm lại bài tập
+                            <span className="sr-only">: {scoreItem.title}</span>
+                          </Link>
+                        )}
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </section>

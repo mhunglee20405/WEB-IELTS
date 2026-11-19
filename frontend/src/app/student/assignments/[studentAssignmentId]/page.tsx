@@ -135,11 +135,21 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
     },
   });
 
-  const isReviewUnlocked =
-    detail.answerReviewUnlocked || Boolean(latestResult?.answerReviewUnlocked);
-  const isTranslationAvailable =
-    detail.translationAvailable || Boolean(latestResult?.translationAvailable);
   const bestScore = latestResult?.bestScore ?? detail.bestScore;
+  const isPassed = Boolean(
+    detail.passed ||
+    detail.answerReviewUnlocked ||
+    latestResult?.passed ||
+    latestResult?.answerReviewUnlocked ||
+    detail.status === "passed" ||
+    (bestScore !== null && bestScore !== undefined && bestScore >= PASS_SCORE_THRESHOLD),
+  );
+  const isReviewUnlocked = isPassed;
+  const isReadingExercise =
+    detail.exerciseType === "reading" ||
+    !detail.exerciseType ||
+    String(detail.exerciseType).toLowerCase() === "reading";
+  const isTranslationAvailable = Boolean(isPassed && isReadingExercise);
 
   const questionsPanel = (
     <div className="space-y-4">
@@ -240,7 +250,7 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
         <div className="flex flex-wrap items-center gap-3">
-          <StatusBadge status={detail.passed ? "passed" : detail.status} />
+          <StatusBadge status={isPassed ? "passed" : detail.status} />
           <span className="text-slate-600">
             Hạn nộp:{" "}
             <strong className="font-semibold text-slate-900">
@@ -261,7 +271,7 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
             >
               <CheckCircle2 className="h-4 w-4" aria-hidden={true} />
-              Xem đáp án chi tiết
+              Xem lại đáp án
             </Link>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">

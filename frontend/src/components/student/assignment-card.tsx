@@ -1,4 +1,4 @@
-import { BookOpen, CalendarClock, Headphones, Lock, ShieldAlert } from "lucide-react";
+import { BookOpen, CalendarClock, CheckCircle2, Headphones, Lock, RotateCcw, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { buttonVariants, MetaTag, StatusBadge } from "@/components/ui";
 import { PASS_SCORE_THRESHOLD, type StudentAssignmentSummary } from "@/lib/api/types";
@@ -38,13 +38,20 @@ export function AssignmentCard({ item, nowMs }: AssignmentCardProps) {
   const hasExtendedDue = item.effectiveDueAt !== item.dueAt;
   const remaining = getRemainingSummary(item.effectiveDueAt, nowMs);
 
+  const isPassed = Boolean(
+    item.passed ||
+    item.answerReviewUnlocked ||
+    item.status === "passed" ||
+    (item.bestScore !== null && item.bestScore !== undefined && item.bestScore >= PASS_SCORE_THRESHOLD),
+  );
+
   const badgeStatus = isPreOpen
     ? "upcoming"
-    : item.passed
+    : isPassed
       ? "passed"
       : item.status;
 
-  const ctaLabel = item.passed
+  const ctaLabel = isPassed
     ? "Xem kết quả & đáp án"
     : item.status === "in_progress"
       ? "Tiếp tục làm bài"
@@ -93,10 +100,10 @@ export function AssignmentCard({ item, nowMs }: AssignmentCardProps) {
               <span
                 className={cn(
                   "font-medium",
-                  remaining.isOverdue && !item.passed ? "text-red-700" : "text-slate-700",
+                  remaining.isOverdue && !isPassed ? "text-red-700" : "text-slate-700",
                 )}
               >
-                ({item.passed ? "Đã đạt" : remaining.label})
+                ({isPassed ? "Đã đạt" : remaining.label})
               </span>
             </dd>
           </div>
@@ -115,11 +122,11 @@ export function AssignmentCard({ item, nowMs }: AssignmentCardProps) {
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <MetaTag variant="neutral">Số lần làm: {item.attemptsCount}</MetaTag>
             {item.bestScore !== null ? (
-              <MetaTag variant={item.passed ? "success" : "warning"}>
+              <MetaTag variant={isPassed ? "success" : "warning"}>
                 Điểm cao nhất: {item.bestScore}% (Yêu cầu &ge; {PASS_SCORE_THRESHOLD}%)
               </MetaTag>
             ) : null}
-            {item.answerReviewUnlocked ? (
+            {item.answerReviewUnlocked || isPassed ? (
               <MetaTag variant="success">Đã mở đáp án chi tiết</MetaTag>
             ) : null}
             {item.translationAvailable ? (
@@ -145,6 +152,23 @@ export function AssignmentCard({ item, nowMs }: AssignmentCardProps) {
             <CalendarClock className="h-4 w-4" aria-hidden={true} />
             Chưa đến giờ mở bài
           </button>
+        ) : isPassed ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/student/assignments/${item.studentAssignmentId}/review`}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden={true} />
+              Xem lại đáp án
+            </Link>
+            <Link
+              href={`/student/assignments/${item.studentAssignmentId}`}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden={true} />
+              Làm lại bài tập
+            </Link>
+          </div>
         ) : (
           <Link
             href={`/student/assignments/${item.studentAssignmentId}`}
@@ -155,7 +179,7 @@ export function AssignmentCard({ item, nowMs }: AssignmentCardProps) {
           </Link>
         )}
 
-        {!isPreOpen && !item.passed ? (
+        {!isPreOpen && !isPassed ? (
           <Link
             href={`/student/extensions?studentAssignmentId=${encodeURIComponent(
               item.studentAssignmentId,

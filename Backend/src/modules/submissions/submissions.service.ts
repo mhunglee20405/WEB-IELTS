@@ -405,6 +405,7 @@ export class SubmissionsService {
         submission = await sub.save({ session });
 
         // Update student assignment record
+        studentAssignment.attemptsCount = attemptNo;
         studentAssignment.lastSubmittedAt = now;
         studentAssignment.bestScore = Math.max(
           studentAssignment.bestScore || 0,
@@ -413,6 +414,7 @@ export class SubmissionsService {
 
         if (isPassed || alreadyPassedBefore) {
           studentAssignment.status = StudentAssignmentStatus.PASSED;
+          studentAssignment.isTargetAchieved = true;
           if (!studentAssignment.passedAt) {
             studentAssignment.passedAt = now;
           }

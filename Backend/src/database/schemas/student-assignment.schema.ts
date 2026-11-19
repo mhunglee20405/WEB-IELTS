@@ -42,6 +42,9 @@ export class StudentAssignment {
   @Prop({ default: false })
   isTargetAchieved?: boolean;
 
+  @Prop({ default: 0 })
+  attemptsCount?: number;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
