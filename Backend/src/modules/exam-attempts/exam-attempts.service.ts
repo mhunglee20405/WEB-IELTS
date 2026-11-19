@@ -178,7 +178,7 @@ export class ExamAttemptsService {
     if (linkedAssignment) {
       const now = new Date();
       if (
-        linkedAssignment.status === AssignmentStatus.SCHEDULED ||
+        linkedAssignment.openAt &&
         now.getTime() < new Date(linkedAssignment.openAt).getTime()
       ) {
         throw new ForbiddenException({
@@ -558,6 +558,7 @@ export class ExamAttemptsService {
         const isTargetAchieved = rawScore >= targetScore;
 
         sa.lastSubmittedAt = submittedAt;
+        sa.attemptsCount = (sa.attemptsCount || 0) + 1;
         sa.bestScore = Math.max(sa.bestScore || 0, scorePercent);
         sa.isTargetAchieved = isTargetAchieved;
         if (isPassed) {

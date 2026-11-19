@@ -186,6 +186,16 @@ export class AssignmentsService implements OnModuleInit {
         },
       );
 
+      // Auto-publish scheduled assignments whose openAt has arrived
+      await this.assignmentModel.updateMany(
+        {
+          status: { $in: [AssignmentStatus.SCHEDULED, 'scheduled', 'SCHEDULED'] },
+          openAt: { $lte: new Date() },
+          deadlineAt: { $gt: new Date() },
+        },
+        { $set: { status: AssignmentStatus.PUBLISHED } },
+      );
+
       // Auto-heal attemptsCount from submissions
       if (this.submissionModel) {
         const counts = await this.submissionModel.aggregate([
@@ -1598,7 +1608,7 @@ export class AssignmentsService implements OnModuleInit {
       dueAtVn: formatVnDateTime(raw.deadlineAt),
       allowRetake: raw.allowRetake,
       maxAttempts: raw.maxAttempts,
-      status: raw.status,
+      status: lifecycleStatus.toLowerCase(),
       rawStatus: raw.status,
       scheduleStatus: lifecycleStatus,
       createdAt: raw.createdAt,
@@ -1625,7 +1635,6 @@ export class AssignmentsService implements OnModuleInit {
     let sanitizedExercise: any = undefined;
     // CRITICAL: Students must NOT access protected questions/passages before availableAt!
     const isLocked =
-      raw.status === AssignmentStatus.SCHEDULED ||
       studentLifecycle.scheduleStatus === 'SCHEDULED' ||
       now.getTime() < new Date(raw.openAt).getTime();
 

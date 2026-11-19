@@ -220,7 +220,15 @@ export class SubmissionsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    if (assignment.status !== AssignmentStatus.PUBLISHED) {
+    // Accept PUBLISHED or SCHEDULED (time-based: opened when now >= openAt)
+    const isPublishedOrOpen =
+      assignment.status === AssignmentStatus.PUBLISHED ||
+      assignment.status === AssignmentStatus.SCHEDULED ||
+      assignment.status === AssignmentStatus.AVAILABLE ||
+      String(assignment.status).toLowerCase() === 'published' ||
+      String(assignment.status).toLowerCase() === 'scheduled' ||
+      String(assignment.status).toLowerCase() === 'available';
+    if (!isPublishedOrOpen) {
       throw new BadRequestException('This assignment is not active');
     }
 

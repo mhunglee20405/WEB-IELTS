@@ -67,7 +67,18 @@ export class TranslationsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    if (assignment.status !== AssignmentStatus.PUBLISHED) {
+    const nowMs = Date.now();
+    const isOpenTimeArrived =
+      !assignment.openAt || nowMs >= new Date(assignment.openAt).getTime();
+    const isAllowedStatus =
+      assignment.status === AssignmentStatus.PUBLISHED ||
+      assignment.status === AssignmentStatus.AVAILABLE ||
+      assignment.status === AssignmentStatus.SCHEDULED ||
+      String(assignment.status).toLowerCase() === 'published' ||
+      String(assignment.status).toLowerCase() === 'available' ||
+      String(assignment.status).toLowerCase() === 'scheduled';
+
+    if (!isAllowedStatus || !isOpenTimeArrived) {
       throw new BadRequestException('This assignment is not active');
     }
 

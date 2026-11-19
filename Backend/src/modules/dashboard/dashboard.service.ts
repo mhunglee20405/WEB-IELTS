@@ -97,7 +97,11 @@ export class DashboardService {
         const asg = sa.assignmentId;
         const crs = asg.courseId;
         const exe = asg.exerciseId;
-        const passed = Boolean(sa.isTargetAchieved);
+        const passed = Boolean(
+          sa.isTargetAchieved ||
+          sa.status === StudentAssignmentStatus.PASSED ||
+          (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
+        );
         const openAt = asg.openAt ? new Date(asg.openAt).toISOString() : new Date().toISOString();
         const dueAt = asg.deadlineAt ? new Date(asg.deadlineAt).toISOString() : new Date().toISOString();
         const effectiveDueAt = sa.effectiveDeadlineAt
@@ -250,17 +254,32 @@ export class DashboardService {
         .exec(),
     ]);
 
-    const recentAssignments = recentAssignmentsDocs.map((a: any) => ({
-      id: extractObjectId(a._id),
-      courseId: extractObjectId(a.courseId),
-      title: a.title,
-      exerciseId: extractObjectId(a.exerciseId),
-      exerciseType: a.requiredScope || 'reading',
-      assignedDate: a.assignedDate || formatVnDateTime(a.openAt).slice(0, 10),
-      openAt: a.openAt ? a.openAt.toISOString() : '',
-      dueAt: a.deadlineAt ? a.deadlineAt.toISOString() : '',
-      status: a.status,
-    }));
+    const nowMs = now.getTime();
+    const recentAssignments = recentAssignmentsDocs.map((a: any) => {
+      const openMs = a.openAt ? new Date(a.openAt).getTime() : 0;
+      const dueMs = a.deadlineAt ? new Date(a.deadlineAt).getTime() : 0;
+      let effectiveStatus = a.status;
+      if (openMs && dueMs) {
+        if (nowMs < openMs) {
+          effectiveStatus = 'scheduled';
+        } else if (nowMs >= openMs && nowMs < dueMs) {
+          effectiveStatus = 'available';
+        } else {
+          effectiveStatus = 'expired';
+        }
+      }
+      return {
+        id: extractObjectId(a._id),
+        courseId: extractObjectId(a.courseId),
+        title: a.title,
+        exerciseId: extractObjectId(a.exerciseId),
+        exerciseType: a.requiredScope || 'reading',
+        assignedDate: a.assignedDate || formatVnDateTime(a.openAt).slice(0, 10),
+        openAt: a.openAt ? a.openAt.toISOString() : '',
+        dueAt: a.deadlineAt ? a.deadlineAt.toISOString() : '',
+        status: effectiveStatus,
+      };
+    });
 
     const upcomingLessons = lessonDocs.map((l: any) => ({
       id: extractObjectId(l._id),
