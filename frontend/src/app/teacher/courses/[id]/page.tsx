@@ -94,7 +94,6 @@ export default function TeacherEditCoursePage() {
                   startBand: values.startBand,
                   targetBand: values.targetBand,
                   status: values.status,
-                  teacherId: values.teacherId,
                   timezone: values.timezone,
                   startDate: values.startDate,
                   endDate: values.endDate,

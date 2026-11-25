@@ -17,14 +17,6 @@ import {
 import type { StudentProfile } from "@/lib/api/types";
 import { DEFAULT_TIMEZONE } from "@/lib/time/vn-time";
 
-const TIMEZONE_OPTIONS = [
-  { value: "Asia/Ho_Chi_Minh", label: "Asia/Ho_Chi_Minh (Việt Nam GMT+7)" },
-  { value: "Asia/Bangkok", label: "Asia/Bangkok (GMT+7)" },
-  { value: "Asia/Singapore", label: "Asia/Singapore (GMT+8)" },
-  { value: "Asia/Tokyo", label: "Asia/Tokyo (GMT+9)" },
-  { value: "UTC", label: "UTC (Giờ phối hợp quốc tế)" },
-] as const;
-
 interface ProfileEditFormProps {
   profile: StudentProfile;
 }
@@ -36,7 +28,6 @@ function ProfileEditForm({ profile }: ProfileEditFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const currentTimezone = profile.user.timezone || DEFAULT_TIMEZONE;
-  const hasKnownTimezone = TIMEZONE_OPTIONS.some((opt) => opt.value === currentTimezone);
 
   const {
     register,
@@ -53,9 +44,8 @@ function ProfileEditForm({ profile }: ProfileEditFormProps) {
 
   const updateMutation = useMutation({
     mutationFn: (values: ProfileUpdateFormValues) =>
-      usersApi.update(profile.user.id, {
+      usersApi.updateOwnProfile({
         fullName: values.fullName.trim(),
-        timezone: values.timezone.trim(),
       }),
     onSuccess: async () => {
       setSubmitError(null);
@@ -67,7 +57,7 @@ function ProfileEditForm({ profile }: ProfileEditFormProps) {
       setSavedMessage(null);
       if (err instanceof ApiError && err.statusCode === 403) {
         setSubmitError(
-          "Tài khoản học viên hiện chỉ được xem thông tin hồ sơ. Vui lòng liên hệ Quản trị viên nếu cần thay đổi họ tên hoặc múi giờ.",
+          "Tài khoản hiện không có quyền cập nhật thông tin hồ sơ. Vui lòng liên hệ Quản trị viên để được hỗ trợ.",
         );
         return;
       }
@@ -155,32 +145,19 @@ function ProfileEditForm({ profile }: ProfileEditFormProps) {
 
       <div className="space-y-1.5">
         <label htmlFor="profile-timezone" className="block text-sm font-medium text-slate-800">
-          Múi giờ hiển thị cá nhân
+          Múi giờ hiển thị cá nhân (chỉ đọc)
         </label>
         <p id="profile-timezone-hint" className="text-xs text-slate-600">
-          Lịch mở bài tập hàng ngày và hạn nộp chuẩn vẫn được neo cố định theo Asia/Ho_Chi_Minh.
+          Lịch mở bài tập hàng ngày và hạn nộp chuẩn được cố định theo hệ thống (Asia/Ho_Chi_Minh).
         </p>
-        <select
+        <input
           id="profile-timezone"
+          type="text"
+          readOnly
           aria-describedby="profile-timezone-hint"
-          aria-invalid={errors.timezone ? "true" : undefined}
-          className="lms-input"
-          {...register("timezone")}
-        >
-          {!hasKnownTimezone ? (
-            <option value={currentTimezone}>{currentTimezone}</option>
-          ) : null}
-          {TIMEZONE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        {errors.timezone ? (
-          <p role="alert" className="text-xs font-medium text-red-700">
-            {errors.timezone.message}
-          </p>
-        ) : null}
+          value={currentTimezone}
+          className="lms-input cursor-not-allowed bg-slate-100 text-slate-600"
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-1">

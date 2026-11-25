@@ -54,11 +54,7 @@ function TranslationReviewPane({
 
   const reviewMutation = useMutation({
     mutationFn: (payload: { decision: "approved" | "needs_revision"; feedback: string }) =>
-      studentAssignmentsApi.reviewTranslation(item.workspace.translationId, {
-        decision: payload.decision,
-        feedback: payload.feedback,
-        teacherComment: payload.feedback,
-      } as any),
+      studentAssignmentsApi.reviewTranslation(item.workspace.translationId, payload),
     onSuccess: async (_updated, vars) => {
       await queryClient.invalidateQueries({ queryKey: teacherKeys.translationsQueue });
       await queryClient.invalidateQueries({ queryKey: teacherKeys.dashboard });
@@ -259,13 +255,10 @@ function PassageTranslationReviewPane({
 
   const reviewMutation = useMutation({
     mutationFn: (payload: { decision: "REVIEWED" | "NEEDS_REVISION"; feedback: string }) =>
-      readingTranslationsApi.reviewTranslation(item.translationId, {
-        decision: payload.decision,
-        feedback: payload.feedback,
-        teacherComment: payload.feedback,
-      } as any),
+      readingTranslationsApi.reviewTranslation(item.translationId, payload),
     onSuccess: async (_updated, vars) => {
       await queryClient.invalidateQueries({ queryKey: examKeys.teacherTranslationsRoot });
+      await queryClient.invalidateQueries({ queryKey: teacherKeys.dashboard });
       onReviewed(
         vars.decision === "REVIEWED"
           ? `Đã chấm hoàn tất Passage ${partNumber} của ${studentDisplayName}.`

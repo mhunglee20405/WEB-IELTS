@@ -20,6 +20,7 @@ export default function StudentReadingTranslationWorkspacePage() {
 
   const [draftOverride, setDraftOverride] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const eligibilityQuery = useQuery({
     queryKey: examKeys.translationEligibility(testId),
@@ -49,15 +50,21 @@ export default function StudentReadingTranslationWorkspacePage() {
         textVi,
         revision: detail?.revision ?? 1,
       }),
+    onMutate: () => {
+      setNotice(null);
+      setErrorMessage(null);
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(examKeys.translationPassage(passageId), updated);
       void queryClient.invalidateQueries({
         queryKey: examKeys.translationEligibility(testId),
       });
+      setErrorMessage(null);
       setNotice("Đã lưu bản nháp tiếng Việt trên máy chủ.");
     },
-    onError: () => {
+    onError: (err) => {
       setNotice(null);
+      setErrorMessage(getFriendlyErrorMessage(err));
     },
   });
 
@@ -68,20 +75,28 @@ export default function StudentReadingTranslationWorkspacePage() {
         textVi,
         revision: detail?.revision,
       }),
+    onMutate: () => {
+      setNotice(null);
+      setErrorMessage(null);
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(examKeys.translationPassage(passageId), updated);
       void queryClient.invalidateQueries({
         queryKey: examKeys.translationEligibility(testId),
       });
+      setErrorMessage(null);
       setNotice("Đã nộp bài dịch thành công. Giảng viên sẽ xem xét và phản hồi.");
     },
-    onError: () => {
+    onError: (err) => {
       setNotice(null);
+      setErrorMessage(getFriendlyErrorMessage(err));
     },
   });
 
   const is403Locked =
     detailQuery.error instanceof ApiError && detailQuery.error.statusCode === 403;
+  const isLocked =
+    is403Locked || detail?.status === "LOCKED" || detail?.unlocked === false;
 
   return (
     <div className="space-y-6">
@@ -140,7 +155,7 @@ export default function StudentReadingTranslationWorkspacePage() {
         </div>
       )}
 
-      {is403Locked ? (
+      {isLocked ? (
         <Card className="border-amber-200 bg-amber-50/50 text-center">
           <div className="mx-auto flex max-w-md flex-col items-center py-6">
             <Lock className="h-9 w-9 text-amber-600" />
@@ -268,21 +283,22 @@ export default function StudentReadingTranslationWorkspacePage() {
                     </div>
                   )}
 
-                  {(saveDraftMutation.isError || submitMutation.isError) && (
-                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-                      {getFriendlyErrorMessage(
-                        saveDraftMutation.error ?? submitMutation.error,
-                      )}
+                  {errorMessage && (
+                    <div
+                      role="alert"
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+                    >
+                      {errorMessage}
                     </div>
                   )}
 
-                  {!isLockedSubmitted && (
+                  {!isLockedSubmitted && !isLocked && (
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         variant="secondary"
                         loading={saveDraftMutation.isPending}
-                        disabled={textVi.trim().length < 10}
-                        onClick={() => void saveDraftMutation.mutateAsync()}
+                        disabled={textVi.trim().length < 10 || submitMutation.isPending}
+                        onClick={() => saveDraftMutation.mutate()}
                       >
                         <Save className="h-4 w-4" />
                         Lưu nháp
@@ -290,8 +306,8 @@ export default function StudentReadingTranslationWorkspacePage() {
                       <Button
                         variant="primary"
                         loading={submitMutation.isPending}
-                        disabled={textVi.trim().length < 10}
-                        onClick={() => void submitMutation.mutateAsync()}
+                        disabled={textVi.trim().length < 10 || saveDraftMutation.isPending}
+                        onClick={() => submitMutation.mutate()}
                         data-testid="translation-submit-btn"
                       >
                         <Send className="h-4 w-4" />

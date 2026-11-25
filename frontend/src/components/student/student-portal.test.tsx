@@ -160,12 +160,16 @@ describe("Phase 3 Student Portal pages & domain safety", () => {
     });
   });
 
-  it("updates safe fields via PATCH /users/:id and surfaces 403 cleanly in /student/profile", async () => {
-    const updateSpy = vi.spyOn(usersApi, "update");
+  it("updates safe fields via PATCH /users/me and surfaces 403 cleanly in /student/profile", async () => {
+    const updateOwnSpy = vi.spyOn(usersApi, "updateOwnProfile");
+    const updateByIdSpy = vi.spyOn(usersApi, "update");
     renderWithQuery(<StudentProfilePage />);
 
     const nameInput = await screen.findByLabelText(/Họ và tên/i);
     expect(nameInput).toHaveValue("Khổng Phú Cường");
+
+    const timezoneField = screen.getByLabelText(/Múi giờ/i);
+    expect(timezoneField).toHaveAttribute("readonly");
 
     fireEvent.change(nameInput, { target: { value: "Khổng Phú Cường Updated" } });
     fireEvent.click(screen.getByRole("button", { name: /Lưu thay đổi/i }));
@@ -173,13 +177,13 @@ describe("Phase 3 Student Portal pages & domain safety", () => {
     expect(
       await screen.findByText(/Đã cập nhật thông tin cá nhân thành công/i),
     ).toBeInTheDocument();
-    expect(updateSpy).toHaveBeenCalledWith("stu-01", {
+    expect(updateOwnSpy).toHaveBeenCalledWith({
       fullName: "Khổng Phú Cường Updated",
-      timezone: "Asia/Ho_Chi_Minh",
     });
+    expect(updateByIdSpy).not.toHaveBeenCalled();
     expect(mockRefreshUser).toHaveBeenCalled();
 
-    updateSpy.mockRejectedValueOnce(
+    updateOwnSpy.mockRejectedValueOnce(
       new ApiError({
         statusCode: 403,
         code: "FORBIDDEN",
@@ -190,8 +194,11 @@ describe("Phase 3 Student Portal pages & domain safety", () => {
     fireEvent.change(nameInput, { target: { value: "Blocked Update" } });
     fireEvent.click(screen.getByRole("button", { name: /Lưu thay đổi/i }));
 
-    expect(await screen.findByText(/chỉ được xem thông tin hồ sơ/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/chỉ được xem thông tin hồ sơ|không có quyền cập nhật/i),
+    ).toBeInTheDocument();
 
-    updateSpy.mockRestore();
+    updateOwnSpy.mockRestore();
+    updateByIdSpy.mockRestore();
   });
 });

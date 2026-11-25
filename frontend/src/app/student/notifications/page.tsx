@@ -45,6 +45,11 @@ const NOTIFICATION_META: Record<
     Icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   }
 > = {
+  new_assignment: {
+    label: "Bài tập mới",
+    badgeClasses: "bg-blue-50 text-blue-900",
+    Icon: FileText,
+  },
   assignment_new: {
     label: "Bài tập mới",
     badgeClasses: "bg-blue-50 text-blue-900",
@@ -55,15 +60,30 @@ const NOTIFICATION_META: Record<
     badgeClasses: "bg-red-50 text-red-900",
     Icon: AlertTriangle,
   },
+  course_enrolled: {
+    label: "Ghi danh lớp",
+    badgeClasses: "bg-emerald-50 text-emerald-900",
+    Icon: BookPlus,
+  },
   course_added: {
     label: "Ghi danh lớp",
     badgeClasses: "bg-emerald-50 text-emerald-900",
     Icon: BookPlus,
   },
+  extension_reviewed: {
+    label: "Kết quả gia hạn",
+    badgeClasses: "bg-amber-50 text-amber-900",
+    Icon: Clock,
+  },
   extension_decided: {
     label: "Kết quả gia hạn",
     badgeClasses: "bg-amber-50 text-amber-900",
     Icon: Clock,
+  },
+  other: {
+    label: "Thông báo hệ thống",
+    badgeClasses: "bg-slate-100 text-slate-800",
+    Icon: Bell,
   },
 };
 

@@ -40,7 +40,10 @@ function TranslationEditor({ workspace, studentAssignmentId }: TranslationEditor
     message: string;
   } | null>(null);
 
-  const isFrozen = workspace.status === "submitted" || workspace.status === "approved";
+  const isFrozen =
+    workspace.status === "submitted" ||
+    workspace.status === "approved" ||
+    workspace.status === "reviewed";
 
   const saveDraftMutation = useMutation({
     mutationFn: () =>
@@ -114,7 +117,7 @@ function TranslationEditor({ workspace, studentAssignmentId }: TranslationEditor
           <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" aria-hidden={true} />
             <p>
-              {workspace.status === "approved"
+              {workspace.status === "approved" || workspace.status === "reviewed"
                 ? "Bản dịch đã được giảng viên duyệt hoàn tất."
                 : "Bản dịch đã được nộp và khóa chỉnh sửa để giảng viên chấm. Nếu giảng viên yêu cầu sửa lại, khung nhập sẽ được mở khóa."}
             </p>

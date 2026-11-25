@@ -64,22 +64,24 @@ export default function StudentAssignmentReviewPage() {
         title="Xem lại đáp án & giải thích"
         subtitle="Đáp án chuẩn chỉ được mở khóa sau khi bạn đạt từ 70% trở lên."
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/student/assignments/${studentAssignmentId}`}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-            >
-              <RotateCcw className="h-4 w-4" aria-hidden={true} />
-              Làm lại bài tập
-            </Link>
-            <Link
-              href="/student/assignments"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden={true} />
-              Danh sách bài tập
-            </Link>
-          </div>
+          !reviewQuery.isLoading && !isAnswerLocked ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/student/assignments/${studentAssignmentId}`}
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden={true} />
+                Làm lại bài tập
+              </Link>
+              <Link
+                href="/student/assignments"
+                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden={true} />
+                Danh sách bài tập
+              </Link>
+            </div>
+          ) : undefined
         }
       />
 

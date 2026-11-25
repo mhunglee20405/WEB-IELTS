@@ -104,7 +104,7 @@ export interface Course {
   courseType?: CourseFormat;
   startBand?: number;
   targetBand?: number;
-  enrollmentStatus?: "active" | "withdrawn" | "completed";
+  enrollmentStatus?: "active" | "dropped" | "withdrawn" | "completed";
   teacherId: string;
   teacherName?: string;
   status: CourseStatus;
@@ -288,7 +288,16 @@ export interface CreateExerciseRequest {
 
 export type UpdateExerciseRequest = Partial<CreateExerciseRequest>;
 
-export type AssignmentStatus = "scheduled" | "active" | "closed";
+export type AssignmentStatus =
+  | "draft"
+  | "scheduled"
+  | "published"
+  | "available"
+  | "active"
+  | "expired"
+  | "closed"
+  | "archived"
+  | "completed";
 
 export interface Assignment {
   id: string;
@@ -341,7 +350,9 @@ export type StudentAssignmentStatus =
   | "in_progress"
   | "submitted"
   | "passed"
+  | "completed"
   | "overdue"
+  | "excused"
   | "extended";
 
 export interface StudentAssignmentSummary {
@@ -430,6 +441,7 @@ export type TranslationStatus =
   | "not_started"
   | "draft"
   | "submitted"
+  | "reviewed"
   | "needs_revision"
   | "approved";
 
@@ -458,7 +470,7 @@ export interface ReviewTranslationRequest {
   feedback?: string;
 }
 
-export type ExtensionStatus = "pending" | "approved" | "rejected";
+export type ExtensionStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 export interface ExtensionRequestItem {
   id: string;
@@ -523,8 +535,12 @@ export interface ReversePenaltyRequest {
 }
 
 export type NotificationType =
-  | "assignment_new"
+  | "new_assignment"
   | "overdue"
+  | "course_enrolled"
+  | "extension_reviewed"
+  | "other"
+  | "assignment_new"
   | "course_added"
   | "extension_decided";
 
@@ -614,7 +630,7 @@ export type ExamSkill = "READING" | "LISTENING";
 export type ExamMode = "PART" | "FULL";
 export type ExamTestStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 export type ExamPartType = "PASSAGE" | "SECTION";
-export type ExamAttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "EXPIRED" | "ABANDONED";
+export type ExamAttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "EXPIRED" | "ABANDONED";
 export type ExamDifficulty = "FOUNDATION" | "INTERMEDIATE" | "TARGET_65" | "TARGET_75_PLUS";
 
 export type ExamQuestionType =
@@ -946,6 +962,7 @@ export interface ReadingTranslationDetail {
   passageTitle: string;
   passageHtml: string;
   paragraphs?: ExamPassageParagraph[];
+  unlocked?: boolean;
   status: ReadingTranslationEligibilityStatus;
   revision: number;
   textVi: string;
