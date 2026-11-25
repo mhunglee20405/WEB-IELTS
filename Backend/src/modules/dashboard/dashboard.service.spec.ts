@@ -338,5 +338,45 @@ describe('DashboardService & DashboardController', () => {
         status: ExtensionRequestStatus.PENDING,
       });
     });
+
+    it('scopes non-authored shared usedTestIds to teacherEnrolledStudentIds while keeping authoredTestIds unscoped by studentId', async () => {
+      const sharedTestId = new Types.ObjectId();
+      const authoredTestId = new Types.ObjectId();
+      const enrolledStudentId = new Types.ObjectId();
+
+      courseModel.find.mockReturnValue(chain([{ _id: courseId }]));
+      assignmentModel.find.mockReturnValue(
+        chain([
+          {
+            _id: assignmentId,
+            courseId,
+            examTestId: sharedTestId,
+            title: 'Shared Reading',
+            openAt: new Date(),
+            deadlineAt: new Date(Date.now() + 86400000),
+          },
+        ]),
+      );
+      examTestModel.find.mockReturnValue(chain([{ _id: authoredTestId }]));
+      enrollmentModel.find.mockReturnValue(
+        chain([{ courseId, studentId: enrolledStudentId }]),
+      );
+      translationModel.countDocuments.mockResolvedValue(3);
+
+      const dash = await service.getTeacherDashboard(teacherActor);
+      expect(dash.pendingTranslationsCount).toBe(3);
+
+      const translationFilter = translationModel.countDocuments.mock.calls[0][0];
+      expect(translationFilter.$or).toEqual(
+        expect.arrayContaining([
+          { assignmentId: { $in: [assignmentId] } },
+          { testId: { $in: [authoredTestId] } },
+          { testId: { $in: [sharedTestId] }, studentId: { $in: [enrolledStudentId] } },
+        ]),
+      );
+      expect(translationFilter.$or).not.toContainEqual({
+        testId: { $in: expect.arrayContaining([sharedTestId]) },
+      });
+    });
   });
 });

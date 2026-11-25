@@ -468,6 +468,45 @@ export class ReadingTranslationsService {
     };
   }
 
+  private async buildScopedTranslationOrConditions(options: {
+    courseIds: Types.ObjectId[];
+    assignmentIds: Types.ObjectId[];
+    assignedTestIds: Types.ObjectId[];
+    authoredTestIds?: Types.ObjectId[];
+  }): Promise<Record<string, any>[]> {
+    const { courseIds, assignmentIds, assignedTestIds, authoredTestIds = [] } = options;
+    const authoredIdSet = new Set(authoredTestIds.map((id) => extractObjectId(id)));
+    const sharedAssignedTestIds = assignedTestIds.filter(
+      (id) => !authoredIdSet.has(extractObjectId(id)),
+    );
+
+    const scopeOr: Record<string, any>[] = [];
+    if (authoredTestIds.length > 0) {
+      scopeOr.push({ testId: { $in: authoredTestIds } });
+    }
+    if (assignmentIds.length > 0) {
+      scopeOr.push({ assignmentId: { $in: assignmentIds } });
+    }
+    if (sharedAssignedTestIds.length > 0 && courseIds.length > 0) {
+      if (this.enrollmentModel) {
+        const enrollments = await this.enrollmentModel
+          .find({ courseId: { $in: courseIds }, status: EnrollmentStatus.ACTIVE })
+          .exec();
+        const enrolledStudentIds = enrollments.map((e) => e.studentId);
+        if (enrolledStudentIds.length > 0) {
+          scopeOr.push({
+            testId: { $in: sharedAssignedTestIds },
+            studentId: { $in: enrolledStudentIds },
+          });
+        }
+      } else {
+        scopeOr.push({ testId: { $in: sharedAssignedTestIds } });
+      }
+    }
+
+    return scopeOr;
+  }
+
   async findAllForTeacher(query: TeacherTranslationQueryDto, actor: UserDocument) {
     if (actor.role === UserRole.STUDENT) {
       throw new ForbiddenException('Students cannot view translation submissions list');
@@ -519,23 +558,13 @@ export class ReadingTranslationsService {
         return emptyResult;
       }
 
-      const courseScopeOr: Record<string, any>[] = [];
-      if (courseAssignmentIds.length > 0) {
-        courseScopeOr.push({ assignmentId: { $in: courseAssignmentIds } });
-      }
-      if (courseTestIds.length > 0) {
-        if (this.enrollmentModel) {
-          const enrollments = await this.enrollmentModel
-            .find({ courseId: courseObjId, status: EnrollmentStatus.ACTIVE })
-            .exec();
-          const enrolledStudentIds = enrollments.map((e) => e.studentId);
-          courseScopeOr.push({
-            testId: { $in: courseTestIds },
-            studentId: { $in: enrolledStudentIds },
-          });
-        } else {
-          courseScopeOr.push({ testId: { $in: courseTestIds } });
-        }
+      const courseScopeOr = await this.buildScopedTranslationOrConditions({
+        courseIds: [courseObjId],
+        assignmentIds: courseAssignmentIds,
+        assignedTestIds: courseTestIds,
+      });
+      if (courseScopeOr.length === 0) {
+        return emptyResult;
       }
       filter.$or = courseScopeOr;
     } else if (actor.role === UserRole.TEACHER) {
@@ -555,14 +584,12 @@ export class ReadingTranslationsService {
         .flatMap((a) => [a.examTestId, a.exerciseId])
         .filter((id): id is Types.ObjectId => Boolean(id));
 
-      const allowedTestIds = [...ownedTestIds, ...assignedTestIds];
-      const scopeOr: Record<string, any>[] = [];
-      if (allowedTestIds.length > 0) {
-        scopeOr.push({ testId: { $in: allowedTestIds } });
-      }
-      if (teacherAssignmentIds.length > 0) {
-        scopeOr.push({ assignmentId: { $in: teacherAssignmentIds } });
-      }
+      const scopeOr = await this.buildScopedTranslationOrConditions({
+        courseIds: teacherCourseIds,
+        assignmentIds: teacherAssignmentIds,
+        assignedTestIds,
+        authoredTestIds: ownedTestIds,
+      });
 
       if (scopeOr.length === 0) {
         return emptyResult;

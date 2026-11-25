@@ -533,6 +533,44 @@ describe('ReadingTranslationsService', () => {
       expect(JSON.stringify(filterArg)).toContain(testId.toHexString());
       expect(JSON.stringify(filterArg)).toContain(studentAId.toHexString());
     });
+
+    it('without courseId, scopes shared assigned tests to enrolled students while keeping authored tests unrestricted by studentId', async () => {
+      const courseId = new Types.ObjectId();
+      const courseAssignmentId = new Types.ObjectId();
+      const sharedTestId = new Types.ObjectId();
+      const authoredTestId = new Types.ObjectId();
+      setupTranslationFindMock([]);
+
+      examTestModel.find.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([{ _id: authoredTestId }]),
+      });
+      courseModel.find.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([{ _id: courseId, teacherId }]),
+      });
+      assignmentModel.find.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([
+          { _id: courseAssignmentId, courseId, examTestId: sharedTestId },
+        ]),
+      });
+      enrollmentModel.find.mockReturnValue({
+        exec: jest.fn().mockResolvedValue([{ courseId, studentId: studentAId }]),
+      });
+
+      await service.findAllForTeacher({}, teacher);
+
+      expect(translationModel.find).toHaveBeenCalledTimes(1);
+      const filterArg = translationModel.find.mock.calls[0][0];
+      expect(filterArg.$or).toEqual(
+        expect.arrayContaining([
+          { testId: { $in: [authoredTestId] } },
+          { testId: { $in: [sharedTestId] }, studentId: { $in: [studentAId] } },
+          { assignmentId: { $in: [courseAssignmentId] } },
+        ]),
+      );
+      expect(filterArg.$or).not.toContainEqual({
+        testId: { $in: expect.arrayContaining([sharedTestId]) },
+      });
+    });
   });
 });
 

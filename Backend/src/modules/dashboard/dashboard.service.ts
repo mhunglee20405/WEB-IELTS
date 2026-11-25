@@ -129,14 +129,35 @@ export class DashboardService {
       .flatMap((a) => [a.examTestId, a.exerciseId])
       .filter((id): id is Types.ObjectId => Boolean(id));
     const authoredTestIds = authoredTests.map((t) => t._id as Types.ObjectId);
-    const relevantTestIds = [...usedTestIds, ...authoredTestIds];
+    const authoredIdSet = new Set(authoredTestIds.map((id) => extractObjectId(id)));
+    const sharedUsedTestIds = usedTestIds.filter(
+      (id) => !authoredIdSet.has(extractObjectId(id)),
+    );
+
+    let enrolledStudentIds: Types.ObjectId[] = [];
+    if (sharedUsedTestIds.length > 0 && teacher.role !== UserRole.ADMIN) {
+      const enrollments = await this.enrollmentModel
+        .find({ courseId: { $in: courseIds }, status: EnrollmentStatus.ACTIVE })
+        .exec();
+      enrolledStudentIds = enrollments.map((e) => e.studentId);
+    }
 
     const translationOrConditions: Record<string, any>[] = [];
     if (assignmentIds.length > 0) {
       translationOrConditions.push({ assignmentId: { $in: assignmentIds } });
     }
-    if (relevantTestIds.length > 0) {
-      translationOrConditions.push({ testId: { $in: relevantTestIds } });
+    if (authoredTestIds.length > 0) {
+      translationOrConditions.push({ testId: { $in: authoredTestIds } });
+    }
+    if (sharedUsedTestIds.length > 0) {
+      if (teacher.role === UserRole.ADMIN) {
+        translationOrConditions.push({ testId: { $in: sharedUsedTestIds } });
+      } else if (enrolledStudentIds.length > 0) {
+        translationOrConditions.push({
+          testId: { $in: sharedUsedTestIds },
+          studentId: { $in: enrolledStudentIds },
+        });
+      }
     }
 
     const [pendingExtensionsCount, pendingTranslationsCount, overdueStudentsCount] =
