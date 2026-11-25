@@ -21,6 +21,10 @@ import {
 } from 'src/database/schemas/exam-attempt.schema';
 import { Course, CourseDocument } from 'src/database/schemas/course.schema';
 import { Assignment, AssignmentDocument } from 'src/database/schemas/assignment.schema';
+import {
+  StudentAssignment,
+  StudentAssignmentDocument,
+} from 'src/database/schemas/student-assignment.schema';
 import { Enrollment, EnrollmentDocument } from 'src/database/schemas/enrollment.schema';
 import { UserDocument } from 'src/database/schemas/user.schema';
 import {
@@ -58,7 +62,84 @@ export class ReadingTranslationsService {
     @Optional()
     @InjectModel(Enrollment.name)
     private enrollmentModel?: Model<EnrollmentDocument>,
+    @Optional()
+    @InjectModel(StudentAssignment.name)
+    private studentAssignmentModel?: Model<StudentAssignmentDocument>,
   ) {}
+
+  private async execQuery<T>(query: any): Promise<T> {
+    if (!query) return query;
+    return typeof query.exec === 'function' ? await query.exec() : await query;
+  }
+
+  private assertTranslationEditable(sub: TranslationSubmissionDocument): void {
+    const normalizedStatus = String(sub.status || '').toLowerCase();
+    if (
+      normalizedStatus === TranslationSubmissionStatus.SUBMITTED ||
+      normalizedStatus === TranslationSubmissionStatus.REVIEWED
+    ) {
+      throw new BadRequestException('Cannot edit a submitted or reviewed translation');
+    }
+  }
+
+  private async resolvePassThreshold(
+    studentId: Types.ObjectId,
+    test: ExamTestDocument,
+    studentAssignmentId?: string,
+  ): Promise<number> {
+    const fallback = test.passScore ?? 70;
+    if (
+      !studentAssignmentId ||
+      !Types.ObjectId.isValid(studentAssignmentId) ||
+      !this.studentAssignmentModel ||
+      !this.assignmentModel
+    ) {
+      return fallback;
+    }
+
+    const sa = await this.execQuery<any>(
+      this.studentAssignmentModel.findById(studentAssignmentId),
+    );
+    if (!sa) {
+      return fallback;
+    }
+    if (sa.studentId && extractObjectId(sa.studentId) !== extractObjectId(studentId)) {
+      return fallback;
+    }
+    if (!sa.assignmentId) {
+      return fallback;
+    }
+
+    const assignment =
+      typeof sa.assignmentId === 'object' &&
+      !(sa.assignmentId instanceof Types.ObjectId) &&
+      ('targetScorePercent' in sa.assignmentId ||
+        'examTestId' in sa.assignmentId ||
+        'exerciseId' in sa.assignmentId)
+        ? sa.assignmentId
+        : await this.execQuery<AssignmentDocument | null>(
+            this.assignmentModel.findById(sa.assignmentId),
+          );
+
+    if (!assignment) {
+      return fallback;
+    }
+
+    const testIdStr = extractObjectId(test._id);
+    const linkedExamTestId =
+      assignment.examTestId != null ? extractObjectId(assignment.examTestId) : '';
+    const linkedExerciseId =
+      assignment.exerciseId != null ? extractObjectId(assignment.exerciseId) : '';
+    if (
+      (linkedExamTestId || linkedExerciseId) &&
+      linkedExamTestId !== testIdStr &&
+      linkedExerciseId !== testIdStr
+    ) {
+      return fallback;
+    }
+
+    return assignment.targetScorePercent ?? fallback;
+  }
 
   private async resolveTestAndPassage(
     passageId: string,
@@ -164,7 +245,13 @@ export class ReadingTranslationsService {
     studentId: Types.ObjectId,
     test: ExamTestDocument,
     passageId: string,
+    studentAssignmentId?: string,
+    resolvedPassScore?: number,
   ): Promise<{ unlocked: boolean; sourceAttemptId: string | null }> {
+    const passScore =
+      resolvedPassScore ??
+      (await this.resolvePassThreshold(studentId, test, studentAssignmentId));
+
     // Find all submitted attempts for this student and test
     const attempts = await this.examAttemptModel
       .find({
@@ -219,7 +306,6 @@ export class ReadingTranslationsService {
       }
 
       const scorePercent = total > 0 ? (earned / total) * 100 : 0;
-      const passScore = test.passScore ?? 70;
 
       if (scorePercent >= passScore) {
         return {
@@ -245,11 +331,23 @@ export class ReadingTranslationsService {
       throw new BadRequestException('Translation features are only available for Reading tests');
     }
 
+    const passThresholdPercent = await this.resolvePassThreshold(
+      student._id as Types.ObjectId,
+      test,
+      studentAssignmentId,
+    );
+
     const passageStatuses: any[] = [];
 
     for (const part of test.parts || []) {
       const partId = extractObjectId((part as any)._id);
-      const unlockInfo = await this.checkPassageUnlockStatus(student._id as Types.ObjectId, test, partId);
+      const unlockInfo = await this.checkPassageUnlockStatus(
+        student._id as Types.ObjectId,
+        test,
+        partId,
+        studentAssignmentId,
+        passThresholdPercent,
+      );
 
       // Check if there is an existing translation submission
       const existingFilter: Record<string, any> = {
@@ -276,7 +374,9 @@ export class ReadingTranslationsService {
         sourceAttemptId: unlockInfo.sourceAttemptId,
         unlockedByAttemptId: unlockInfo.sourceAttemptId,
         status,
-        lockReason: unlockInfo.unlocked ? null : 'Cần đạt từ 70% trở lên cho Passage này để mở khóa dịch.',
+        lockReason: unlockInfo.unlocked
+          ? null
+          : `Cần đạt từ ${passThresholdPercent}% trở lên cho Passage này để mở khóa dịch.`,
         hasSubmission: Boolean(existingSub),
         submissionStatus: existingSub?.status || null,
         updatedAt: existingSub?.updatedAt ? existingSub.updatedAt.toISOString() : null,
@@ -292,7 +392,7 @@ export class ReadingTranslationsService {
       testTitle: test.title,
       exerciseVersion: test.version,
       translationEnabled: test.translationEnabled,
-      passThresholdPercent: test.passScore ?? 70,
+      passThresholdPercent,
       fullTestPassed,
       passages: passageStatuses,
     };
@@ -306,7 +406,12 @@ export class ReadingTranslationsService {
   ) {
     const { test, part } = await this.resolveTestAndPassage(passageId, testId);
 
-    const unlockInfo = await this.checkPassageUnlockStatus(student._id as Types.ObjectId, test, passageId);
+    const unlockInfo = await this.checkPassageUnlockStatus(
+      student._id as Types.ObjectId,
+      test,
+      passageId,
+      studentAssignmentId,
+    );
 
     const existing = await this.translationModel
       .findOne({
@@ -349,7 +454,12 @@ export class ReadingTranslationsService {
     const { test } = await this.resolveTestAndPassage(passageId, dto.testId);
 
     // STRICT UNLOCK CHECK: Student must have a passed attempt covering this passage
-    const unlockInfo = await this.checkPassageUnlockStatus(student._id as Types.ObjectId, test, passageId);
+    const unlockInfo = await this.checkPassageUnlockStatus(
+      student._id as Types.ObjectId,
+      test,
+      passageId,
+      dto.studentAssignmentId,
+    );
     if (!unlockInfo.unlocked) {
       throw new ForbiddenException({
         statusCode: 403,
@@ -368,9 +478,7 @@ export class ReadingTranslationsService {
     let sub = await this.translationModel.findOne(filter).exec();
 
     if (sub) {
-      if (sub.status === TranslationSubmissionStatus.REVIEWED) {
-        throw new BadRequestException('Cannot edit a translation that has already been reviewed');
-      }
+      this.assertTranslationEditable(sub);
       sub.translatedText = dto.textVi;
       sub.status = TranslationSubmissionStatus.DRAFT;
       await sub.save();
@@ -406,7 +514,12 @@ export class ReadingTranslationsService {
     const { test } = await this.resolveTestAndPassage(passageId, dto.testId);
 
     // STRICT UNLOCK CHECK: Student must have a passed attempt covering this passage
-    const unlockInfo = await this.checkPassageUnlockStatus(student._id as Types.ObjectId, test, passageId);
+    const unlockInfo = await this.checkPassageUnlockStatus(
+      student._id as Types.ObjectId,
+      test,
+      passageId,
+      dto.studentAssignmentId,
+    );
     if (!unlockInfo.unlocked) {
       throw new ForbiddenException({
         statusCode: 403,
@@ -427,9 +540,7 @@ export class ReadingTranslationsService {
     const submittedAt = new Date();
 
     if (sub) {
-      if (sub.status === TranslationSubmissionStatus.REVIEWED) {
-        throw new BadRequestException('Cannot edit a translation that has already been reviewed');
-      }
+      this.assertTranslationEditable(sub);
       if (dto.textVi !== undefined) {
         sub.translatedText = dto.textVi;
       }

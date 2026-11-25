@@ -18,6 +18,7 @@ import { TeacherProfile } from 'src/database/schemas/teacher-profile.schema';
 import { ExamTest } from 'src/database/schemas/exam-test.schema';
 import { UserDocument } from 'src/database/schemas/user.schema';
 import {
+  ExamSkill,
   ExtensionRequestStatus,
   StudentAssignmentStatus,
   TranslationSubmissionStatus,
@@ -242,6 +243,140 @@ describe('DashboardService & DashboardController', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    it('hydrates ExamTest from examTestId for Listening assignments without defaulting to reading', async () => {
+      const listeningTestId = new Types.ObjectId();
+      const saQuery = chain([
+        {
+          _id: new Types.ObjectId(),
+          assignmentId: {
+            _id: assignmentId,
+            title: 'Listening Assignment',
+            openAt: new Date('2026-11-09T23:00:00.000Z'),
+            deadlineAt: new Date('2026-11-10T23:00:00.000Z'),
+            courseId: { _id: courseId, code: 'C1', title: 'Course 1' },
+            examTestId: {
+              _id: listeningTestId,
+              title: 'Listening Test 1',
+              skill: ExamSkill.LISTENING,
+              passScore: 70,
+            },
+          },
+          status: StudentAssignmentStatus.PASSED,
+          bestScore: 90,
+          isTargetAchieved: true,
+        },
+      ]);
+      studentAssignmentModel.find.mockReturnValue(saQuery);
+
+      const res = await service.getStudentDashboard(studentActor);
+
+      expect(res.todayExercises[0].exerciseType).toBe('listening');
+      expect(res.todayExercises[0].translationAvailable).toBe(false);
+    });
+
+    it('hydrates legacy ExamTest stored in raw exerciseId without letting populate(exerciseId) erase it, enabling translationAvailable for passed Reading ExamTests', async () => {
+      const legacyReadingTestId = new Types.ObjectId();
+      const saQuery = chain([
+        {
+          _id: new Types.ObjectId(),
+          assignmentId: {
+            _id: assignmentId,
+            title: 'Legacy Reading ExamTest',
+            openAt: new Date('2026-11-09T23:00:00.000Z'),
+            deadlineAt: new Date('2026-11-10T23:00:00.000Z'),
+            courseId: { _id: courseId, code: 'C1', title: 'Course 1' },
+            exerciseId: legacyReadingTestId,
+          },
+          status: StudentAssignmentStatus.PASSED,
+          bestScore: 85,
+          isTargetAchieved: true,
+        },
+      ]);
+      studentAssignmentModel.find.mockReturnValue(saQuery);
+      examTestModel.find.mockReturnValue(
+        chain([
+          {
+            _id: legacyReadingTestId,
+            title: 'Reading Test Legacy',
+            skill: ExamSkill.READING,
+            passScore: 70,
+          },
+        ]),
+      );
+
+      const res = await service.getStudentDashboard(studentActor);
+
+      const populateArg = saQuery.populate.mock.calls[0]?.[0];
+      expect(populateArg?.populate).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: 'exerciseId' })]),
+      );
+      expect(res.todayExercises[0].exerciseType).toBe('reading');
+      expect(res.todayExercises[0].translationAvailable).toBe(true);
+    });
+
+    it('respects targetScorePercent ?? exe?.passScore ?? examTest?.passScore ?? 70 when computing passed and translationAvailable', async () => {
+      const readingTestId = new Types.ObjectId();
+      const listeningTestId = new Types.ObjectId();
+      studentAssignmentModel.find.mockReturnValue(
+        chain([
+          {
+            _id: new Types.ObjectId(),
+            assignmentId: {
+              _id: new Types.ObjectId(),
+              title: 'Reading Custom Pass 60',
+              openAt: new Date('2026-11-09T23:00:00.000Z'),
+              deadlineAt: new Date('2026-11-10T23:00:00.000Z'),
+              courseId: { _id: courseId, code: 'C1', title: 'Course 1' },
+              examTestId: readingTestId,
+            },
+            status: StudentAssignmentStatus.SUBMITTED,
+            bestScore: 65,
+            isTargetAchieved: false,
+          },
+          {
+            _id: new Types.ObjectId(),
+            assignmentId: {
+              _id: new Types.ObjectId(),
+              title: 'Listening Custom Pass 80',
+              openAt: new Date('2026-11-09T23:00:00.000Z'),
+              deadlineAt: new Date('2026-11-10T23:00:00.000Z'),
+              courseId: { _id: courseId, code: 'C1', title: 'Course 1' },
+              exerciseId: listeningTestId,
+            },
+            status: StudentAssignmentStatus.SUBMITTED,
+            bestScore: 75,
+            isTargetAchieved: false,
+          },
+        ]),
+      );
+      examTestModel.find.mockReturnValue(
+        chain([
+          {
+            _id: readingTestId,
+            title: 'Reading 60',
+            skill: ExamSkill.READING,
+            passScore: 60,
+          },
+          {
+            _id: listeningTestId,
+            title: 'Listening 80',
+            skill: ExamSkill.LISTENING,
+            passScore: 80,
+          },
+        ]),
+      );
+
+      const res = await service.getStudentDashboard(studentActor);
+
+      expect(res.todayExercises[0].exerciseType).toBe('reading');
+      expect(res.todayExercises[0].passed).toBe(true);
+      expect(res.todayExercises[0].translationAvailable).toBe(true);
+
+      expect(res.todayExercises[1].exerciseType).toBe('listening');
+      expect(res.todayExercises[1].passed).toBe(false);
+      expect(res.todayExercises[1].translationAvailable).toBe(false);
     });
   });
 

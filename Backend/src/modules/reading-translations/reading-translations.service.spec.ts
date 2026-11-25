@@ -12,6 +12,7 @@ import { ExamTest } from 'src/database/schemas/exam-test.schema';
 import { ExamAttempt } from 'src/database/schemas/exam-attempt.schema';
 import { Course } from 'src/database/schemas/course.schema';
 import { Assignment } from 'src/database/schemas/assignment.schema';
+import { StudentAssignment } from 'src/database/schemas/student-assignment.schema';
 import { Enrollment } from 'src/database/schemas/enrollment.schema';
 import { UserDocument } from 'src/database/schemas/user.schema';
 import {
@@ -33,6 +34,7 @@ describe('ReadingTranslationsService', () => {
   let examAttemptModel: any;
   let courseModel: any;
   let assignmentModel: any;
+  let studentAssignmentModel: any;
   let enrollmentModel: any;
 
   const studentAId = new Types.ObjectId();
@@ -155,6 +157,11 @@ describe('ReadingTranslationsService', () => {
     assignmentModel = {
       find: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }),
       findOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }),
+      findById: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }),
+    };
+
+    studentAssignmentModel = {
+      findById: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }),
     };
 
     enrollmentModel = {
@@ -170,6 +177,7 @@ describe('ReadingTranslationsService', () => {
         { provide: getModelToken(ExamAttempt.name), useValue: examAttemptModel },
         { provide: getModelToken(Course.name), useValue: courseModel },
         { provide: getModelToken(Assignment.name), useValue: assignmentModel },
+        { provide: getModelToken(StudentAssignment.name), useValue: studentAssignmentModel },
         { provide: getModelToken(Enrollment.name), useValue: enrollmentModel },
       ],
     }).compile();
@@ -253,6 +261,151 @@ describe('ReadingTranslationsService', () => {
       expect(res.passages[0].unlocked).toBe(true);
       expect(res.passages[1].unlocked).toBe(true);
     });
+
+    it('uses assignment.targetScorePercent when studentAssignmentId is provided in getEligibility and getPassageTranslation', async () => {
+      const saId = new Types.ObjectId();
+      const asnId = new Types.ObjectId();
+      const customTestId = new Types.ObjectId();
+      const customPassageId = new Types.ObjectId();
+      const customTest = {
+        ...sampleReadingTest,
+        _id: customTestId,
+        passScore: 70,
+        parts: [
+          {
+            _id: customPassageId,
+            ordinal: 1,
+            type: PartType.PASSAGE,
+            title: 'Passage 1',
+            contentHtml: '<p>Text</p>',
+            questionGroups: [
+              {
+                _id: new Types.ObjectId(),
+                type: ExamQuestionType.TRUE_FALSE_NOT_GIVEN,
+                questions: [
+                  { number: 1, prompt: 'Q1', points: 1, grading: { acceptedKeys: ['TRUE'] } },
+                  { number: 2, prompt: 'Q2', points: 1, grading: { acceptedKeys: ['TRUE'] } },
+                  { number: 3, prompt: 'Q3', points: 1, grading: { acceptedKeys: ['TRUE'] } },
+                  { number: 4, prompt: 'Q4', points: 1, grading: { acceptedKeys: ['TRUE'] } },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(customTest),
+      });
+      // 3/4 = 75% (>= test.passScore 70, < assignment.targetScorePercent 85)
+      const attempt75 = {
+        _id: new Types.ObjectId(),
+        studentId: studentAId,
+        testId: customTestId,
+        mode: ExamMode.PART,
+        partId: customPassageId.toHexString(),
+        status: AttemptStatus.SUBMITTED,
+        scopeQuestionIds: ['1', '2', '3', '4'],
+        savedAnswers: new Map([
+          ['1', 'TRUE'],
+          ['2', 'TRUE'],
+          ['3', 'TRUE'],
+          ['4', 'FALSE'],
+        ]),
+      };
+      examAttemptModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([attempt75]),
+        }),
+      });
+      translationModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+      studentAssignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: saId,
+          studentId: studentAId,
+          assignmentId: asnId,
+        }),
+      });
+      assignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: asnId,
+          examTestId: customTestId,
+          targetScorePercent: 85,
+        }),
+      });
+
+      const eligStrict = await service.getEligibility(
+        customTestId.toHexString(),
+        saId.toHexString(),
+        studentA,
+      );
+      expect(eligStrict.passThresholdPercent).toBe(85);
+      expect(eligStrict.passages[0].unlocked).toBe(false);
+      expect(eligStrict.passages[0].status).toBe('LOCKED');
+
+      const detailStrict = await service.getPassageTranslation(
+        customPassageId.toHexString(),
+        customTestId.toHexString(),
+        saId.toHexString(),
+        studentA,
+      );
+      expect(detailStrict.unlocked).toBe(false);
+      expect(detailStrict.status).toBe('LOCKED');
+
+      await expect(
+        service.saveDraft(
+          customPassageId.toHexString(),
+          {
+            testId: customTestId.toHexString(),
+            studentAssignmentId: saId.toHexString(),
+            textVi: 'Attempt below assignment target',
+          },
+          studentA,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+
+      // Lower assignment targetScorePercent (60%) unlocks even when test.passScore is 70%
+      assignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: asnId,
+          examTestId: customTestId,
+          targetScorePercent: 60,
+        }),
+      });
+      const attempt60 = {
+        ...attempt75,
+        scopeQuestionIds: ['1', '2', '3', '4', '5'],
+        savedAnswers: new Map([
+          ['1', 'TRUE'],
+          ['2', 'TRUE'],
+          ['3', 'TRUE'],
+          ['4', 'FALSE'],
+          ['5', 'FALSE'],
+        ]),
+      };
+      customTest.parts[0].questionGroups[0].questions.push({
+        number: 5,
+        prompt: 'Q5',
+        points: 1,
+        grading: { acceptedKeys: ['TRUE'] },
+      });
+      examAttemptModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([attempt60]),
+        }),
+      });
+
+      const eligRelaxed = await service.getEligibility(
+        customTestId.toHexString(),
+        saId.toHexString(),
+        studentA,
+      );
+      expect(eligRelaxed.passThresholdPercent).toBe(60);
+      expect(eligRelaxed.passages[0].unlocked).toBe(true);
+      expect(eligRelaxed.passages[0].status).toBe('DRAFT');
+    });
   });
 
   describe('saveDraft & submitTranslation authorization', () => {
@@ -308,6 +461,62 @@ describe('ReadingTranslationsService', () => {
 
       expect(draftRes).toBeDefined();
       expect(draftRes.status).toBe('DRAFT');
+    });
+
+    it('rejects saveDraft and submitTranslation when translation is already SUBMITTED', async () => {
+      const passedPartAttempt = {
+        _id: new Types.ObjectId(),
+        studentId: studentAId,
+        testId,
+        mode: ExamMode.PART,
+        partId: passage1Id.toHexString(),
+        status: AttemptStatus.SUBMITTED,
+        scopeQuestionIds: ['1'],
+        savedAnswers: new Map([['1', 'TRUE']]),
+      };
+
+      examAttemptModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([passedPartAttempt]),
+        }),
+      });
+
+      const submittedDoc = {
+        _id: new Types.ObjectId(),
+        studentId: studentAId,
+        testId,
+        passageId: passage1Id.toHexString(),
+        translatedText: 'Bản dịch đã nộp',
+        status: TranslationSubmissionStatus.SUBMITTED,
+        save: jest.fn(),
+      };
+      translationModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(submittedDoc),
+      });
+
+      await expect(
+        service.saveDraft(
+          passage1Id.toHexString(),
+          {
+            testId: testId.toHexString(),
+            textVi: 'Cố tình ghi đè thành draft',
+          },
+          studentA,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.submitTranslation(
+          passage1Id.toHexString(),
+          {
+            testId: testId.toHexString(),
+            textVi: 'Cố tình ghi đè bản đã nộp',
+          },
+          studentA,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(submittedDoc.save).not.toHaveBeenCalled();
     });
   });
 

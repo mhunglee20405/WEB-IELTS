@@ -252,6 +252,49 @@ describe('DeadlinesService', () => {
       expect(penaltyModel.findOne).not.toHaveBeenCalled();
       expect(studentProfileModel.updateOne).not.toHaveBeenCalled();
     });
+
+    it('does not double-count newPenaltiesCount when MongoDB withTransaction retries after TransientTransactionError', async () => {
+      const pastDeadline = new Date('2026-11-20T23:59:59.999Z');
+      const referenceDate = new Date('2026-11-21T08:00:00Z');
+      const mockOverdueDoc: any = {
+        _id: studentAssignmentId,
+        studentId,
+        assignmentId,
+        effectiveDeadlineAt: pastDeadline,
+        status: StudentAssignmentStatus.NOT_STARTED,
+      };
+
+      studentAssignmentModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            exec: jest.fn().mockResolvedValue([mockOverdueDoc]),
+          }),
+        }),
+      });
+      studentAssignmentModel.findOneAndUpdate.mockResolvedValue({
+        ...mockOverdueDoc,
+        status: StudentAssignmentStatus.OVERDUE,
+      });
+      penaltyModel.findOne.mockReturnValue({
+        session: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      });
+
+      connection.startSession.mockResolvedValue({
+        withTransaction: jest.fn().mockImplementation(async (cb: any) => {
+          // Simulate attempt 1 running to completion before transient commit error, then retry attempt 2 succeeding
+          await cb();
+          return await cb();
+        }),
+        endSession: jest.fn().mockResolvedValue(true),
+      });
+
+      const res = await service.processOverdueAssignments({}, undefined, referenceDate);
+
+      expect(res.processedCount).toBe(1);
+      expect(res.newPenaltiesCount).toBe(1);
+    });
   });
 });
 

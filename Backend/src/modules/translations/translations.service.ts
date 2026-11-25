@@ -106,8 +106,12 @@ export class TranslationsService {
     const isSubmitted = status === TranslationSubmissionStatus.SUBMITTED;
 
     if (existing) {
-      if (existing.status === TranslationSubmissionStatus.REVIEWED) {
-        throw new BadRequestException('Cannot edit a translation that has already been reviewed by the teacher');
+      const normalizedStatus = String(existing.status || '').toLowerCase();
+      if (
+        normalizedStatus === TranslationSubmissionStatus.SUBMITTED ||
+        normalizedStatus === TranslationSubmissionStatus.REVIEWED
+      ) {
+        throw new BadRequestException('Cannot edit a submitted or reviewed translation');
       }
 
       existing.translatedText = dto.translatedText;

@@ -152,6 +152,8 @@ export class DeadlinesService {
       const session = await this.connection.startSession();
       try {
         await session.withTransaction(async () => {
+          wasProcessed = false;
+          penaltyCreated = false;
           const updateResult = this.studentAssignmentModel.findOneAndUpdate(
             {
               _id: sa._id,
@@ -210,30 +212,32 @@ export class DeadlinesService {
               { $inc: { penaltyPointsCache: 1 } },
               { session },
             );
-            newPenaltiesCount++;
             penaltyCreated = true;
           }
         });
         if (wasProcessed) {
           processedCount++;
         }
-        if (penaltyCreated && this.notificationsService) {
-          // Dispatch notification to student asynchronously after commit
-          this.notificationsService
-            .create({
-              userId: sa.studentId.toString(),
-              type: NotificationType.OVERDUE,
-              title: 'Cảnh báo: Bài tập đã quá hạn',
-              body: `Bài tập của bạn đã quá hạn nộp. Hệ thống đã ghi nhận 1 điểm phạt.`,
-              payload: {
-                studentAssignmentId: sa._id.toString(),
-                effectiveDeadlineAt: sa.effectiveDeadlineAt.toISOString(),
-              },
-              sendEmail: true,
-              emailTemplateKey: 'assignment-overdue',
-              idempotencyKey: `notif:overdue:${sa._id}`,
-            })
-            .catch((err) => this.logger.warn(`Failed to notify overdue assignment: ${err.message}`));
+        if (penaltyCreated) {
+          newPenaltiesCount++;
+          if (this.notificationsService) {
+            // Dispatch notification to student asynchronously after commit
+            this.notificationsService
+              .create({
+                userId: sa.studentId.toString(),
+                type: NotificationType.OVERDUE,
+                title: 'Cảnh báo: Bài tập đã quá hạn',
+                body: `Bài tập của bạn đã quá hạn nộp. Hệ thống đã ghi nhận 1 điểm phạt.`,
+                payload: {
+                  studentAssignmentId: sa._id.toString(),
+                  effectiveDeadlineAt: sa.effectiveDeadlineAt.toISOString(),
+                },
+                sendEmail: true,
+                emailTemplateKey: 'assignment-overdue',
+                idempotencyKey: `notif:overdue:${sa._id}`,
+              })
+              .catch((err) => this.logger.warn(`Failed to notify overdue assignment: ${err.message}`));
+          }
         }
       } catch (err: any) {
         if (err.code === 11000) {

@@ -969,6 +969,61 @@ describe('ExamAttemptsService', () => {
       expect(saDoc.status).toBe(StudentAssignmentStatus.PASSED);
       expect(saDoc.bestScore).toBe(90);
     });
+
+    it('serializes null student answers as empty string instead of "null" in Submission', async () => {
+      const assignmentId = new Types.ObjectId();
+      const saId = new Types.ObjectId();
+      const saDoc = {
+        _id: saId,
+        assignmentId,
+        studentId,
+        attemptsCount: 0,
+        bestScore: 0,
+        isTargetAchieved: false,
+        status: StudentAssignmentStatus.IN_PROGRESS,
+        save: jest.fn().mockResolvedValue(true),
+      };
+      const attemptDoc = {
+        _id: new Types.ObjectId(),
+        studentId,
+        testId,
+        assignmentId,
+        studentAssignmentId: saId,
+        exerciseVersion: 1,
+        skill: ExamSkill.READING,
+        mode: ExamMode.PART,
+        partId: part1Id.toHexString(),
+        status: AttemptStatus.IN_PROGRESS,
+        scopeQuestionIds: ['1', '2'],
+        savedAnswers: new Map<string, any>([
+          ['1', null],
+          ['2', ['FALSE']],
+        ]),
+      };
+
+      examAttemptModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(attemptDoc),
+      });
+      studentAssignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(saDoc),
+      });
+      assignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ _id: assignmentId, targetScorePercent: 70 }),
+      });
+
+      const createdSubs: any[] = [];
+      submissionModel.mockImplementation((dto: any) => {
+        const doc = { ...dto, _id: new Types.ObjectId(), save: jest.fn().mockResolvedValue(dto) };
+        createdSubs.push(doc);
+        return doc;
+      });
+
+      await service.submitAttempt(attemptDoc._id.toHexString(), {}, student);
+
+      expect(createdSubs).toHaveLength(1);
+      expect(createdSubs[0].answers[0].value).toBe('');
+      expect(createdSubs[0].answers[1].value).toBe('["FALSE"]');
+    });
   });
 
   describe('getResult, getAttempt, and getReview (cheating oracle & teacher ownership)', () => {

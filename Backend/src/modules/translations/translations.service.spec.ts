@@ -166,6 +166,104 @@ describe('TranslationsService', () => {
       expect(res.status).toBe(TranslationSubmissionStatus.SUBMITTED);
       expect(res.originalPassage).toContain('Mesopotamia');
     });
+
+    it('rejects downgrading or overwriting an already SUBMITTED or REVIEWED translation', async () => {
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(sampleReadingAssignment),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleStudentAssignment),
+      });
+
+      const existingSubmitted = {
+        _id: translationId,
+        studentAssignmentId,
+        assignmentId,
+        studentId,
+        translatedText: 'Bản dịch đã nộp',
+        status: TranslationSubmissionStatus.SUBMITTED,
+        save: jest.fn(),
+      };
+      translationModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(existingSubmitted),
+      });
+
+      await expect(
+        service.submit(
+          assignmentId.toHexString(),
+          {
+            translatedText: 'Cố tình hoàn tác về draft',
+            status: TranslationSubmissionStatus.DRAFT,
+          },
+          studentActor,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.submit(
+          assignmentId.toHexString(),
+          {
+            translatedText: 'Cố tình ghi đè bản đã nộp',
+            status: TranslationSubmissionStatus.SUBMITTED,
+          },
+          studentActor,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(existingSubmitted.save).not.toHaveBeenCalled();
+    });
+
+    it('preserves DRAFT -> DRAFT and DRAFT -> SUBMITTED transitions', async () => {
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(sampleReadingAssignment),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleStudentAssignment),
+      });
+
+      const existingDraft: any = {
+        _id: translationId,
+        studentAssignmentId,
+        assignmentId,
+        studentId,
+        translatedText: 'Nháp ban đầu',
+        status: TranslationSubmissionStatus.DRAFT,
+        save: jest.fn().mockImplementation(function (this: any) {
+          return Promise.resolve(this);
+        }),
+        toObject: function () {
+          return { ...this };
+        },
+      };
+      translationModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(existingDraft),
+      });
+
+      const draftRes = await service.submit(
+        assignmentId.toHexString(),
+        {
+          translatedText: 'Nháp cập nhật mới nhất...',
+          status: TranslationSubmissionStatus.DRAFT,
+        },
+        studentActor,
+      );
+      expect(draftRes.status).toBe(TranslationSubmissionStatus.DRAFT);
+
+      const submittedRes = await service.submit(
+        assignmentId.toHexString(),
+        {
+          translatedText: 'Bản dịch hoàn chỉnh để nộp...',
+          status: TranslationSubmissionStatus.SUBMITTED,
+        },
+        studentActor,
+      );
+      expect(submittedRes.status).toBe(TranslationSubmissionStatus.SUBMITTED);
+      expect(existingDraft.save).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('review', () => {

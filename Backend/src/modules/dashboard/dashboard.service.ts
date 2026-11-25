@@ -39,6 +39,7 @@ import {
   TeacherProfile,
   TeacherProfileDocument,
 } from 'src/database/schemas/teacher-profile.schema';
+import { Exercise, ExerciseDocument } from 'src/database/schemas/exercise.schema';
 import { ExamTest, ExamTestDocument } from 'src/database/schemas/exam-test.schema';
 import {
   CourseStatus,
@@ -83,7 +84,108 @@ export class DashboardService {
     @Optional()
     @InjectModel(ExamTest.name)
     private readonly examTestModel?: Model<ExamTestDocument>,
+    @Optional()
+    @InjectModel(Exercise.name)
+    private readonly exerciseModel?: Model<ExerciseDocument>,
   ) {}
+
+  private async execQuery<T>(query: any): Promise<T> {
+    if (!query) return query;
+    return typeof query.exec === 'function' ? await query.exec() : await query;
+  }
+
+  private async hydrateStudentAssignmentRefs(assignments: any[]): Promise<{
+    exerciseMap: Map<string, any>;
+    examTestMap: Map<string, any>;
+  }> {
+    const exerciseMap = new Map<string, any>();
+    const examTestMap = new Map<string, any>();
+    const exerciseLookupIds = new Set<string>();
+    const examTestLookupIds = new Set<string>();
+
+    for (const asg of assignments || []) {
+      if (!asg) continue;
+
+      if (
+        asg.exerciseId &&
+        typeof asg.exerciseId === 'object' &&
+        (asg.exerciseId.title || asg.exerciseId.type)
+      ) {
+        const idStr = extractObjectId(asg.exerciseId);
+        if (idStr) exerciseMap.set(idStr, asg.exerciseId);
+      } else if (asg.exerciseId != null) {
+        const idStr = extractObjectId(asg.exerciseId);
+        if (idStr && idStr !== 'undefined' && idStr !== 'null') {
+          exerciseLookupIds.add(idStr);
+        }
+      }
+
+      if (
+        asg.examTestId &&
+        typeof asg.examTestId === 'object' &&
+        (asg.examTestId.title || asg.examTestId.skill)
+      ) {
+        const idStr = extractObjectId(asg.examTestId);
+        if (idStr) examTestMap.set(idStr, asg.examTestId);
+      } else if (asg.examTestId != null) {
+        const idStr = extractObjectId(asg.examTestId);
+        if (idStr && idStr !== 'undefined' && idStr !== 'null') {
+          examTestLookupIds.add(idStr);
+        }
+      }
+    }
+
+    const exerciseIdsToFetch = Array.from(exerciseLookupIds).filter(
+      (id) => !exerciseMap.has(id),
+    );
+    if (exerciseIdsToFetch.length > 0 && this.exerciseModel) {
+      const objectIds = exerciseIdsToFetch.map((id) =>
+        Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+      );
+      if (typeof this.exerciseModel.find === 'function') {
+        const q = this.exerciseModel.find({ _id: { $in: objectIds } });
+        const docs = await (typeof q?.select === 'function'
+          ? this.execQuery<any[]>(q.select('title type passScore'))
+          : this.execQuery<any[]>(q));
+        for (const ex of docs || []) {
+          if (ex?._id != null) {
+            const exId = extractObjectId(ex._id);
+            if (exId) exerciseMap.set(exId, ex);
+          }
+        }
+      }
+    }
+
+    // Legacy ExamTest assignments store ExamTest._id in raw exerciseId without examTestId
+    for (const id of exerciseLookupIds) {
+      if (!exerciseMap.has(id)) {
+        examTestLookupIds.add(id);
+      }
+    }
+
+    const examTestIdsToFetch = Array.from(examTestLookupIds).filter(
+      (id) => !examTestMap.has(id),
+    );
+    if (examTestIdsToFetch.length > 0 && this.examTestModel) {
+      const objectIds = examTestIdsToFetch.map((id) =>
+        Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+      );
+      if (typeof this.examTestModel.find === 'function') {
+        const q = this.examTestModel.find({ _id: { $in: objectIds } });
+        const docs = await (typeof q?.select === 'function'
+          ? this.execQuery<any[]>(q.select('title skill passScore'))
+          : this.execQuery<any[]>(q));
+        for (const t of docs || []) {
+          if (t?._id != null) {
+            const tId = extractObjectId(t._id);
+            if (tId) examTestMap.set(tId, t);
+          }
+        }
+      }
+    }
+
+    return { exerciseMap, examTestMap };
+  }
 
   private async countMonthlyExtensionsUsed(
     studentId: Types.ObjectId,
@@ -200,20 +302,43 @@ export class DashboardService {
         path: 'assignmentId',
         populate: [
           { path: 'courseId', select: 'code title' },
-          { path: 'exerciseId', select: 'title type passScore' },
+          { path: 'examTestId', select: 'title skill passScore' },
         ],
       })
       .sort({ createdAt: -1 })
       .exec();
 
+    const validSaDocs = saDocs.filter((sa: any) => sa.assignmentId);
+    const refs = await this.hydrateStudentAssignmentRefs(
+      validSaDocs.map((sa: any) => sa.assignmentId),
+    );
+
     const submittedAtBySaId = new Map<string, string>();
-    const formattedAssignments = saDocs
-      .filter((sa: any) => sa.assignmentId)
-      .map((sa: any) => {
+    const formattedAssignments = validSaDocs.map((sa: any) => {
         const asg = sa.assignmentId;
         const crs = asg.courseId;
-        const exe = asg.exerciseId;
-        const targetScore = asg.targetScorePercent ?? 70;
+        const rawExerciseId = asg.exerciseId != null ? extractObjectId(asg.exerciseId) : '';
+        const rawExamTestId = asg.examTestId != null ? extractObjectId(asg.examTestId) : '';
+        const exe =
+          asg.exerciseId &&
+          typeof asg.exerciseId === 'object' &&
+          (asg.exerciseId.title || asg.exerciseId.type)
+            ? asg.exerciseId
+            : rawExerciseId
+              ? refs.exerciseMap.get(rawExerciseId)
+              : undefined;
+        const examTest =
+          asg.examTestId &&
+          typeof asg.examTestId === 'object' &&
+          (asg.examTestId.title || asg.examTestId.skill)
+            ? asg.examTestId
+            : (rawExamTestId ? refs.examTestMap.get(rawExamTestId) : undefined) ||
+              (rawExerciseId ? refs.examTestMap.get(rawExerciseId) : undefined);
+        const resolvedExerciseType = String(
+          exe?.type ?? examTest?.skill?.toLowerCase() ?? 'reading',
+        ).toLowerCase();
+        const targetScore =
+          asg.targetScorePercent ?? exe?.passScore ?? examTest?.passScore ?? 70;
         const passed = Boolean(
           sa.isTargetAchieved ||
           sa.status === StudentAssignmentStatus.PASSED ||
@@ -238,7 +363,7 @@ export class DashboardService {
           studentId: extractObjectId(student._id),
           studentName: student.fullName,
           title: asg.title,
-          exerciseType: exe?.type || 'reading',
+          exerciseType: resolvedExerciseType,
           assignedDate: asg.assignedDate || todayKey,
           openAt,
           dueAt,
@@ -249,7 +374,7 @@ export class DashboardService {
           bestScore: sa.bestScore ?? null,
           passed,
           answerReviewUnlocked: passed,
-          translationAvailable: passed && exe?.type === 'reading',
+          translationAvailable: passed && resolvedExerciseType === 'reading',
           translationStatus: sa.translationStatus || 'not_started',
           penaltyApplied: Boolean(sa.penaltyAppliedAt),
         };

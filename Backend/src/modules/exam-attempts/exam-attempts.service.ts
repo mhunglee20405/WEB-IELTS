@@ -745,7 +745,10 @@ export class ExamAttemptsService {
 
       gradedAnswers.push({
         questionId: qNum,
-        value: typeof studentVal === 'object' ? JSON.stringify(studentVal) : String(studentVal ?? ''),
+        value:
+          studentVal !== null && typeof studentVal === 'object'
+            ? JSON.stringify(studentVal)
+            : String(studentVal ?? ''),
         awardedPoints: gradeRes.awardedPoints,
         isCorrect: gradeRes.isCorrect,
       });
