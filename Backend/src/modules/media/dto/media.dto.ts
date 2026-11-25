@@ -8,7 +8,18 @@ export class AudioUploadIntentDto {
 
   @ApiProperty({ example: 'audio/mpeg' })
   @IsString()
-  @IsIn(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a'])
+  @IsIn([
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/mp4',
+    'audio/x-m4a',
+    'audio/m4a',
+    'audio/aac',
+    'audio/ogg',
+    'audio/webm',
+  ])
   mimeType: string;
 
   @ApiProperty({ example: 10485760, description: 'File size in bytes (max 50MB)' })

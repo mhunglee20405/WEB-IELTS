@@ -151,21 +151,10 @@ export async function apiRequest<TResponse, TBody = unknown>(
     });
   }
 
-  let requestBody: unknown = options.body;
+  const requestBody: unknown = options.body;
   const isJsonBody = requestBody !== undefined && !(requestBody instanceof FormData);
   if (isJsonBody) {
     requestHeaders["Content-Type"] = "application/json";
-    if (
-      options.idempotencyKey &&
-      typeof requestBody === "object" &&
-      requestBody !== null &&
-      !("idempotencyKey" in (requestBody as Record<string, unknown>))
-    ) {
-      requestBody = {
-        ...(requestBody as Record<string, unknown>),
-        idempotencyKey: options.idempotencyKey,
-      };
-    }
   }
 
   const maxAttempts = method === "GET" ? 2 : 1;

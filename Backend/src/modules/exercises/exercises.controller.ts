@@ -79,6 +79,14 @@ export class ExercisesController {
     return this.exercisesService.publish(id, actor);
   }
 
+  @Post(':id/versions')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Fork exercise into a new editable DRAFT version' })
+  @ApiParam({ name: 'id', description: 'Exercise ObjectId' })
+  createVersion(@Param('id') id: string, @CurrentUser() actor: UserDocument) {
+    return this.exercisesService.createVersion(id, actor);
+  }
+
   @Post(':id/archive')
   @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @HttpCode(HttpStatus.OK)

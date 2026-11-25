@@ -337,6 +337,41 @@ export class ExercisesService {
     return ExerciseMapper.forTeacher(published);
   }
 
+  async createVersion(id: string, actor: UserDocument): Promise<FullExercise> {
+    if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Exercise not found');
+
+    const exercise = await this.exerciseModel
+      .findById(id)
+      .select('+questions.answerSpecification +questions.explanation')
+      .exec();
+
+    if (!exercise) throw new NotFoundException('Exercise not found');
+
+    if (actor.role === UserRole.TEACHER) {
+      this.assertTeacherOwns(exercise, actor._id as Types.ObjectId);
+    }
+
+    if (exercise.status === ExerciseStatus.ARCHIVED) {
+      throw new UnprocessableEntityException('Cannot version an archived exercise');
+    }
+
+    const cloned = new this.exerciseModel({
+      title: exercise.title,
+      description: exercise.description,
+      type: exercise.type,
+      passage: exercise.passage,
+      audioAssets: exercise.audioAssets,
+      questions: exercise.questions,
+      passScore: exercise.passScore,
+      version: (exercise.version || 1) + 1,
+      status: ExerciseStatus.DRAFT,
+      createdBy: actor._id,
+    });
+
+    const saved = await cloned.save();
+    return ExerciseMapper.forTeacher(saved);
+  }
+
   async archive(id: string, actor: UserDocument): Promise<{ message: string; exercise: FullExercise }> {
     if (!Types.ObjectId.isValid(id)) throw new NotFoundException('Exercise not found');
 

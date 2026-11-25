@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsUrl,
   IsEnum,
+  IsMongoId,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -11,6 +12,11 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LessonStatus, LessonType } from 'src/database/schemas/enums';
 
 export class CreateLessonDto {
+  @ApiPropertyOptional({ description: 'Course ObjectId (required when using POST /lessons directly)' })
+  @IsOptional()
+  @IsMongoId()
+  courseId?: string;
+
   @ApiProperty({ example: 'Reading Passage 1 — Skimming & Scanning' })
   @IsString()
   @MinLength(2)

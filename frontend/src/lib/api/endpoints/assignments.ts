@@ -42,6 +42,9 @@ export const assignmentsApi = {
     if (typeof payload.maxAttempts === "number" && !isNaN(payload.maxAttempts)) {
       body.maxAttempts = payload.maxAttempts;
     }
+    if (payload.allowRetake !== undefined) {
+      body.allowRetake = payload.allowRetake;
+    }
     return apiRequest<Assignment, typeof body>({
       method: "POST",
       path: "/assignments",
@@ -85,10 +88,14 @@ export const assignmentsApi = {
   },
 
   update(id: string, payload: UpdateAssignmentRequest): Promise<Assignment> {
-    return apiRequest<Assignment, UpdateAssignmentRequest>({
+    const body: Record<string, unknown> = { ...payload };
+    if (payload.dueAt && !body.deadlineAt) {
+      body.deadlineAt = payload.dueAt;
+    }
+    return apiRequest<Assignment, typeof body>({
       method: "PATCH",
       path: `/assignments/${encodeURIComponent(id)}`,
-      body: payload,
+      body,
     });
   },
 

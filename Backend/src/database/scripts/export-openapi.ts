@@ -6,6 +6,7 @@ import { AppModule } from '../../app.module';
 
 async function exportOpenApi() {
   const app = await NestFactory.create(AppModule, { logger: false });
+  app.setGlobalPrefix('api/v1');
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('IELTS LMS API')
