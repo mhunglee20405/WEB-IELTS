@@ -127,7 +127,7 @@ describe('ExamTestsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('allows modification if test is PUBLISHED', async () => {
+    it('rejects modification if test is PUBLISHED', async () => {
       const testDoc = {
         _id: new Types.ObjectId(),
         title: 'Published Test',
@@ -141,9 +141,76 @@ describe('ExamTestsService', () => {
         exec: jest.fn().mockResolvedValue(testDoc),
       });
 
-      const updated = await service.update(testDoc._id.toHexString(), { title: 'New Title' }, teacherA);
-      expect(testDoc.title).toBe('New Title');
-      expect(testDoc.save).toHaveBeenCalled();
+      await expect(
+        service.update(testDoc._id.toHexString(), { title: 'New Title' }, teacherA),
+      ).rejects.toThrow(BadRequestException);
+      expect(testDoc.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects addPart, updatePart, deletePart, addQuestionGroup, and updateQuestionGroup on PUBLISHED test', async () => {
+      const pId = new Types.ObjectId();
+      const gId = new Types.ObjectId();
+      const testDoc = {
+        _id: new Types.ObjectId(),
+        title: 'Published Test',
+        skill: ExamSkill.READING,
+        createdBy: teacherAId,
+        status: ExamTestStatus.PUBLISHED,
+        parts: [
+          {
+            _id: pId,
+            ordinal: 1,
+            type: PartType.PASSAGE,
+            title: 'Passage 1',
+            questionGroups: [{ _id: gId, type: ExamQuestionType.TRUE_FALSE_NOT_GIVEN, questions: [] }],
+          },
+        ],
+        toObject: () => testDoc,
+        save: jest.fn(),
+      };
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(testDoc),
+      });
+
+      await expect(
+        service.addPart(
+          testDoc._id.toHexString(),
+          { type: PartType.PASSAGE, ordinal: 2, title: 'Passage 2' },
+          teacherA,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.updatePart(testDoc._id.toHexString(), pId.toHexString(), { title: 'Edited' }, teacherA),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.deletePart(testDoc._id.toHexString(), pId.toHexString(), teacherA),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.addQuestionGroup(
+          testDoc._id.toHexString(),
+          pId.toHexString(),
+          {
+            type: ExamQuestionType.TRUE_FALSE_NOT_GIVEN,
+            order: 1,
+            questions: [
+              { number: 1, prompt: 'Q1', type: ExamQuestionType.TRUE_FALSE_NOT_GIVEN, points: 1, grading: { acceptedKeys: ['TRUE'], caseSensitive: false } },
+            ],
+          },
+          teacherA,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.updateQuestionGroup(
+          testDoc._id.toHexString(),
+          gId.toHexString(),
+          { title: 'Edited group' },
+          teacherA,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('rejects modification if test is ARCHIVED', async () => {

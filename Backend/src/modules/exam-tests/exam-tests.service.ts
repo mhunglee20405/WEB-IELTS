@@ -57,9 +57,9 @@ export class ExamTestsService {
   }
 
   private checkDraftStatus(test: ExamTestDocument) {
-    if (test.status === ExamTestStatus.ARCHIVED) {
+    if (test.status !== ExamTestStatus.DRAFT) {
       throw new BadRequestException(
-        `Cannot modify an ARCHIVED exam test.`,
+        'Only DRAFT tests can be modified directly. Create a new version instead.',
       );
     }
   }
