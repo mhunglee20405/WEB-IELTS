@@ -6,7 +6,7 @@ export type NotificationDocument = Notification & Document;
 
 @Schema({ timestamps: true, collection: 'notifications' })
 export class Notification {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
   @Prop({

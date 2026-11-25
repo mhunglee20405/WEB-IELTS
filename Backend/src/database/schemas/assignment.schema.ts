@@ -23,6 +23,9 @@ export class Assignment {
   @Prop({ type: Types.ObjectId, ref: 'Exercise', required: true })
   exerciseId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'ExamTest', required: false })
+  examTestId?: Types.ObjectId;
+
   /** Snapshot of exercise version at assignment creation */
   @Prop({ required: true, min: 1 })
   exerciseVersion: number;
