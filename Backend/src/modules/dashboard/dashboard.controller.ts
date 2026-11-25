@@ -47,8 +47,11 @@ export class DashboardController {
   @Roles(UserRole.TEACHER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get penalties for a specific student' })
   @ApiParam({ name: 'studentId', description: 'Student User ObjectId' })
-  getStudentPenalties(@Param('studentId') studentId: string) {
-    return this.dashboardService.getStudentPenalties(studentId);
+  getStudentPenalties(
+    @Param('studentId') studentId: string,
+    @CurrentUser() actor: UserDocument,
+  ) {
+    return this.dashboardService.getStudentPenalties(studentId, actor);
   }
 }
 

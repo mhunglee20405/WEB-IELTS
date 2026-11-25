@@ -98,6 +98,7 @@ export class TranslationsController {
   ) {
     const reviewDto: ReviewTranslationDto = {
       teacherComment: dto.teacherComment || dto.feedback || '',
+      decision: dto.decision,
     };
     return this.translationsService.review(id, reviewDto, actor);
   }

@@ -162,15 +162,19 @@ export class TranslationsService {
       .populate('reviewedBy', 'fullName email')
       .exec();
 
+    const isBeforeOpen =
+      Boolean(assignment.openAt) && Date.now() < new Date(assignment.openAt).getTime();
+    const passage = isBeforeOpen ? undefined : assignment.exerciseSnapshot?.passage;
+
     if (!submission) {
       return {
         assignmentId,
-        passage: assignment.exerciseSnapshot?.passage,
+        passage,
         translation: null,
       };
     }
 
-    return this.formatTranslation(submission, assignment.exerciseSnapshot?.passage);
+    return this.formatTranslation(submission, passage);
   }
 
   async findAllForAssignment(

@@ -204,6 +204,68 @@ describe('PenaltiesService', () => {
       expect(res.items[0].assignmentTitle).toBe('IELTS Reading Test 1');
       expect(res.records).toBe(res.items);
     });
+
+    it('rejects Teacher filtering by studentId not enrolled in teacher courses', async () => {
+      const courseId = new Types.ObjectId();
+      const otherStudentId = new Types.ObjectId();
+
+      courseModel.find.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([{ _id: courseId }]),
+        }),
+      });
+      enrollmentModel.find.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([{ studentId }]),
+        }),
+      });
+
+      await expect(
+        service.findAll(teacherActor, { studentId: otherStudentId.toHexString() }),
+      ).rejects.toThrow(
+        new ForbiddenException("You do not have access to this student's penalties"),
+      );
+    });
+
+    it('allows Teacher filtering by studentId enrolled in teacher courses', async () => {
+      const courseId = new Types.ObjectId();
+
+      courseModel.find.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([{ _id: courseId }]),
+        }),
+      });
+      enrollmentModel.find.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([{ studentId }]),
+        }),
+      });
+      penaltyModel.find.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          skip: jest.fn().mockReturnValue({
+            limit: jest.fn().mockReturnValue({
+              sort: jest.fn().mockReturnValue({
+                exec: jest.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        }),
+      });
+      penaltyModel.countDocuments.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(0),
+      });
+
+      const res = await service.findAll(teacherActor, {
+        studentId: studentId.toHexString(),
+      });
+
+      expect(res.items).toEqual([]);
+      expect(penaltyModel.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId,
+        }),
+      );
+    });
   });
 
   describe('reverse', () => {

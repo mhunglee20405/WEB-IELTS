@@ -128,6 +128,7 @@ export class PenaltiesService {
         .exec();
       const teacherCourseIds = teacherCourses.map((c) => c._id);
 
+      let studentIds: Types.ObjectId[];
       if (query.courseId) {
         if (!Types.ObjectId.isValid(query.courseId)) {
           throw new BadRequestException('Invalid courseId');
@@ -139,14 +140,24 @@ export class PenaltiesService {
           .find({ courseId: new Types.ObjectId(query.courseId), status: EnrollmentStatus.ACTIVE })
           .select('studentId')
           .exec();
-        const studentIds = enrollments.map((e) => e.studentId);
-        filter.studentId = { $in: studentIds };
+        studentIds = enrollments.map((e) => e.studentId);
       } else {
         const enrollments = await this.enrollmentModel
           .find({ courseId: { $in: teacherCourseIds }, status: EnrollmentStatus.ACTIVE })
           .select('studentId')
           .exec();
-        const studentIds = enrollments.map((e) => e.studentId);
+        studentIds = enrollments.map((e) => e.studentId);
+      }
+
+      if (query.studentId) {
+        if (!Types.ObjectId.isValid(query.studentId)) {
+          throw new BadRequestException('Invalid studentId');
+        }
+        if (!studentIds.some((id) => extractObjectId(id) === query.studentId)) {
+          throw new ForbiddenException("You do not have access to this student's penalties");
+        }
+        filter.studentId = new Types.ObjectId(query.studentId);
+      } else {
         filter.studentId = { $in: studentIds };
       }
     } else if (actor.role === UserRole.ADMIN) {
@@ -158,13 +169,6 @@ export class PenaltiesService {
       }
     } else {
       throw new ForbiddenException('Students must view their penalty ledger via /penalties/mine');
-    }
-
-    if (query.studentId && actor.role === UserRole.TEACHER) {
-      if (!Types.ObjectId.isValid(query.studentId)) {
-        throw new BadRequestException('Invalid studentId');
-      }
-      filter.studentId = new Types.ObjectId(query.studentId);
     }
 
     if (query.search && query.search.trim()) {
