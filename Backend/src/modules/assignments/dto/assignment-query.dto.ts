@@ -1,4 +1,4 @@
-import { IsOptional, IsEnum, IsInt, Min, Max, IsMongoId, IsDateString } from 'class-validator';
+import { IsOptional, IsEnum, IsInt, Min, Max, IsMongoId, IsDateString, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { AssignmentStatus } from 'src/database/schemas/enums';
@@ -28,6 +28,11 @@ export class AssignmentQueryDto {
   @IsOptional()
   @IsEnum(AssignmentStatus)
   status?: AssignmentStatus;
+
+  @ApiPropertyOptional({ example: '2026-11-20', description: 'Filter by assigned VN date (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  assignedDate?: string;
 
   @ApiPropertyOptional({ description: 'Filter openAt >= from' })
   @IsOptional()

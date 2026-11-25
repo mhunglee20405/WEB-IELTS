@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
   Optional,
   Logger,
 } from '@nestjs/common';
@@ -250,15 +251,6 @@ export class PenaltiesService {
       throw new BadRequestException('Cannot reverse a transaction that is not a penalty charge (+1)');
     }
 
-    // Check if already reversed
-    const existingReversal = await this.penaltyModel
-      .findOne({ reversedTransactionId: original._id })
-      .exec();
-
-    if (existingReversal) {
-      throw new BadRequestException('This penalty transaction has already been reversed');
-    }
-
     // Teacher check
     if (actor.role === UserRole.TEACHER) {
       const studentAssignment = await this.studentAssignmentModel
@@ -282,6 +274,49 @@ export class PenaltiesService {
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
+        const existingQuery = this.penaltyModel.findOne({ reversedTransactionId: original._id });
+        const boundExistingQuery =
+          typeof (existingQuery as any)?.session === 'function'
+            ? (existingQuery as any).session(session)
+            : existingQuery;
+        const existingReversal =
+          typeof (boundExistingQuery as any)?.exec === 'function'
+            ? await (boundExistingQuery as any).exec()
+            : await boundExistingQuery;
+
+        if (existingReversal) {
+          throw new BadRequestException('This penalty transaction has already been reversed');
+        }
+
+        const now = new Date();
+        if (typeof this.penaltyModel.findOneAndUpdate === 'function') {
+          const updateQuery = this.penaltyModel.findOneAndUpdate(
+            { _id: original._id, isReversed: { $ne: true } },
+            {
+              $set: {
+                isReversed: true,
+                reversedBy: actor._id,
+                reversedAt: now,
+                reversalReason: dto.reason,
+              },
+            },
+            { new: true, session },
+          );
+          const lockedOriginal =
+            typeof (updateQuery as any)?.exec === 'function'
+              ? await (updateQuery as any).exec()
+              : await updateQuery;
+          if (!lockedOriginal) {
+            throw new BadRequestException('This penalty transaction has already been reversed');
+          }
+        } else {
+          original.isReversed = true;
+          original.reversedBy = actor._id;
+          original.reversedAt = now;
+          original.reversalReason = dto.reason;
+          await original.save({ session });
+        }
+
         reversalDoc = new this.penaltyModel({
           studentId: original.studentId,
           studentAssignmentId: original.studentAssignmentId,
@@ -294,12 +329,6 @@ export class PenaltiesService {
 
         await reversalDoc.save({ session });
 
-        original.isReversed = true;
-        original.reversedBy = actor._id;
-        original.reversedAt = new Date();
-        original.reversalReason = dto.reason;
-        await original.save({ session });
-
         // Update cached penalty points in profile
         const profile = await this.studentProfileModel
           .findOne({ userId: original.studentId })
@@ -311,6 +340,11 @@ export class PenaltiesService {
           await profile.save({ session });
         }
       });
+    } catch (err: any) {
+      if (err?.code === 11000) {
+        throw new ConflictException('Penalty transaction has already been reversed');
+      }
+      throw err;
     } finally {
       await session.endSession();
     }

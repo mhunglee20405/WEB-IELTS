@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getModelToken } from '@nestjs/mongoose';
+import { getModelToken, getConnectionToken } from '@nestjs/mongoose';
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Types } from 'mongoose';
 import { UsersService } from './users.service';
 import { User } from 'src/database/schemas/user.schema';
 import { StudentProfile } from 'src/database/schemas/student-profile.schema';
@@ -154,6 +155,104 @@ describe('UsersService', () => {
       await expect(
         service.updateOwnProfile('invalid-id', { fullName: 'Test' }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('create transactional integrity & duplicate handling', () => {
+    it('wraps user.save and student/teacher profile.save inside a MongoDB transaction when connection is available', async () => {
+      const mockSession = {
+        withTransaction: jest.fn().mockImplementation(async (cb: any) => await cb()),
+        endSession: jest.fn().mockResolvedValue(true),
+      };
+      const connectionMock = {
+        startSession: jest.fn().mockResolvedValue(mockSession),
+      };
+
+      const savedUserId = new Types.ObjectId();
+      const userSaveMock = jest.fn().mockResolvedValue({
+        _id: savedUserId,
+        email: 'tx@example.com',
+        role: UserRole.TEACHER,
+      });
+      const txUserModel: any = jest.fn().mockImplementation((dto: any) => ({
+        ...dto,
+        _id: savedUserId,
+        save: userSaveMock,
+      }));
+      txUserModel.findOne = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      const studentSaveMock = jest.fn().mockResolvedValue({});
+      const txStudentProfileModel = jest.fn().mockImplementation((dto: any) => ({
+        ...dto,
+        save: studentSaveMock,
+      }));
+
+      const teacherSaveMock = jest.fn().mockResolvedValue({});
+      const txTeacherProfileModel = jest.fn().mockImplementation((dto: any) => ({
+        ...dto,
+        save: teacherSaveMock,
+      }));
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getModelToken(User.name), useValue: txUserModel },
+          { provide: getModelToken(StudentProfile.name), useValue: txStudentProfileModel },
+          { provide: getModelToken(TeacherProfile.name), useValue: txTeacherProfileModel },
+          { provide: getConnectionToken(), useValue: connectionMock },
+        ],
+      }).compile();
+
+      const txService = module.get<UsersService>(UsersService);
+
+      await txService.create({
+        fullName: 'Tx Teacher',
+        email: 'tx@example.com',
+        password: 'password123',
+        role: UserRole.TEACHER,
+      });
+
+      expect(connectionMock.startSession).toHaveBeenCalledTimes(1);
+      expect(mockSession.withTransaction).toHaveBeenCalledTimes(1);
+      expect(userSaveMock).toHaveBeenCalledWith({ session: mockSession });
+      expect(teacherSaveMock).toHaveBeenCalledWith({ session: mockSession });
+      expect(mockSession.endSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('catches MongoDB E11000 duplicate key error on concurrent duplicate email and throws ConflictException', async () => {
+      const dupErr = Object.assign(new Error('E11000 duplicate key error'), { code: 11000 });
+      const userSaveMock = jest.fn().mockRejectedValue(dupErr);
+      const dupUserModel: any = jest.fn().mockImplementation((dto: any) => ({
+        ...dto,
+        save: userSaveMock,
+      }));
+      dupUserModel.findOne = jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) });
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getModelToken(User.name), useValue: dupUserModel },
+          {
+            provide: getModelToken(StudentProfile.name),
+            useValue: jest.fn().mockImplementation(() => ({ save: jest.fn() })),
+          },
+          {
+            provide: getModelToken(TeacherProfile.name),
+            useValue: jest.fn().mockImplementation(() => ({ save: jest.fn() })),
+          },
+        ],
+      }).compile();
+
+      const dupService = module.get<UsersService>(UsersService);
+
+      await expect(
+        dupService.create({
+          fullName: 'Race User',
+          email: 'race@example.com',
+          password: 'password123',
+          role: UserRole.STUDENT,
+        }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 });

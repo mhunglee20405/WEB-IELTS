@@ -400,31 +400,63 @@ export class ExtensionsService {
       }
     }
 
-    if (requestDoc.status !== ExtensionRequestStatus.PENDING) {
-      throw new BadRequestException('Only pending extension requests can be reviewed');
-    }
-
-    const studentAssignment = await this.studentAssignmentModel
-      .findById(requestDoc.studentAssignmentId)
-      .exec();
-
-    if (!studentAssignment) {
-      throw new NotFoundException('Student assignment not found');
-    }
-
     const effectiveStatus = (dto.status || dto.decision || ExtensionRequestStatus.APPROVED) as ExtensionRequestStatus;
     const effectiveReviewNote = dto.reviewNote || dto.decisionNote;
+    const now = new Date();
+    const approvedDeadline =
+      effectiveStatus === ExtensionRequestStatus.APPROVED
+        ? dto.approvedDeadlineAt
+          ? new Date(dto.approvedDeadlineAt)
+          : requestDoc.requestedDeadlineAt
+        : undefined;
+
+    let updatedRequestDoc: ExtensionRequestDocument | null = null;
+    let studentAssignment: StudentAssignmentDocument | null = null;
 
     const session = await this.connection.startSession();
     try {
       await session.withTransaction(async () => {
-        if (effectiveStatus === ExtensionRequestStatus.APPROVED) {
-          const approvedDeadline = dto.approvedDeadlineAt
-            ? new Date(dto.approvedDeadlineAt)
-            : requestDoc.requestedDeadlineAt;
+        const updatePayload: Record<string, any> = {
+          status: effectiveStatus,
+          reviewedBy: actor._id as Types.ObjectId,
+          reviewedAt: now,
+        };
+        if (effectiveReviewNote) {
+          updatePayload.reviewNote = effectiveReviewNote;
+        }
+        if (approvedDeadline) {
+          updatePayload.grantedDeadlineAt = approvedDeadline;
+        }
 
-          requestDoc.grantedDeadlineAt = approvedDeadline;
+        const updateQuery = this.extensionModel.findOneAndUpdate(
+          { _id: requestDoc._id, status: ExtensionRequestStatus.PENDING },
+          { $set: updatePayload },
+          { new: true, session },
+        );
+        updatedRequestDoc =
+          typeof (updateQuery as any)?.exec === 'function'
+            ? await (updateQuery as any).exec()
+            : await updateQuery;
 
+        if (!updatedRequestDoc) {
+          throw new BadRequestException('Extension request has already been reviewed');
+        }
+
+        const saQuery = this.studentAssignmentModel.findById(updatedRequestDoc.studentAssignmentId);
+        const boundSaQuery =
+          typeof (saQuery as any)?.session === 'function'
+            ? (saQuery as any).session(session)
+            : saQuery;
+        studentAssignment =
+          typeof (boundSaQuery as any)?.exec === 'function'
+            ? await (boundSaQuery as any).exec()
+            : await boundSaQuery;
+
+        if (!studentAssignment) {
+          throw new NotFoundException('Student assignment not found');
+        }
+
+        if (effectiveStatus === ExtensionRequestStatus.APPROVED && approvedDeadline) {
           if (!studentAssignment.originalDeadlineAt) {
             studentAssignment.originalDeadlineAt = studentAssignment.effectiveDeadlineAt;
           }
@@ -449,18 +481,22 @@ export class ExtensionsService {
             .exec();
 
           for (const activePenalty of activePenalties) {
+            const reversalReason = `Automatic penalty reversal upon approved extension request #${extractObjectId(updatedRequestDoc._id)}`;
             const reversal = new this.penaltyModel({
               studentId: studentAssignment.studentId,
               studentAssignmentId: studentAssignment._id,
               deltaPoints: -activePenalty.deltaPoints,
-              reason: `Automatic penalty reversal upon approved extension request #${extractObjectId(requestDoc._id)}`,
+              reason: reversalReason,
               reversedTransactionId: activePenalty._id,
-              createdBy: actor._id,
-              idempotencyKey: `penalty:reversal:extension:${requestDoc._id}:${activePenalty._id}`,
+              actorId: actor._id,
+              idempotencyKey: `penalty:reversal:extension:${updatedRequestDoc._id}:${activePenalty._id}`,
             });
             await reversal.save({ session });
 
             activePenalty.isReversed = true;
+            activePenalty.reversedBy = actor._id as Types.ObjectId;
+            activePenalty.reversedAt = now;
+            activePenalty.reversalReason = reversal.reason;
             await activePenalty.save({ session });
 
             await this.studentProfileModel.updateOne(
@@ -472,19 +508,12 @@ export class ExtensionsService {
 
           await studentAssignment.save({ session });
         }
-
-        requestDoc.status = effectiveStatus;
-        requestDoc.reviewedBy = actor._id as Types.ObjectId;
-        requestDoc.reviewedAt = new Date();
-        if (effectiveReviewNote) {
-          requestDoc.reviewNote = effectiveReviewNote;
-        }
-
-        await requestDoc.save({ session });
       });
     } finally {
       await session.endSession();
     }
+
+    const finalRequestDoc = updatedRequestDoc!;
 
     // Post-transaction notifications and audit logging
     if (this.notificationsService) {
@@ -501,15 +530,15 @@ export class ExtensionsService {
 
       this.notificationsService
         .create({
-          userId: extractObjectId(requestDoc.studentId),
+          userId: extractObjectId(finalRequestDoc.studentId),
           type: notifType,
           title: notifTitle,
           body: notifBody,
           payload: {
-            requestId: extractObjectId(requestDoc._id),
-            studentAssignmentId: extractObjectId(requestDoc.studentAssignmentId),
-            status: dto.status,
-            reviewNote: dto.reviewNote,
+            requestId: extractObjectId(finalRequestDoc._id),
+            studentAssignmentId: extractObjectId(finalRequestDoc.studentAssignmentId),
+            status: effectiveStatus,
+            reviewNote: effectiveReviewNote,
           },
           sendEmail: true,
           emailTemplateKey: 'extension-reviewed',
@@ -522,18 +551,18 @@ export class ExtensionsService {
         .log({
           action: 'EXTENSION_REQUEST_REVIEWED',
           entityType: 'ExtensionRequest',
-          entityId: requestDoc._id,
+          entityId: finalRequestDoc._id,
           actorId: actor._id,
           metadata: {
-            status: dto.status,
-            reviewNote: dto.reviewNote,
-            studentAssignmentId: requestDoc.studentAssignmentId,
+            status: effectiveStatus,
+            reviewNote: effectiveReviewNote,
+            studentAssignmentId: finalRequestDoc.studentAssignmentId,
           },
         })
         .catch((err) => this.logger.warn(`Failed to audit extension review: ${err.message}`));
     }
 
-    return this.formatRequest(requestDoc, studentAssignment);
+    return this.formatRequest(finalRequestDoc, studentAssignment);
   }
 
   private formatRequest(doc: ExtensionRequestDocument, sa?: any) {

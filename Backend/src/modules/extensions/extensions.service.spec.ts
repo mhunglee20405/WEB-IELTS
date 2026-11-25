@@ -15,6 +15,8 @@ import { Course } from 'src/database/schemas/course.schema';
 import { PenaltyTransaction } from 'src/database/schemas/penalty-transaction.schema';
 import { StudentProfile } from 'src/database/schemas/student-profile.schema';
 import { UserDocument } from 'src/database/schemas/user.schema';
+import { NotificationsService } from 'src/modules/notifications/notifications.service';
+import { AuditService } from 'src/modules/audit/audit.service';
 import {
   ExtensionRequestStatus,
   StudentAssignmentStatus,
@@ -74,6 +76,7 @@ describe('ExtensionsService', () => {
     extensionModel = MockExtensionInstance;
     extensionModel.find = jest.fn();
     extensionModel.findOne = jest.fn();
+    extensionModel.findOneAndUpdate = jest.fn();
     extensionModel.findById = jest.fn();
     extensionModel.countDocuments = jest.fn();
 
@@ -294,12 +297,21 @@ describe('ExtensionsService', () => {
         exec: jest.fn().mockResolvedValue(mockRequestDoc),
       });
 
+      extensionModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockImplementation(async () => {
+          mockRequestDoc.status = ExtensionRequestStatus.APPROVED;
+          mockRequestDoc.reviewedBy = teacherId;
+          return mockRequestDoc;
+        }),
+      });
+
       courseModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue({ _id: courseId, teacherId }),
       });
 
       const updatedSa: any = {
         _id: studentAssignmentId,
+        studentId,
         effectiveDeadlineAt: futureEffectiveDeadline,
         status: StudentAssignmentStatus.OVERDUE,
         save: jest.fn().mockResolvedValue(true),
@@ -324,6 +336,7 @@ describe('ExtensionsService', () => {
       expect(updatedSa.effectiveDeadlineAt).toEqual(requestedDeadline);
       // If assignment was OVERDUE, reverts to NOT_STARTED / SUBMITTED
       expect(updatedSa.status).toBe(StudentAssignmentStatus.NOT_STARTED);
+      expect(res.status).toBe(ExtensionRequestStatus.APPROVED);
     });
 
     it('rejects request and preserves previous effective deadline on StudentAssignment', async () => {
@@ -344,6 +357,14 @@ describe('ExtensionsService', () => {
         exec: jest.fn().mockResolvedValue(mockRequestDoc),
       });
 
+      extensionModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockImplementation(async () => {
+          mockRequestDoc.status = ExtensionRequestStatus.REJECTED;
+          mockRequestDoc.reviewedBy = teacherId;
+          return mockRequestDoc;
+        }),
+      });
+
       courseModel.findById.mockReturnValue({
         exec: jest.fn().mockResolvedValue({ _id: courseId, teacherId }),
       });
@@ -351,6 +372,7 @@ describe('ExtensionsService', () => {
       const originalDeadline = new Date(futureEffectiveDeadline);
       const updatedSa: any = {
         _id: studentAssignmentId,
+        studentId,
         effectiveDeadlineAt: originalDeadline,
         status: StudentAssignmentStatus.NOT_STARTED,
         save: jest.fn().mockResolvedValue(true),
@@ -372,6 +394,176 @@ describe('ExtensionsService', () => {
       expect(mockRequestDoc.status).toBe(ExtensionRequestStatus.REJECTED);
       // Effective deadline is preserved
       expect(updatedSa.effectiveDeadlineAt).toEqual(originalDeadline);
+      expect(res.status).toBe(ExtensionRequestStatus.REJECTED);
+    });
+
+    it('prevents concurrent double-review via atomic PENDING findOneAndUpdate inside transaction', async () => {
+      const mockRequestDoc: any = {
+        _id: requestId,
+        studentId,
+        courseId,
+        studentAssignmentId,
+        requestedDeadlineAt: requestedDeadline,
+        status: ExtensionRequestStatus.PENDING,
+        save: jest.fn().mockResolvedValue(true),
+        toObject: function () {
+          return { ...this };
+        },
+      };
+
+      extensionModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockRequestDoc),
+      });
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ _id: courseId, teacherId }),
+      });
+      // Concurrent review already changed status before transaction claimed PENDING lock
+      extensionModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const updatedSa: any = {
+        _id: studentAssignmentId,
+        studentId,
+        effectiveDeadlineAt: futureEffectiveDeadline,
+        status: StudentAssignmentStatus.OVERDUE,
+        save: jest.fn().mockResolvedValue(true),
+      };
+      studentAssignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(updatedSa),
+      });
+
+      await expect(
+        service.review(
+          requestId.toHexString(),
+          { status: ExtensionRequestStatus.APPROVED },
+          teacherActor,
+        ),
+      ).rejects.toThrow(new BadRequestException('Extension request has already been reviewed'));
+
+      expect(updatedSa.save).not.toHaveBeenCalled();
+    });
+
+    it('writes actorId (not createdBy) on reversal, persists reversedBy/reversedAt/reversalReason, and logs effectiveStatus/effectiveReviewNote', async () => {
+      const createdReversals: any[] = [];
+      const penaltyModelMock: any = jest.fn().mockImplementation((dto: any) => {
+        createdReversals.push(dto);
+        return {
+          ...dto,
+          _id: new Types.ObjectId(),
+          save: jest.fn().mockResolvedValue(true),
+        };
+      });
+
+      const activePenalty: any = {
+        _id: new Types.ObjectId(),
+        studentId,
+        studentAssignmentId,
+        deltaPoints: 1,
+        isReversed: false,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      penaltyModelMock.find = jest.fn().mockReturnValue({
+        session: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([activePenalty]),
+        }),
+      });
+
+      const notifMock = { create: jest.fn().mockResolvedValue({}) };
+      const auditMock = { log: jest.fn().mockResolvedValue({}) };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          ExtensionsService,
+          { provide: getModelToken(ExtensionRequest.name), useValue: extensionModel },
+          { provide: getModelToken(StudentAssignment.name), useValue: studentAssignmentModel },
+          { provide: getModelToken(Assignment.name), useValue: assignmentModel },
+          { provide: getModelToken(Course.name), useValue: courseModel },
+          { provide: getModelToken(PenaltyTransaction.name), useValue: penaltyModelMock },
+          { provide: getModelToken(StudentProfile.name), useValue: { updateOne: jest.fn().mockResolvedValue(true) } },
+          { provide: getConnectionToken(), useValue: connection },
+          { provide: NotificationsService, useValue: notifMock },
+          { provide: AuditService, useValue: auditMock },
+        ],
+      }).compile();
+
+      const fullService = module.get<ExtensionsService>(ExtensionsService);
+
+      const mockRequestDoc: any = {
+        _id: requestId,
+        studentId,
+        courseId,
+        studentAssignmentId,
+        requestedDeadlineAt: requestedDeadline,
+        status: ExtensionRequestStatus.PENDING,
+        save: jest.fn().mockResolvedValue(true),
+        toObject: function () {
+          return { ...this };
+        },
+      };
+
+      extensionModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockRequestDoc),
+      });
+      extensionModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockImplementation(async (_f: any, u: any) => ({
+          ...mockRequestDoc,
+          ...(u?.$set || {}),
+          toObject() {
+            return { ...this };
+          },
+        })),
+      });
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ _id: courseId, teacherId }),
+      });
+      const updatedSa: any = {
+        _id: studentAssignmentId,
+        studentId,
+        effectiveDeadlineAt: futureEffectiveDeadline,
+        status: StudentAssignmentStatus.OVERDUE,
+        save: jest.fn().mockResolvedValue(true),
+      };
+      studentAssignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(updatedSa),
+      });
+
+      await fullService.review(
+        requestId.toHexString(),
+        {
+          decision: ExtensionRequestStatus.APPROVED,
+          decisionNote: 'Approved via decision alias',
+        },
+        teacherActor,
+      );
+
+      expect(createdReversals).toHaveLength(1);
+      expect(createdReversals[0].actorId).toEqual(teacherId);
+      expect(createdReversals[0].createdBy).toBeUndefined();
+
+      expect(activePenalty.isReversed).toBe(true);
+      expect(activePenalty.reversedBy).toEqual(teacherId);
+      expect(activePenalty.reversedAt).toBeInstanceOf(Date);
+      expect(activePenalty.reversalReason).toBe(createdReversals[0].reason);
+      expect(activePenalty.save).toHaveBeenCalled();
+
+      expect(notifMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            status: ExtensionRequestStatus.APPROVED,
+            reviewNote: 'Approved via decision alias',
+          }),
+        }),
+      );
+      expect(auditMock.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            status: ExtensionRequestStatus.APPROVED,
+            reviewNote: 'Approved via decision alias',
+          }),
+        }),
+      );
     });
   });
 });

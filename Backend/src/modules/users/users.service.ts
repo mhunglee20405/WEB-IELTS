@@ -1,6 +1,6 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Injectable, ConflictException, NotFoundException, Optional } from '@nestjs/common';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import * as argon2 from 'argon2';
 import { User, UserDocument } from 'src/database/schemas/user.schema';
 import {
@@ -30,11 +30,35 @@ export class UsersService {
     private studentProfileModel: Model<StudentProfileDocument>,
     @InjectModel(TeacherProfile.name)
     private teacherProfileModel: Model<TeacherProfileDocument>,
+    @Optional() @InjectConnection() private readonly connection?: Connection,
   ) {}
 
+  private async runInTransaction<T>(work: (session?: any) => Promise<T>): Promise<T> {
+    if (typeof this.connection?.startSession !== 'function') {
+      return await work(undefined);
+    }
+
+    const session = await this.connection.startSession();
+    try {
+      if (typeof session?.withTransaction === 'function') {
+        let result!: T;
+        await session.withTransaction(async () => {
+          result = await work(session);
+        });
+        return result;
+      }
+      return await work(session);
+    } finally {
+      if (typeof session?.endSession === 'function') {
+        await session.endSession();
+      }
+    }
+  }
+
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
+    const normalizedEmail = createUserDto.email.toLowerCase().trim();
     const existing = await this.userModel
-      .findOne({ email: createUserDto.email.toLowerCase().trim() })
+      .findOne({ email: normalizedEmail })
       .exec();
 
     if (existing) {
@@ -50,23 +74,33 @@ export class UsersService {
       (createUserDto.roles && createUserDto.roles[0]) ||
       UserRole.STUDENT;
 
-    const user = new this.userModel({
-      ...createUserDto,
-      role: effectiveRole,
-      email: createUserDto.email.toLowerCase().trim(),
-      passwordHash,
-    });
+    try {
+      return await this.runInTransaction(async (session) => {
+        const saveOptions = session ? { session } : undefined;
+        const user = new this.userModel({
+          ...createUserDto,
+          role: effectiveRole,
+          email: normalizedEmail,
+          passwordHash,
+        });
 
-    const savedUser = await user.save();
+        const savedUser = await user.save(saveOptions);
 
-    // Create profile based on role
-    if (effectiveRole === UserRole.STUDENT) {
-      await new this.studentProfileModel({ userId: savedUser._id }).save();
-    } else if (effectiveRole === UserRole.TEACHER) {
-      await new this.teacherProfileModel({ userId: savedUser._id }).save();
+        // Create profile based on role
+        if (effectiveRole === UserRole.STUDENT) {
+          await new this.studentProfileModel({ userId: savedUser._id }).save(saveOptions);
+        } else if (effectiveRole === UserRole.TEACHER) {
+          await new this.teacherProfileModel({ userId: savedUser._id }).save(saveOptions);
+        }
+
+        return savedUser;
+      });
+    } catch (err: any) {
+      if (err?.code === 11000) {
+        throw new ConflictException('Email already exists');
+      }
+      throw err;
     }
-
-    return savedUser;
   }
 
   async findAll(

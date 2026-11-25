@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken, getConnectionToken } from '@nestjs/mongoose';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -52,6 +53,7 @@ describe('PenaltiesService', () => {
     penaltyModel = MockPenaltyInstance;
     penaltyModel.find = jest.fn();
     penaltyModel.findOne = jest.fn();
+    penaltyModel.findOneAndUpdate = jest.fn();
     penaltyModel.findById = jest.fn();
     penaltyModel.countDocuments = jest.fn();
     penaltyModel.aggregate = jest.fn();
@@ -284,7 +286,14 @@ describe('PenaltiesService', () => {
       });
 
       penaltyModel.findOne.mockReturnValue({
+        session: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
         exec: jest.fn().mockResolvedValue(null), // Has not been reversed yet
+      });
+
+      penaltyModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...originalPenaltyDoc, isReversed: true }),
       });
 
       studentAssignmentModel.findById.mockReturnValue({
@@ -324,7 +333,7 @@ describe('PenaltiesService', () => {
       expect(profileDoc.penaltyPointsCache).toBe(0);
     });
 
-    it('rejects reversal if the penalty transaction was already reversed', async () => {
+    it('rejects reversal if the penalty transaction was already reversed inside transaction', async () => {
       const originalPenaltyDoc: any = {
         _id: transactionId,
         studentId,
@@ -336,9 +345,44 @@ describe('PenaltiesService', () => {
         exec: jest.fn().mockResolvedValue(originalPenaltyDoc),
       });
 
-      // Existing reversal found!
+      studentAssignmentModel.findById.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            assignmentId: { courseId: new Types.ObjectId() },
+          }),
+        }),
+      });
+
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ teacherId }),
+      });
+
+      let insideTransaction = false;
+      connection.startSession.mockResolvedValue({
+        withTransaction: jest.fn().mockImplementation(async (cb: any) => {
+          insideTransaction = true;
+          try {
+            return await cb();
+          } finally {
+            insideTransaction = false;
+          }
+        }),
+        endSession: jest.fn().mockResolvedValue(true),
+      });
+
+      let findOneCalledInsideTx = false;
+      const sessionSpy = jest.fn().mockImplementation(() => {
+        findOneCalledInsideTx = insideTransaction;
+        return {
+          exec: jest.fn().mockResolvedValue({ _id: new Types.ObjectId(), reversedTransactionId: transactionId }),
+        };
+      });
       penaltyModel.findOne.mockReturnValue({
-        exec: jest.fn().mockResolvedValue({ _id: new Types.ObjectId(), reversedTransactionId: transactionId }),
+        session: sessionSpy,
+        exec: jest.fn().mockImplementation(() => {
+          findOneCalledInsideTx = insideTransaction;
+          return Promise.resolve({ _id: new Types.ObjectId(), reversedTransactionId: transactionId });
+        }),
       });
 
       await expect(
@@ -348,6 +392,59 @@ describe('PenaltiesService', () => {
           teacherActor,
         ),
       ).rejects.toThrow(BadRequestException);
+
+      expect(findOneCalledInsideTx).toBe(true);
+      expect(sessionSpy).toHaveBeenCalled();
+    });
+
+    it('catches MongoDB E11000 duplicate key error on concurrent reversal and throws ConflictException', async () => {
+      const originalPenaltyDoc: any = {
+        _id: transactionId,
+        studentId,
+        studentAssignmentId,
+        deltaPoints: 1,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      penaltyModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(originalPenaltyDoc),
+      });
+      penaltyModel.findOne.mockReturnValue({
+        session: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      });
+      penaltyModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...originalPenaltyDoc, isReversed: true }),
+      });
+      studentAssignmentModel.findById.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            assignmentId: { courseId: new Types.ObjectId() },
+          }),
+        }),
+      });
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ teacherId }),
+      });
+
+      const dupErr = Object.assign(new Error('E11000 duplicate key error'), { code: 11000 });
+      const origModel = penaltyModel;
+      const raceModel: any = jest.fn().mockImplementation((dto: any) => ({
+        ...dto,
+        _id: new Types.ObjectId(),
+        save: jest.fn().mockRejectedValue(dupErr),
+      }));
+      Object.assign(raceModel, origModel);
+      (service as any).penaltyModel = raceModel;
+
+      await expect(
+        service.reverse(
+          transactionId.toHexString(),
+          { reason: 'Concurrent duplicate reversal test' },
+          teacherActor,
+        ),
+      ).rejects.toThrow(new ConflictException('Penalty transaction has already been reversed'));
     });
   });
 });

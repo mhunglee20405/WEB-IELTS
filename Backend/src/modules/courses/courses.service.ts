@@ -5,9 +5,10 @@ import {
   ForbiddenException,
   BadRequestException,
   UnprocessableEntityException,
+  Optional,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { Course, CourseDocument } from 'src/database/schemas/course.schema';
 import { Enrollment, EnrollmentDocument } from 'src/database/schemas/enrollment.schema';
 import { User, UserDocument } from 'src/database/schemas/user.schema';
@@ -65,7 +66,36 @@ export class CoursesService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Assignment.name) private assignmentModel: Model<AssignmentDocument>,
     @InjectModel(Lesson.name) private lessonModel: Model<LessonDocument>,
+    @Optional() @InjectConnection() private readonly connection?: Connection,
   ) {}
+
+  private async runInTransaction<T>(work: (session?: any) => Promise<T>): Promise<T> {
+    if (typeof this.connection?.startSession !== 'function') {
+      return await work(undefined);
+    }
+
+    const session = await this.connection.startSession();
+    try {
+      if (typeof session?.withTransaction === 'function') {
+        let result!: T;
+        await session.withTransaction(async () => {
+          result = await work(session);
+        });
+        return result;
+      }
+      return await work(session);
+    } finally {
+      if (typeof session?.endSession === 'function') {
+        await session.endSession();
+      }
+    }
+  }
+
+  private async execWithOptionalSession<T>(query: any, session?: any): Promise<T> {
+    if (!query) return query;
+    const bound = session && typeof query.session === 'function' ? query.session(session) : query;
+    return typeof bound?.exec === 'function' ? await bound.exec() : await bound;
+  }
 
   async create(dto: CreateCourseDto, actorId: string): Promise<CourseDocument> {
     validateBand(dto.startBand, 'startBand');
@@ -363,19 +393,10 @@ export class CoursesService {
           : CourseType.GROUP;
     }
 
-    if (effectiveType === CourseType.ONE_TO_ONE && course.type !== CourseType.ONE_TO_ONE) {
-      const activeCount = await this.enrollmentModel
-        .countDocuments({
-          courseId: new Types.ObjectId(id),
-          status: EnrollmentStatus.ACTIVE,
-        })
-        .exec();
-      if (activeCount > 1) {
-        throw new ConflictException(
-          'Cannot switch course to ONE_TO_ONE while multiple students are actively enrolled',
-        );
-      }
-    }
+    const isSwitchingToOneToOne =
+      effectiveType === CourseType.ONE_TO_ONE && course.type !== CourseType.ONE_TO_ONE;
+    const isSwitchingToGroup =
+      effectiveType === CourseType.GROUP && course.type === CourseType.ONE_TO_ONE;
 
     if (dto.startBand !== undefined) validateBand(dto.startBand, 'startBand');
     if (dto.targetBand !== undefined) validateBand(dto.targetBand, 'targetBand');
@@ -398,12 +419,85 @@ export class CoursesService {
     if (startAt) updatePayload['startAt'] = startAt;
     if (endAt) updatePayload['endAt'] = endAt;
 
-    const updated = await this.courseModel
-      .findByIdAndUpdate(id, { $set: updatePayload }, { new: true })
-      .populate('teacherId', 'fullName email')
-      .exec();
+    if (!isSwitchingToOneToOne && !isSwitchingToGroup) {
+      const updated = await this.courseModel
+        .findByIdAndUpdate(id, { $set: updatePayload }, { new: true })
+        .populate('teacherId', 'fullName email')
+        .exec();
 
-    return updated!;
+      return updated!;
+    }
+
+    const courseObjectId = new Types.ObjectId(id);
+
+    try {
+      return await this.runInTransaction(async (session) => {
+        if (isSwitchingToOneToOne) {
+          const activeCount = await this.execWithOptionalSession<number>(
+            this.enrollmentModel.countDocuments({
+              courseId: courseObjectId,
+              status: EnrollmentStatus.ACTIVE,
+            }),
+            session,
+          );
+          if (activeCount > 1) {
+            throw new ConflictException(
+              'Cannot switch course to ONE_TO_ONE while multiple students are actively enrolled',
+            );
+          }
+
+          const syncPromise = session
+            ? this.enrollmentModel.updateMany(
+                { courseId: courseObjectId, status: EnrollmentStatus.ACTIVE },
+                { $set: { isOneToOneActive: true } },
+                { session },
+              )
+            : this.enrollmentModel.updateMany(
+                { courseId: courseObjectId, status: EnrollmentStatus.ACTIVE },
+                { $set: { isOneToOneActive: true } },
+              );
+          if (typeof (syncPromise as any)?.exec === 'function') {
+            await (syncPromise as any).exec();
+          } else {
+            await syncPromise;
+          }
+        } else if (isSwitchingToGroup) {
+          const unsetPromise = session
+            ? this.enrollmentModel.updateMany(
+                { courseId: courseObjectId },
+                { $unset: { isOneToOneActive: '' } },
+                { session },
+              )
+            : this.enrollmentModel.updateMany(
+                { courseId: courseObjectId },
+                { $unset: { isOneToOneActive: '' } },
+              );
+          if (typeof (unsetPromise as any)?.exec === 'function') {
+            await (unsetPromise as any).exec();
+          } else {
+            await unsetPromise;
+          }
+        }
+
+        const updated = await this.courseModel
+          .findByIdAndUpdate(
+            id,
+            { $set: updatePayload },
+            session ? { new: true, session } : { new: true },
+          )
+          .populate('teacherId', 'fullName email')
+          .exec();
+
+        return updated!;
+      });
+    } catch (err: any) {
+      if (err?.code === 11000) {
+        throw new ConflictException(
+          'Cannot switch course to ONE_TO_ONE while multiple students are actively enrolled',
+        );
+      }
+      throw err;
+    }
   }
 
   /**
