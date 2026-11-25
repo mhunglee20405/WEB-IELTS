@@ -22,6 +22,7 @@ import {
   type UpdateCourseRequest,
   type UpdateExerciseRequest,
   type UpdateLessonRequest,
+  type UpdateProfileRequest,
   type UpdateUserRequest,
 } from "../types";
 import {
@@ -322,6 +323,17 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
     };
     mockState.users.unshift(created);
     return created as T;
+  }
+  if (pathname === "/users/me") {
+    const user = getCurrentUser();
+    if (method === "GET") return user as T;
+    if (method === "PATCH") {
+      const body = options.body as UpdateProfileRequest;
+      if (body.fullName !== undefined) user.fullName = body.fullName;
+      if (body.phone !== undefined) user.phone = body.phone;
+      user.updatedAt = new Date().toISOString();
+      return user as T;
+    }
   }
   if (pathname.startsWith("/users/")) {
     const id = pathname.split("/")[2]!;

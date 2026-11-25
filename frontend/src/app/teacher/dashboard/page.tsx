@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -178,7 +178,31 @@ export default function TeacherDashboardPage() {
                 </div>
               ) : (
                 <div className="lms-card-grid">
-                  {data.recentAssignments.slice(0, 4).map((assignment) => (
+                  {data.recentAssignments.slice(0, 4).map((assignment) => {
+                    const now = Date.now();
+                    const openMs = new Date(assignment.openAt ?? "").getTime();
+                    const dueMs = new Date(assignment.dueAt ?? "").getTime();
+                    let liveStatus: string = String(assignment.status ?? "scheduled");
+                    if (!Number.isNaN(openMs) && !Number.isNaN(dueMs)) {
+                      if (now < openMs) liveStatus = "scheduled";
+                      else if (now >= openMs && now < dueMs) liveStatus = "available";
+                      else liveStatus = "expired";
+                    }
+                    const badgeStatus =
+                      liveStatus === "closed" || liveStatus === "expired" || liveStatus === "completed"
+                        ? "completed"
+                        : liveStatus === "available" || liveStatus === "published"
+                          ? "passed"
+                          : "upcoming";
+                    const label =
+                      liveStatus === "closed" || liveStatus === "completed"
+                        ? "Đã đóng"
+                        : liveStatus === "expired"
+                          ? "Hết hạn"
+                          : liveStatus === "available" || liveStatus === "published"
+                            ? "Đang mở"
+                            : "Sắp mở";
+                    return (
                     <article key={assignment.id} className="lms-card space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <MetaTag
@@ -187,16 +211,8 @@ export default function TeacherDashboardPage() {
                           {assignment.exerciseType === "listening" ? "Listening" : "Reading"}
                         </MetaTag>
                         <StatusBadge
-                          status={
-                            assignment.status === "closed" ? "completed" : assignment.status
-                          }
-                          labelOverride={
-                            assignment.status === "closed"
-                              ? "Đã đóng"
-                              : assignment.status === "scheduled"
-                                ? "Sắp mở"
-                                : "Đang mở"
-                          }
+                          status={badgeStatus}
+                          labelOverride={label}
                         />
                       </div>
                       <h3 className="text-base font-semibold text-slate-950">
@@ -216,7 +232,8 @@ export default function TeacherDashboardPage() {
                         </Link>
                       </div>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>

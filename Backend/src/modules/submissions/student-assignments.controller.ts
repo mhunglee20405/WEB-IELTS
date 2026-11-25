@@ -8,6 +8,7 @@ import {
   UseGuards,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -28,6 +29,7 @@ import {
   StudentAssignmentDocument,
 } from 'src/database/schemas/student-assignment.schema';
 import { Assignment, AssignmentDocument } from 'src/database/schemas/assignment.schema';
+import { Course, CourseDocument } from 'src/database/schemas/course.schema';
 import { Submission, SubmissionDocument } from 'src/database/schemas/submission.schema';
 import {
   TranslationSubmission,
@@ -56,6 +58,8 @@ export class StudentAssignmentsController {
     private readonly studentAssignmentModel: Model<StudentAssignmentDocument>,
     @InjectModel(Assignment.name)
     private readonly assignmentModel: Model<AssignmentDocument>,
+    @InjectModel(Course.name)
+    private readonly courseModel: Model<CourseDocument>,
     @InjectModel(Submission.name)
     private readonly submissionModel: Model<SubmissionDocument>,
     @InjectModel(TranslationSubmission.name)
@@ -64,6 +68,64 @@ export class StudentAssignmentsController {
     private readonly translationsService: TranslationsService,
     private readonly extensionsService: ExtensionsService,
   ) {}
+
+  private async assertAssignmentAccess(
+    sa: StudentAssignmentDocument | any,
+    assignment: AssignmentDocument | any,
+    user: UserDocument,
+  ): Promise<void> {
+    if (user.role === UserRole.ADMIN) {
+      return;
+    }
+
+    if (user.role === UserRole.STUDENT) {
+      if (extractObjectId(sa.studentId) !== extractObjectId(user._id)) {
+        throw new ForbiddenException('You cannot access another student’s assignment');
+      }
+      return;
+    }
+
+    if (user.role === UserRole.TEACHER) {
+      let resolvedAssignment = assignment;
+      if (!resolvedAssignment || !resolvedAssignment.courseId) {
+        resolvedAssignment = await this.assignmentModel
+          .findById(extractObjectId(sa.assignmentId))
+          .exec();
+      }
+      const courseId = resolvedAssignment?.courseId;
+      if (!courseId) {
+        throw new ForbiddenException('You do not teach this course');
+      }
+      let teacherId = (courseId as any)?.teacherId;
+      if (!teacherId) {
+        const course = await this.courseModel.findById(extractObjectId(courseId)).exec();
+        teacherId = course?.teacherId;
+      }
+      if (!teacherId || extractObjectId(teacherId) !== extractObjectId(user._id)) {
+        throw new ForbiddenException('You do not teach this course');
+      }
+      return;
+    }
+
+    throw new ForbiddenException('Access denied');
+  }
+
+  private assertAssignmentOpenForStudent(assignment: any, user: UserDocument): void {
+    if (user.role === UserRole.STUDENT && assignment?.openAt) {
+      if (Date.now() < new Date(assignment.openAt).getTime()) {
+        throw new ForbiddenException('Assignment is not yet open');
+      }
+    }
+  }
+
+  private isStudentAssignmentPassed(sa: any, assignment: any): boolean {
+    const targetScore = assignment?.targetScorePercent ?? 70;
+    return Boolean(
+      sa.isTargetAchieved ||
+        sa.status === StudentAssignmentStatus.PASSED ||
+        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= targetScore),
+    );
+  }
 
   @Get(':id')
   @Roles(UserRole.STUDENT, UserRole.TEACHER, UserRole.ADMIN)
@@ -80,7 +142,7 @@ export class StudentAssignmentsController {
         path: 'assignmentId',
         select: '+exerciseSnapshot',
         populate: [
-          { path: 'courseId', select: 'code title' },
+          { path: 'courseId', select: 'code title teacherId' },
           {
             path: 'exerciseId',
             select: 'title type passScore instructions passage audioAssetId durationMinutes questions version',
@@ -95,10 +157,8 @@ export class StudentAssignmentsController {
     }
 
     const assignment: any = sa.assignmentId;
+    await this.assertAssignmentAccess(sa, assignment, user);
     const isStudent = user.role === UserRole.STUDENT;
-    if (isStudent && extractObjectId(sa.studentId?._id || sa.studentId) !== extractObjectId(user._id)) {
-      throw new ForbiddenException('You cannot access another student’s assignment');
-    }
 
     const snapshot = assignment.exerciseSnapshot;
     const exercise = assignment.exerciseId;
@@ -152,6 +212,8 @@ export class StudentAssignmentsController {
       .countDocuments({ studentAssignmentId: sa._id })
       .exec();
 
+    const passed = this.isStudentAssignmentPassed(sa, assignment);
+
     return {
       id: extractObjectId(sa._id),
       studentAssignmentId: extractObjectId(sa._id),
@@ -167,32 +229,14 @@ export class StudentAssignmentsController {
       dueAt: new Date(dueAt).toISOString(),
       effectiveDueAt: new Date(effectiveDueAt).toISOString(),
       timezone: 'Asia/Ho_Chi_Minh',
-      status:
-        sa.status === StudentAssignmentStatus.PASSED ||
-        Boolean(sa.isTargetAchieved) ||
-        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70)
-          ? StudentAssignmentStatus.PASSED
-          : sa.status,
+      status: passed ? StudentAssignmentStatus.PASSED : sa.status,
       attemptsCount: actualAttemptsCount || (sa as any).attemptsCount || (sa.lastSubmittedAt ? 1 : 0),
       bestScore: sa.bestScore ?? null,
-      passed: Boolean(
-        sa.isTargetAchieved ||
-        sa.status === StudentAssignmentStatus.PASSED ||
-        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
-      ),
-      answerReviewUnlocked: Boolean(
-        sa.isTargetAchieved ||
-        sa.status === StudentAssignmentStatus.PASSED ||
-        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
-      ),
-      translationAvailable: Boolean(
-        (sa.isTargetAchieved ||
-          sa.status === StudentAssignmentStatus.PASSED ||
-          (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70)) &&
-        (exerciseType === 'reading' || !exerciseType),
-      ),
+      passed,
+      answerReviewUnlocked: passed,
+      translationAvailable: Boolean(passed && (exerciseType === 'reading' || !exerciseType)),
       translationStatus: (sa as any).translationStatus || 'not_started',
-      penaltyApplied: Boolean((sa as any).penaltyApplied),
+      penaltyApplied: Boolean(sa.penaltyAppliedAt),
       exercise: exercisePublic,
     };
   }
@@ -269,6 +313,8 @@ export class StudentAssignmentsController {
       throw new NotFoundException('Student assignment not found');
     }
 
+    await this.assertAssignmentAccess(sa, null, user);
+
     const submissions = await this.submissionModel
       .find({ studentAssignmentId: sa._id })
       .sort({ attemptNo: 1 })
@@ -304,8 +350,10 @@ export class StudentAssignmentsController {
       throw new NotFoundException('Student assignment not found');
     }
 
+    await this.assertAssignmentAccess(sa, sa.assignmentId, user);
+
     const assignment = await this.assignmentModel
-      .findById(sa.assignmentId)
+      .findById(extractObjectId(sa.assignmentId))
       .select('+exerciseSnapshot')
       .exec();
 
@@ -313,18 +361,12 @@ export class StudentAssignmentsController {
       throw new NotFoundException('Exercise snapshot not found');
     }
 
-    if (user.role === UserRole.STUDENT) {
-      if (extractObjectId(sa.studentId) !== extractObjectId(user._id)) {
-        throw new ForbiddenException('You cannot access another student’s review');
-      }
-      const isPassed = Boolean(
-        sa.isTargetAchieved ||
-        sa.status === StudentAssignmentStatus.PASSED ||
-        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
+    const passed = this.isStudentAssignmentPassed(sa, assignment);
+    if (user.role === UserRole.STUDENT && !passed) {
+      const targetScore = assignment.targetScorePercent ?? 70;
+      throw new ForbiddenException(
+        `Review is locked until you achieve a PASS score (>= ${targetScore}%)`,
       );
-      if (!isPassed) {
-        throw new ForbiddenException('Review is locked until you achieve a PASS score (>= 70%)');
-      }
     }
 
     const submission = await this.submissionModel
@@ -384,11 +426,7 @@ export class StudentAssignmentsController {
 
     return {
       studentAssignmentId: extractObjectId(sa._id),
-      passed: Boolean(
-        sa.isTargetAchieved ||
-        sa.status === StudentAssignmentStatus.PASSED ||
-        (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= 70),
-      ),
+      passed,
       score: sa.bestScore ?? (submission?.scorePercent || 0),
       items,
     };
@@ -413,18 +451,25 @@ export class StudentAssignmentsController {
     }
 
     const assignment = await this.assignmentModel
-      .findById(sa.assignmentId)
+      .findById(extractObjectId(sa.assignmentId))
       .select('+exerciseSnapshot')
       .exec();
 
-    const snapshot = (assignment?.exerciseSnapshot || {}) as any;
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    await this.assertAssignmentAccess(sa, assignment, user);
+    this.assertAssignmentOpenForStudent(assignment, user);
+
+    const snapshot = (assignment.exerciseSnapshot || {}) as any;
     const targetTestId = (assignment as any)?.examTestId || (assignment as any)?.exerciseId;
 
     const existing = await this.translationModel
       .findOne({
         $or: [
           { studentAssignmentId: sa._id },
-          { studentId: sa.studentId, assignmentId: assignment?._id },
+          { studentId: sa.studentId, assignmentId: assignment._id },
           ...(targetTestId ? [{ studentId: sa.studentId, testId: targetTestId }] : []),
           ...(snapshot?._id ? [{ studentId: sa.studentId, testId: snapshot._id }] : []),
         ],
@@ -433,7 +478,7 @@ export class StudentAssignmentsController {
       .exec();
 
     let passageHtml = snapshot.passage || '';
-    let passageTitle = snapshot.title || assignment?.title || 'Reading Passage';
+    let passageTitle = snapshot.title || assignment.title || 'Reading Passage';
 
     if (snapshot.parts && snapshot.parts.length > 0) {
       const part = existing?.passageId
@@ -483,9 +528,16 @@ export class StudentAssignmentsController {
     }
 
     const assignment = await this.assignmentModel
-      .findById(sa.assignmentId)
+      .findById(extractObjectId(sa.assignmentId))
       .select('+exerciseSnapshot')
       .exec();
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    await this.assertAssignmentAccess(sa, assignment, student);
+    this.assertAssignmentOpenForStudent(assignment, student);
 
     const translatedText = body.translatedText ?? body.textVi ?? '';
     let existing = await this.translationModel
@@ -493,6 +545,12 @@ export class StudentAssignmentsController {
       .exec();
 
     if (existing) {
+      if (
+        existing.status === TranslationSubmissionStatus.SUBMITTED ||
+        existing.status === TranslationSubmissionStatus.REVIEWED
+      ) {
+        throw new BadRequestException('Cannot edit a submitted or reviewed translation');
+      }
       existing.translatedText = translatedText;
       existing.status = TranslationSubmissionStatus.DRAFT;
       await existing.save();
@@ -510,8 +568,8 @@ export class StudentAssignmentsController {
     return {
       translationId: extractObjectId(existing._id),
       studentAssignmentId: extractObjectId(sa._id),
-      passageTitle: assignment?.exerciseSnapshot?.title || assignment?.title || 'Reading Passage',
-      passageHtml: assignment?.exerciseSnapshot?.passage || '',
+      passageTitle: assignment.exerciseSnapshot?.title || assignment.title || 'Reading Passage',
+      passageHtml: assignment.exerciseSnapshot?.passage || '',
       draftText: existing.translatedText,
       status: existing.status,
       teacherFeedback: existing.teacherComment || undefined,
@@ -539,9 +597,16 @@ export class StudentAssignmentsController {
     }
 
     const assignment = await this.assignmentModel
-      .findById(sa.assignmentId)
+      .findById(extractObjectId(sa.assignmentId))
       .select('+exerciseSnapshot')
       .exec();
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    await this.assertAssignmentAccess(sa, assignment, student);
+    this.assertAssignmentOpenForStudent(assignment, student);
 
     const translatedText = body.translatedText ?? body.textVi ?? '';
     const result = await this.translationsService.submit(
@@ -556,8 +621,8 @@ export class StudentAssignmentsController {
     return {
       translationId: extractObjectId(result.id || (result as any)._id),
       studentAssignmentId: extractObjectId(sa._id),
-      passageTitle: assignment?.exerciseSnapshot?.title || assignment?.title || 'Reading Passage',
-      passageHtml: assignment?.exerciseSnapshot?.passage || '',
+      passageTitle: assignment.exerciseSnapshot?.title || assignment.title || 'Reading Passage',
+      passageHtml: assignment.exerciseSnapshot?.passage || '',
       draftText: translatedText,
       status: result.status,
       teacherFeedback: (result as any).teacherComment || undefined,

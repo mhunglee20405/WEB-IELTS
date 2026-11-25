@@ -5,7 +5,7 @@ export type PenaltyTransactionDocument = PenaltyTransaction & Document;
 
 @Schema({ timestamps: true, collection: 'penalty_transactions' })
 export class PenaltyTransaction {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'StudentAssignment', required: true, index: true })

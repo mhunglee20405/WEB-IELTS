@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Optional,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UserDocument } from 'src/database/schemas/user.schema';
@@ -34,6 +39,8 @@ import {
   TeacherProfile,
   TeacherProfileDocument,
 } from 'src/database/schemas/teacher-profile.schema';
+import { Exercise, ExerciseDocument } from 'src/database/schemas/exercise.schema';
+import { ExamTest, ExamTestDocument } from 'src/database/schemas/exam-test.schema';
 import {
   CourseStatus,
   EnrollmentStatus,
@@ -43,7 +50,10 @@ import {
   TranslationSubmissionStatus,
   UserRole,
 } from 'src/database/schemas/enums';
-import { formatVnDateTime } from 'src/common/utils/timezone.util';
+import {
+  formatVnDateTime,
+  createVnMonthBounds,
+} from 'src/common/utils/timezone.util';
 import { extractObjectId } from 'src/modules/submissions/submissions.service';
 
 @Injectable()
@@ -71,7 +81,214 @@ export class DashboardService {
     private readonly studentProfileModel: Model<StudentProfileDocument>,
     @InjectModel(TeacherProfile.name)
     private readonly teacherProfileModel: Model<TeacherProfileDocument>,
+    @Optional()
+    @InjectModel(ExamTest.name)
+    private readonly examTestModel?: Model<ExamTestDocument>,
+    @Optional()
+    @InjectModel(Exercise.name)
+    private readonly exerciseModel?: Model<ExerciseDocument>,
   ) {}
+
+  private async execQuery<T>(query: any): Promise<T> {
+    if (!query) return query;
+    return typeof query.exec === 'function' ? await query.exec() : await query;
+  }
+
+  private async hydrateStudentAssignmentRefs(assignments: any[]): Promise<{
+    exerciseMap: Map<string, any>;
+    examTestMap: Map<string, any>;
+  }> {
+    const exerciseMap = new Map<string, any>();
+    const examTestMap = new Map<string, any>();
+    const exerciseLookupIds = new Set<string>();
+    const examTestLookupIds = new Set<string>();
+
+    for (const asg of assignments || []) {
+      if (!asg) continue;
+
+      if (
+        asg.exerciseId &&
+        typeof asg.exerciseId === 'object' &&
+        (asg.exerciseId.title || asg.exerciseId.type)
+      ) {
+        const idStr = extractObjectId(asg.exerciseId);
+        if (idStr) exerciseMap.set(idStr, asg.exerciseId);
+      } else if (asg.exerciseId != null) {
+        const idStr = extractObjectId(asg.exerciseId);
+        if (idStr && idStr !== 'undefined' && idStr !== 'null') {
+          exerciseLookupIds.add(idStr);
+        }
+      }
+
+      if (
+        asg.examTestId &&
+        typeof asg.examTestId === 'object' &&
+        (asg.examTestId.title || asg.examTestId.skill)
+      ) {
+        const idStr = extractObjectId(asg.examTestId);
+        if (idStr) examTestMap.set(idStr, asg.examTestId);
+      } else if (asg.examTestId != null) {
+        const idStr = extractObjectId(asg.examTestId);
+        if (idStr && idStr !== 'undefined' && idStr !== 'null') {
+          examTestLookupIds.add(idStr);
+        }
+      }
+    }
+
+    const exerciseIdsToFetch = Array.from(exerciseLookupIds).filter(
+      (id) => !exerciseMap.has(id),
+    );
+    if (exerciseIdsToFetch.length > 0 && this.exerciseModel) {
+      const objectIds = exerciseIdsToFetch.map((id) =>
+        Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+      );
+      if (typeof this.exerciseModel.find === 'function') {
+        const q = this.exerciseModel.find({ _id: { $in: objectIds } });
+        const docs = await (typeof q?.select === 'function'
+          ? this.execQuery<any[]>(q.select('title type passScore'))
+          : this.execQuery<any[]>(q));
+        for (const ex of docs || []) {
+          if (ex?._id != null) {
+            const exId = extractObjectId(ex._id);
+            if (exId) exerciseMap.set(exId, ex);
+          }
+        }
+      }
+    }
+
+    // Legacy ExamTest assignments store ExamTest._id in raw exerciseId without examTestId
+    for (const id of exerciseLookupIds) {
+      if (!exerciseMap.has(id)) {
+        examTestLookupIds.add(id);
+      }
+    }
+
+    const examTestIdsToFetch = Array.from(examTestLookupIds).filter(
+      (id) => !examTestMap.has(id),
+    );
+    if (examTestIdsToFetch.length > 0 && this.examTestModel) {
+      const objectIds = examTestIdsToFetch.map((id) =>
+        Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+      );
+      if (typeof this.examTestModel.find === 'function') {
+        const q = this.examTestModel.find({ _id: { $in: objectIds } });
+        const docs = await (typeof q?.select === 'function'
+          ? this.execQuery<any[]>(q.select('title skill passScore'))
+          : this.execQuery<any[]>(q));
+        for (const t of docs || []) {
+          if (t?._id != null) {
+            const tId = extractObjectId(t._id);
+            if (tId) examTestMap.set(tId, t);
+          }
+        }
+      }
+    }
+
+    return { exerciseMap, examTestMap };
+  }
+
+  private async countMonthlyExtensionsUsed(
+    studentId: Types.ObjectId,
+    now: Date,
+  ): Promise<number> {
+    const { startOfMonth, endOfMonth } = createVnMonthBounds(now);
+    return this.extensionModel.countDocuments({
+      studentId,
+      createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+    });
+  }
+
+  private async getTeacherScopedData(
+    teacher: UserDocument,
+    courseIds: Types.ObjectId[],
+    includeOverdueCount: boolean,
+  ): Promise<{
+    pendingExtensionsCount: number;
+    pendingTranslationsCount: number;
+    overdueStudentsCount: number;
+    courseAssignments: AssignmentDocument[];
+  }> {
+    if (courseIds.length === 0) {
+      return {
+        pendingExtensionsCount: 0,
+        pendingTranslationsCount: 0,
+        overdueStudentsCount: 0,
+        courseAssignments: [],
+      };
+    }
+
+    const [courseAssignments, authoredTests] = await Promise.all([
+      this.assignmentModel.find({ courseId: { $in: courseIds } }).exec(),
+      this.examTestModel
+        ? this.examTestModel
+            .find(teacher.role === UserRole.ADMIN ? {} : { createdBy: teacher._id })
+            .exec()
+        : Promise.resolve([]),
+    ]);
+
+    const assignmentIds = courseAssignments.map((a) => a._id as Types.ObjectId);
+    const usedTestIds = courseAssignments
+      .flatMap((a) => [a.examTestId, a.exerciseId])
+      .filter((id): id is Types.ObjectId => Boolean(id));
+    const authoredTestIds = authoredTests.map((t) => t._id as Types.ObjectId);
+    const authoredIdSet = new Set(authoredTestIds.map((id) => extractObjectId(id)));
+    const sharedUsedTestIds = usedTestIds.filter(
+      (id) => !authoredIdSet.has(extractObjectId(id)),
+    );
+
+    let enrolledStudentIds: Types.ObjectId[] = [];
+    if (sharedUsedTestIds.length > 0 && teacher.role !== UserRole.ADMIN) {
+      const enrollments = await this.enrollmentModel
+        .find({ courseId: { $in: courseIds }, status: EnrollmentStatus.ACTIVE })
+        .exec();
+      enrolledStudentIds = enrollments.map((e) => e.studentId);
+    }
+
+    const translationOrConditions: Record<string, any>[] = [];
+    if (assignmentIds.length > 0) {
+      translationOrConditions.push({ assignmentId: { $in: assignmentIds } });
+    }
+    if (authoredTestIds.length > 0) {
+      translationOrConditions.push({ testId: { $in: authoredTestIds } });
+    }
+    if (sharedUsedTestIds.length > 0) {
+      if (teacher.role === UserRole.ADMIN) {
+        translationOrConditions.push({ testId: { $in: sharedUsedTestIds } });
+      } else if (enrolledStudentIds.length > 0) {
+        translationOrConditions.push({
+          testId: { $in: sharedUsedTestIds },
+          studentId: { $in: enrolledStudentIds },
+        });
+      }
+    }
+
+    const [pendingExtensionsCount, pendingTranslationsCount, overdueStudentsCount] =
+      await Promise.all([
+        this.extensionModel.countDocuments({
+          courseId: { $in: courseIds },
+          status: ExtensionRequestStatus.PENDING,
+        }),
+        translationOrConditions.length === 0
+          ? Promise.resolve(0)
+          : this.translationModel.countDocuments({
+              status: TranslationSubmissionStatus.SUBMITTED,
+              $or: translationOrConditions,
+            }),
+        !includeOverdueCount || assignmentIds.length === 0
+          ? Promise.resolve(0)
+          : this.studentAssignmentModel.countDocuments({
+              assignmentId: { $in: assignmentIds },
+              status: StudentAssignmentStatus.OVERDUE,
+            }),
+      ]);
+
+    return {
+      pendingExtensionsCount,
+      pendingTranslationsCount,
+      overdueStudentsCount,
+      courseAssignments,
+    };
+  }
 
   async getStudentDashboard(student: UserDocument) {
     const now = new Date();
@@ -85,35 +302,68 @@ export class DashboardService {
         path: 'assignmentId',
         populate: [
           { path: 'courseId', select: 'code title' },
-          { path: 'exerciseId', select: 'title type passScore' },
+          { path: 'examTestId', select: 'title skill passScore' },
         ],
       })
       .sort({ createdAt: -1 })
       .exec();
 
-    const formattedAssignments = saDocs
-      .filter((sa: any) => sa.assignmentId)
-      .map((sa: any) => {
+    const validSaDocs = saDocs.filter((sa: any) => sa.assignmentId);
+    const refs = await this.hydrateStudentAssignmentRefs(
+      validSaDocs.map((sa: any) => sa.assignmentId),
+    );
+
+    const submittedAtBySaId = new Map<string, string>();
+    const formattedAssignments = validSaDocs.map((sa: any) => {
         const asg = sa.assignmentId;
         const crs = asg.courseId;
-        const exe = asg.exerciseId;
-        const passed = Boolean(sa.isTargetAchieved);
+        const rawExerciseId = asg.exerciseId != null ? extractObjectId(asg.exerciseId) : '';
+        const rawExamTestId = asg.examTestId != null ? extractObjectId(asg.examTestId) : '';
+        const exe =
+          asg.exerciseId &&
+          typeof asg.exerciseId === 'object' &&
+          (asg.exerciseId.title || asg.exerciseId.type)
+            ? asg.exerciseId
+            : rawExerciseId
+              ? refs.exerciseMap.get(rawExerciseId)
+              : undefined;
+        const examTest =
+          asg.examTestId &&
+          typeof asg.examTestId === 'object' &&
+          (asg.examTestId.title || asg.examTestId.skill)
+            ? asg.examTestId
+            : (rawExamTestId ? refs.examTestMap.get(rawExamTestId) : undefined) ||
+              (rawExerciseId ? refs.examTestMap.get(rawExerciseId) : undefined);
+        const resolvedExerciseType = String(
+          exe?.type ?? examTest?.skill?.toLowerCase() ?? 'reading',
+        ).toLowerCase();
+        const targetScore =
+          asg.targetScorePercent ?? exe?.passScore ?? examTest?.passScore ?? 70;
+        const passed = Boolean(
+          sa.isTargetAchieved ||
+          sa.status === StudentAssignmentStatus.PASSED ||
+          (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= targetScore),
+        );
         const openAt = asg.openAt ? new Date(asg.openAt).toISOString() : new Date().toISOString();
         const dueAt = asg.deadlineAt ? new Date(asg.deadlineAt).toISOString() : new Date().toISOString();
         const effectiveDueAt = sa.effectiveDeadlineAt
           ? new Date(sa.effectiveDeadlineAt).toISOString()
           : dueAt;
 
+        const saIdStr = extractObjectId(sa._id);
+        const rawSubmittedAt = sa.lastSubmittedAt || sa.updatedAt || now;
+        submittedAtBySaId.set(saIdStr, new Date(rawSubmittedAt).toISOString());
+
         return {
-          id: extractObjectId(sa._id),
-          studentAssignmentId: extractObjectId(sa._id),
+          id: saIdStr,
+          studentAssignmentId: saIdStr,
           assignmentId: extractObjectId(asg._id),
           courseId: crs ? extractObjectId(crs._id || crs) : '',
           courseTitle: crs?.title || '',
           studentId: extractObjectId(student._id),
           studentName: student.fullName,
           title: asg.title,
-          exerciseType: exe?.type || 'reading',
+          exerciseType: resolvedExerciseType,
           assignedDate: asg.assignedDate || todayKey,
           openAt,
           dueAt,
@@ -124,9 +374,9 @@ export class DashboardService {
           bestScore: sa.bestScore ?? null,
           passed,
           answerReviewUnlocked: passed,
-          translationAvailable: passed && exe?.type === 'reading',
+          translationAvailable: passed && resolvedExerciseType === 'reading',
           translationStatus: sa.translationStatus || 'not_started',
-          penaltyApplied: Boolean(sa.penaltyApplied),
+          penaltyApplied: Boolean(sa.penaltyAppliedAt),
         };
       });
 
@@ -143,15 +393,18 @@ export class DashboardService {
       .exec();
     const enrolledCourseIds = enrollments.map((e) => e.courseId);
 
-    const lessonDocs = await this.lessonModel
-      .find({
-        ...(enrolledCourseIds.length > 0 ? { courseId: { $in: enrolledCourseIds } } : {}),
-        status: { $ne: LessonStatus.CANCELLED },
-        endAt: { $gte: now },
-      })
-      .sort({ startAt: 1 })
-      .limit(10)
-      .exec();
+    const lessonDocs =
+      enrolledCourseIds.length === 0
+        ? []
+        : await this.lessonModel
+            .find({
+              courseId: { $in: enrolledCourseIds },
+              status: { $ne: LessonStatus.CANCELLED },
+              endAt: { $gte: now },
+            })
+            .sort({ startAt: 1 })
+            .limit(10)
+            .exec();
 
     const upcomingLessons = lessonDocs.map((l: any) => ({
       id: extractObjectId(l._id),
@@ -178,11 +431,10 @@ export class DashboardService {
         title: a.title,
         score: a.bestScore!,
         passed: a.passed,
-        submittedAt: now.toISOString(),
+        submittedAt: submittedAtBySaId.get(a.studentAssignmentId) || now.toISOString(),
       }));
 
     // 4. Counts
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const [activePenaltiesCount, extensionsUsedThisMonth, unreadNotificationsCount] =
       await Promise.all([
         this.penaltyModel.countDocuments({
@@ -190,11 +442,7 @@ export class DashboardService {
           deltaPoints: { $gt: 0 },
           isReversed: false,
         }),
-        this.extensionModel.countDocuments({
-          studentId: student._id,
-          status: ExtensionRequestStatus.APPROVED,
-          createdAt: { $gte: startOfMonth },
-        }),
+        this.countMonthlyExtensionsUsed(student._id as Types.ObjectId, now),
         this.notificationModel.countDocuments({
           userId: student._id,
           isRead: false,
@@ -222,26 +470,24 @@ export class DashboardService {
         status: CourseStatus.ACTIVE,
       })
       .exec();
-    const courseIds = courses.map((c) => c._id);
+    const courseIds = courses.map((c) => c._id as Types.ObjectId);
 
-    const [
-      pendingExtensionsCount,
-      pendingTranslationsCount,
-      overdueStudentsCount,
-      recentAssignmentsDocs,
-      lessonDocs,
-    ] = await Promise.all([
-      this.extensionModel.countDocuments({ status: ExtensionRequestStatus.PENDING }),
-      this.translationModel.countDocuments({ status: TranslationSubmissionStatus.SUBMITTED }),
-      this.studentAssignmentModel.countDocuments({ status: StudentAssignmentStatus.OVERDUE }),
-      this.assignmentModel
-        .find(courseIds.length > 0 ? { courseId: { $in: courseIds } } : {})
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .exec(),
+    if (courseIds.length === 0) {
+      return {
+        activeCoursesCount: 0,
+        pendingExtensionsCount: 0,
+        pendingTranslationsCount: 0,
+        overdueStudentsCount: 0,
+        recentAssignments: [],
+        upcomingLessons: [],
+      };
+    }
+
+    const [scopedCounts, lessonDocs] = await Promise.all([
+      this.getTeacherScopedData(teacher, courseIds, true),
       this.lessonModel
         .find({
-          ...(courseIds.length > 0 ? { courseId: { $in: courseIds } } : {}),
+          courseId: { $in: courseIds },
           status: { $ne: LessonStatus.CANCELLED },
           endAt: { $gte: now },
         })
@@ -250,17 +496,40 @@ export class DashboardService {
         .exec(),
     ]);
 
-    const recentAssignments = recentAssignmentsDocs.map((a: any) => ({
-      id: extractObjectId(a._id),
-      courseId: extractObjectId(a.courseId),
-      title: a.title,
-      exerciseId: extractObjectId(a.exerciseId),
-      exerciseType: a.requiredScope || 'reading',
-      assignedDate: a.assignedDate || formatVnDateTime(a.openAt).slice(0, 10),
-      openAt: a.openAt ? a.openAt.toISOString() : '',
-      dueAt: a.deadlineAt ? a.deadlineAt.toISOString() : '',
-      status: a.status,
-    }));
+    const recentAssignmentsDocs = [...scopedCounts.courseAssignments]
+      .sort((a: any, b: any) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      })
+      .slice(0, 10);
+
+    const nowMs = now.getTime();
+    const recentAssignments = recentAssignmentsDocs.map((a: any) => {
+      const openMs = a.openAt ? new Date(a.openAt).getTime() : 0;
+      const dueMs = a.deadlineAt ? new Date(a.deadlineAt).getTime() : 0;
+      let effectiveStatus = a.status;
+      if (openMs && dueMs) {
+        if (nowMs < openMs) {
+          effectiveStatus = 'scheduled';
+        } else if (nowMs >= openMs && nowMs < dueMs) {
+          effectiveStatus = 'available';
+        } else {
+          effectiveStatus = 'expired';
+        }
+      }
+      return {
+        id: extractObjectId(a._id),
+        courseId: extractObjectId(a.courseId),
+        title: a.title,
+        exerciseId: extractObjectId(a.exerciseId),
+        exerciseType: a.requiredScope || 'reading',
+        assignedDate: a.assignedDate || formatVnDateTime(a.openAt).slice(0, 10),
+        openAt: a.openAt ? a.openAt.toISOString() : '',
+        dueAt: a.deadlineAt ? a.deadlineAt.toISOString() : '',
+        status: effectiveStatus,
+      };
+    });
 
     const upcomingLessons = lessonDocs.map((l: any) => ({
       id: extractObjectId(l._id),
@@ -280,9 +549,9 @@ export class DashboardService {
 
     return {
       activeCoursesCount: courses.length,
-      pendingExtensionsCount,
-      pendingTranslationsCount,
-      overdueStudentsCount,
+      pendingExtensionsCount: scopedCounts.pendingExtensionsCount,
+      pendingTranslationsCount: scopedCounts.pendingTranslationsCount,
+      overdueStudentsCount: scopedCounts.overdueStudentsCount,
       recentAssignments,
       upcomingLessons,
     };
@@ -290,7 +559,6 @@ export class DashboardService {
 
   async getStudentProfile(student: UserDocument) {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const [profile, enrolledCoursesCount, activePenaltiesCount, extensionsUsedThisMonth] =
       await Promise.all([
@@ -304,11 +572,7 @@ export class DashboardService {
           deltaPoints: { $gt: 0 },
           isReversed: false,
         }),
-        this.extensionModel.countDocuments({
-          studentId: student._id,
-          status: ExtensionRequestStatus.APPROVED,
-          createdAt: { $gte: startOfMonth },
-        }),
+        this.countMonthlyExtensionsUsed(student._id as Types.ObjectId, now),
       ]);
 
     return {
@@ -330,15 +594,14 @@ export class DashboardService {
   }
 
   async getTeacherProfile(teacher: UserDocument) {
-    const [activeCoursesCount, pendingExtensionsCount, pendingTranslationsCount] =
-      await Promise.all([
-        this.courseModel.countDocuments({
-          teacherId: teacher._id,
-          status: CourseStatus.ACTIVE,
-        }),
-        this.extensionModel.countDocuments({ status: ExtensionRequestStatus.PENDING }),
-        this.translationModel.countDocuments({ status: TranslationSubmissionStatus.SUBMITTED }),
-      ]);
+    const courses = await this.courseModel
+      .find({
+        ...(teacher.role === UserRole.ADMIN ? {} : { teacherId: teacher._id }),
+        status: CourseStatus.ACTIVE,
+      })
+      .exec();
+    const courseIds = courses.map((c) => c._id as Types.ObjectId);
+    const scopedCounts = await this.getTeacherScopedData(teacher, courseIds, false);
 
     return {
       user: {
@@ -351,15 +614,39 @@ export class DashboardService {
         timezone: 'Asia/Ho_Chi_Minh',
       },
       specialization: 'IELTS Academic Reading & Listening',
-      activeCoursesCount,
-      pendingExtensionsCount,
-      pendingTranslationsCount,
+      activeCoursesCount: courses.length,
+      pendingExtensionsCount: scopedCounts.pendingExtensionsCount,
+      pendingTranslationsCount: scopedCounts.pendingTranslationsCount,
     };
   }
 
-  async getStudentPenalties(studentId: string) {
+  async getStudentPenalties(studentId: string, actor?: UserDocument) {
     if (!Types.ObjectId.isValid(studentId)) {
       throw new NotFoundException('Student not found');
+    }
+
+    if (actor?.role === UserRole.STUDENT) {
+      if (extractObjectId(actor._id) !== studentId) {
+        throw new ForbiddenException("You do not have access to this student's penalties");
+      }
+    } else if (actor?.role === UserRole.TEACHER) {
+      const teacherCourses = await this.courseModel
+        .find({ teacherId: actor._id })
+        .exec();
+      const teacherCourseIds = teacherCourses.map((c) => c._id);
+      if (teacherCourseIds.length === 0) {
+        throw new ForbiddenException("You do not have access to this student's penalties");
+      }
+      const enrollment = await this.enrollmentModel
+        .findOne({
+          courseId: { $in: teacherCourseIds },
+          studentId: new Types.ObjectId(studentId),
+          status: EnrollmentStatus.ACTIVE,
+        })
+        .exec();
+      if (!enrollment) {
+        throw new ForbiddenException("You do not have access to this student's penalties");
+      }
     }
 
     const penalties = await this.penaltyModel

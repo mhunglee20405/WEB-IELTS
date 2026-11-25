@@ -8,10 +8,10 @@ export class AuditLog {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   actorId?: Types.ObjectId;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   action: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   entityType: string;
 
   @Prop({ type: Types.ObjectId })

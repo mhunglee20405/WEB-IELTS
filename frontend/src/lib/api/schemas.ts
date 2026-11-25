@@ -32,6 +32,17 @@ export const LoginResponseSchema = z.object({
 export const CourseStatusSchema = z.enum(["active", "upcoming", "archived", "draft", "completed"]);
 export const CourseFormatSchema = z.enum(["1:1", "group"]);
 
+function toOptionalStringDate(value: unknown): string | undefined {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  return undefined;
+}
+
 export const CourseSchema = z
   .preprocess((raw: unknown) => {
     if (!raw || typeof raw !== "object") return raw;
@@ -44,10 +55,39 @@ export const CourseSchema = z
       if (!val.teacherName && (teacherObj.fullName || teacherObj.name)) {
         val.teacherName = String(teacherObj.fullName || teacherObj.name);
       }
-      val.teacherId = String(teacherObj._id || teacherObj.id || "");
+      const hexId =
+        teacherObj._id ||
+        teacherObj.id ||
+        (typeof (teacherObj as { toHexString?: () => string }).toHexString === "function"
+          ? (teacherObj as { toHexString: () => string }).toHexString()
+          : "");
+      val.teacherId = String(hexId);
+    } else if (val.teacherId === undefined || val.teacherId === null) {
+      val.teacherId = "";
+    } else if (typeof val.teacherId !== "string") {
+      val.teacherId = String(val.teacherId);
     }
     if (val.type && !val.courseType) {
-      val.courseType = val.type === "one_to_one" ? "1:1" : "group";
+      val.courseType = val.type === "one_to_one" || val.type === "1:1" ? "1:1" : "group";
+    } else if (val.courseType === "one_to_one") {
+      val.courseType = "1:1";
+    }
+    val.startDate = toOptionalStringDate(val.startDate) ?? toOptionalStringDate(val.startAt);
+    val.endDate = toOptionalStringDate(val.endDate) ?? toOptionalStringDate(val.endAt);
+    val.createdAt = toOptionalStringDate(val.createdAt);
+
+    for (const optKey of [
+      "description",
+      "teacherName",
+      "startBand",
+      "targetBand",
+      "studentCount",
+      "enrollmentStatus",
+      "timezone",
+    ] as const) {
+      if (val[optKey] === null) {
+        delete val[optKey];
+      }
     }
     return val;
   }, z.object({
@@ -58,7 +98,7 @@ export const CourseSchema = z
     courseType: CourseFormatSchema.optional(),
     startBand: z.number().optional(),
     targetBand: z.number().optional(),
-    enrollmentStatus: z.enum(["active", "withdrawn", "completed"]).optional(),
+    enrollmentStatus: z.enum(["active", "dropped", "withdrawn", "completed"]).optional(),
     teacherId: z.string(),
     teacherName: z.string().optional(),
     status: CourseStatusSchema,
@@ -306,7 +346,17 @@ export const ExercisePublicSchema = z.preprocess(
   }),
 );
 
-export const AssignmentStatusSchema = z.enum(["scheduled", "active", "closed"]);
+export const AssignmentStatusSchema = z.enum([
+  "draft",
+  "scheduled",
+  "published",
+  "available",
+  "active",
+  "expired",
+  "closed",
+  "archived",
+  "completed",
+]);
 
 export const AssignmentSchema = z.object({
   id: z.string(),
@@ -329,7 +379,9 @@ export const StudentAssignmentStatusSchema = z.enum([
   "in_progress",
   "submitted",
   "passed",
+  "completed",
   "overdue",
+  "excused",
   "extended",
 ]);
 
@@ -337,6 +389,7 @@ export const TranslationStatusSchema = z.enum([
   "not_started",
   "draft",
   "submitted",
+  "reviewed",
   "needs_revision",
   "approved",
 ]);
@@ -418,7 +471,7 @@ export const AnswerReviewResponseSchema = z.object({
   items: z.array(AnswerReviewItemSchema),
 });
 
-export const ExtensionStatusSchema = z.enum(["pending", "approved", "rejected"]);
+export const ExtensionStatusSchema = z.enum(["pending", "approved", "rejected", "cancelled"]);
 
 export const ExtensionRequestItemSchema = z.object({
   id: z.string(),
@@ -460,8 +513,12 @@ export const PenaltySummarySchema = z.object({
 });
 
 export const NotificationTypeSchema = z.enum([
-  "assignment_new",
+  "new_assignment",
   "overdue",
+  "course_enrolled",
+  "extension_reviewed",
+  "other",
+  "assignment_new",
   "course_added",
   "extension_decided",
 ]);
@@ -544,7 +601,7 @@ export const ProfileUpdateFormSchema = z.object({
     .trim()
     .min(2, "Họ và tên phải có ít nhất 2 ký tự.")
     .max(100, "Họ và tên không vượt quá 100 ký tự."),
-  timezone: z.string().trim().min(1, "Vui lòng chọn múi giờ."),
+  timezone: z.string().trim().optional(),
 });
 
 export type ProfileUpdateFormValues = z.infer<typeof ProfileUpdateFormSchema>;
@@ -726,6 +783,7 @@ export const ExamPartTypeSchema = z.enum(["PASSAGE", "SECTION"]);
 export const ExamAttemptStatusSchema = z.enum([
   "IN_PROGRESS",
   "SUBMITTED",
+  "AUTO_SUBMITTED",
   "EXPIRED",
   "ABANDONED",
 ]);

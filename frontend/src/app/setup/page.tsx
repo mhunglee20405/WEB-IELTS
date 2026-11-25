@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ShieldCheck,
   Lock,
@@ -23,6 +23,7 @@ const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^_\-])[A-Za
 
 export default function SetupPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -39,8 +40,9 @@ export default function SetupPage() {
 
   const bootstrapMutation = useMutation({
     mutationFn: systemApi.bootstrapAdmin,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setSuccessMessage(data.message || "Khởi tạo Quản trị viên thành công!");
+      await queryClient.invalidateQueries({ queryKey: ["system", "setup-status"] });
     },
   });
 
@@ -108,26 +110,7 @@ export default function SetupPage() {
           onRetry={() => void statusQuery.refetch()}
           loadingLabel="Đang kiểm tra trạng thái hệ thống..."
         >
-          {isAlreadyInitialized ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center space-y-4">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                <CheckCircle2 className="h-6 w-6" aria-hidden={true} />
-              </div>
-              <h2 className="text-lg font-bold text-slate-900">Hệ thống đã được khởi tạo</h2>
-              <p className="text-sm text-slate-600">
-                Hệ thống đã có quản trị viên. Để đảm bảo an toàn, cổng thiết lập ban đầu đã được đóng vĩnh viễn.
-              </p>
-              <div className="pt-2">
-                <Link
-                  href="/login"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-800"
-                >
-                  Đi tới trang Đăng nhập
-                  <ArrowRight className="h-4 w-4" aria-hidden={true} />
-                </Link>
-              </div>
-            </div>
-          ) : successMessage ? (
+          {successMessage ? (
             <div className="rounded-2xl border border-emerald-200 bg-white p-8 shadow-sm text-center space-y-4">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                 <CheckCircle2 className="h-6 w-6" aria-hidden={true} />
@@ -144,6 +127,25 @@ export default function SetupPage() {
                   Đăng nhập với Quản trị viên mới
                   <ArrowRight className="h-4 w-4" aria-hidden={true} />
                 </button>
+              </div>
+            </div>
+          ) : isAlreadyInitialized ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center space-y-4">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-6 w-6" aria-hidden={true} />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">Hệ thống đã được khởi tạo</h2>
+              <p className="text-sm text-slate-600">
+                Hệ thống đã có quản trị viên. Để đảm bảo an toàn, cổng thiết lập ban đầu đã được đóng vĩnh viễn.
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/login"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-800"
+                >
+                  Đi tới trang Đăng nhập
+                  <ArrowRight className="h-4 w-4" aria-hidden={true} />
+                </Link>
               </div>
             </div>
           ) : (

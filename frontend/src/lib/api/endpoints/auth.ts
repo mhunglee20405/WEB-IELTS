@@ -1,4 +1,3 @@
-import { isMockApiMode } from "../../env";
 import { apiRequest } from "../client";
 import { AuthUserSchema, LoginResponseSchema } from "../schemas";
 import { tokenStore } from "../token-store";
@@ -101,71 +100,18 @@ export const authApi = {
     });
   },
 
-  async getStudentProfile(): Promise<StudentProfile> {
-    if (isMockApiMode()) {
-      return apiRequest<StudentProfile>({
-        method: "GET",
-        path: "/students/me/profile",
-      });
-    }
-
-    const user = await authApi.me();
-    let quota = { used: 0, limit: 3 };
-    try {
-      quota = await apiRequest<{ used: number; limit: number }>({
-        method: "GET",
-        path: "/extension-requests/quota",
-      });
-    } catch {
-      // ignore
-    }
-
-    let activePenaltiesCount = 0;
-    try {
-      const penalties = await apiRequest<{ activePenaltiesCount?: number; totalActive?: number }>({
-        method: "GET",
-        path: "/penalties/mine",
-      });
-      activePenaltiesCount = penalties.activePenaltiesCount ?? penalties.totalActive ?? 0;
-    } catch {
-      // ignore
-    }
-
-    return {
-      user,
-      enrolledCoursesCount: 0,
-      activePenaltiesCount,
-      extensionsUsedThisMonth: quota.used ?? 0,
-      maxExtensionsPerMonth: quota.limit ?? 3,
-    };
+  getStudentProfile(): Promise<StudentProfile> {
+    return apiRequest<StudentProfile>({
+      method: "GET",
+      path: "/students/me/profile",
+    });
   },
 
-  async getTeacherProfile(): Promise<TeacherProfile> {
-    if (isMockApiMode()) {
-      return apiRequest<TeacherProfile>({
-        method: "GET",
-        path: "/teachers/me/profile",
-      });
-    }
-
-    const user = await authApi.me();
-    let activeCoursesCount = 0;
-    try {
-      const courses = await apiRequest<{ total?: number; items?: unknown[] }>({
-        method: "GET",
-        path: "/courses",
-      });
-      activeCoursesCount = courses.total ?? (courses.items ? courses.items.length : 0);
-    } catch {
-      // ignore
-    }
-
-    return {
-      user,
-      activeCoursesCount,
-      pendingExtensionsCount: 0,
-      pendingTranslationsCount: 0,
-    };
+  getTeacherProfile(): Promise<TeacherProfile> {
+    return apiRequest<TeacherProfile>({
+      method: "GET",
+      path: "/teachers/me/profile",
+    });
   },
 };
 

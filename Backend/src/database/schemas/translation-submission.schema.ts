@@ -57,7 +57,35 @@ export class TranslationSubmission {
 }
 
 export const TranslationSubmissionSchema = SchemaFactory.createForClass(TranslationSubmission);
-TranslationSubmissionSchema.index({ studentAssignmentId: 1, passageId: 1 }, { unique: true, sparse: true });
-TranslationSubmissionSchema.index({ studentId: 1, testId: 1, passageId: 1 }, { unique: true, sparse: true });
+TranslationSubmissionSchema.index(
+  { studentAssignmentId: 1, passageId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      studentAssignmentId: { $type: 'objectId' },
+      passageId: { $type: 'string' },
+    },
+  },
+);
+TranslationSubmissionSchema.index(
+  { studentAssignmentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      studentAssignmentId: { $type: 'objectId' },
+      passageId: { $exists: false },
+    },
+  },
+);
+TranslationSubmissionSchema.index(
+  { studentId: 1, testId: 1, passageId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      testId: { $type: 'objectId' },
+      passageId: { $type: 'string' },
+    },
+  },
+);
 TranslationSubmissionSchema.index({ studentId: 1, status: 1 });
 

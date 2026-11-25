@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { TranslationsService } from './translations.service';
+import { TranslationsController } from './translations.controller';
 import { TranslationSubmission } from 'src/database/schemas/translation-submission.schema';
 import { Assignment } from 'src/database/schemas/assignment.schema';
 import { Course } from 'src/database/schemas/course.schema';
@@ -22,6 +23,7 @@ import {
 
 describe('TranslationsService', () => {
   let service: TranslationsService;
+  let controller: TranslationsController;
   let translationModel: any;
   let assignmentModel: any;
   let courseModel: any;
@@ -91,6 +93,7 @@ describe('TranslationsService', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
+      controllers: [TranslationsController],
       providers: [
         TranslationsService,
         { provide: getModelToken(TranslationSubmission.name), useValue: translationModel },
@@ -101,6 +104,7 @@ describe('TranslationsService', () => {
     }).compile();
 
     service = module.get<TranslationsService>(TranslationsService);
+    controller = module.get<TranslationsController>(TranslationsController);
   });
 
   describe('submit', () => {
@@ -162,6 +166,104 @@ describe('TranslationsService', () => {
       expect(res.status).toBe(TranslationSubmissionStatus.SUBMITTED);
       expect(res.originalPassage).toContain('Mesopotamia');
     });
+
+    it('rejects downgrading or overwriting an already SUBMITTED or REVIEWED translation', async () => {
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(sampleReadingAssignment),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleStudentAssignment),
+      });
+
+      const existingSubmitted = {
+        _id: translationId,
+        studentAssignmentId,
+        assignmentId,
+        studentId,
+        translatedText: 'Bản dịch đã nộp',
+        status: TranslationSubmissionStatus.SUBMITTED,
+        save: jest.fn(),
+      };
+      translationModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(existingSubmitted),
+      });
+
+      await expect(
+        service.submit(
+          assignmentId.toHexString(),
+          {
+            translatedText: 'Cố tình hoàn tác về draft',
+            status: TranslationSubmissionStatus.DRAFT,
+          },
+          studentActor,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.submit(
+          assignmentId.toHexString(),
+          {
+            translatedText: 'Cố tình ghi đè bản đã nộp',
+            status: TranslationSubmissionStatus.SUBMITTED,
+          },
+          studentActor,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(existingSubmitted.save).not.toHaveBeenCalled();
+    });
+
+    it('preserves DRAFT -> DRAFT and DRAFT -> SUBMITTED transitions', async () => {
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(sampleReadingAssignment),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleStudentAssignment),
+      });
+
+      const existingDraft: any = {
+        _id: translationId,
+        studentAssignmentId,
+        assignmentId,
+        studentId,
+        translatedText: 'Nháp ban đầu',
+        status: TranslationSubmissionStatus.DRAFT,
+        save: jest.fn().mockImplementation(function (this: any) {
+          return Promise.resolve(this);
+        }),
+        toObject: function () {
+          return { ...this };
+        },
+      };
+      translationModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(existingDraft),
+      });
+
+      const draftRes = await service.submit(
+        assignmentId.toHexString(),
+        {
+          translatedText: 'Nháp cập nhật mới nhất...',
+          status: TranslationSubmissionStatus.DRAFT,
+        },
+        studentActor,
+      );
+      expect(draftRes.status).toBe(TranslationSubmissionStatus.DRAFT);
+
+      const submittedRes = await service.submit(
+        assignmentId.toHexString(),
+        {
+          translatedText: 'Bản dịch hoàn chỉnh để nộp...',
+          status: TranslationSubmissionStatus.SUBMITTED,
+        },
+        studentActor,
+      );
+      expect(submittedRes.status).toBe(TranslationSubmissionStatus.SUBMITTED);
+      expect(existingDraft.save).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('review', () => {
@@ -204,6 +306,131 @@ describe('TranslationsService', () => {
       expect(res.status).toBe(TranslationSubmissionStatus.REVIEWED);
       expect(res.teacherComment).toBe('Bản dịch rất tốt, văn phong mạch lạc.');
       expect(res.reviewedBy).toBe(teacherId.toHexString());
+    });
+  });
+
+  describe('findMine', () => {
+    it('omits passage before assignment.openAt so passage is not leaked early', async () => {
+      const futureOpenAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...sampleReadingAssignment,
+            openAt: futureOpenAt,
+          }),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleStudentAssignment),
+      });
+      translationModel.findOne.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      });
+
+      const res: any = await service.findMine(assignmentId.toHexString(), studentActor);
+
+      expect(res.passage).toBeUndefined();
+      expect(res.originalPassage).toBeUndefined();
+    });
+
+    it('omits originalPassage when a submission exists before assignment.openAt', async () => {
+      const futureOpenAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...sampleReadingAssignment,
+            openAt: futureOpenAt,
+          }),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleStudentAssignment),
+      });
+      translationModel.findOne.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            _id: translationId,
+            studentAssignmentId,
+            assignmentId,
+            studentId,
+            translatedText: 'Draft',
+            status: TranslationSubmissionStatus.DRAFT,
+            toObject: function () {
+              return { ...this };
+            },
+          }),
+        }),
+      });
+
+      const res: any = await service.findMine(assignmentId.toHexString(), studentActor);
+
+      expect(res.originalPassage).toBeUndefined();
+    });
+
+    it('returns passage when now >= assignment.openAt', async () => {
+      const pastOpenAt = new Date(Date.now() - 60 * 60 * 1000);
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...sampleReadingAssignment,
+            openAt: pastOpenAt,
+          }),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleStudentAssignment),
+      });
+      translationModel.findOne.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      });
+
+      const res: any = await service.findMine(assignmentId.toHexString(), studentActor);
+
+      expect(res.passage).toContain('Mesopotamia');
+    });
+  });
+
+  describe('TranslationsController.reviewPost', () => {
+    it('forwards decision to translationsService.review so needs_revision resets status to DRAFT', async () => {
+      const mockDoc: any = {
+        _id: translationId,
+        assignmentId,
+        studentId,
+        translatedText: 'Bản dịch cần sửa',
+        status: TranslationSubmissionStatus.SUBMITTED,
+        save: jest.fn().mockImplementation(function () {
+          return Promise.resolve(this);
+        }),
+        toObject: function () {
+          return { ...this };
+        },
+      };
+
+      translationModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(mockDoc),
+      });
+      assignmentModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(sampleReadingAssignment),
+      });
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({
+          _id: courseId,
+          teacherId,
+        }),
+      });
+
+      const res = await controller.reviewPost(
+        translationId.toHexString(),
+        { feedback: 'Cần sửa lại đoạn 2', decision: 'needs_revision' },
+        teacherActor,
+      );
+
+      expect(res.status).toBe(TranslationSubmissionStatus.DRAFT);
+      expect(res.teacherComment).toBe('Cần sửa lại đoạn 2');
     });
   });
 });

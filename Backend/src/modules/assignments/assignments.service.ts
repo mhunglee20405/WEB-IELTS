@@ -8,8 +8,8 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Model, Connection, Types } from 'mongoose';
 import { Assignment, AssignmentDocument, ExerciseSnapshot } from 'src/database/schemas/assignment.schema';
 import { Course, CourseDocument } from 'src/database/schemas/course.schema';
 import { Exercise, ExerciseDocument } from 'src/database/schemas/exercise.schema';
@@ -44,11 +44,17 @@ import { NotificationsService } from 'src/modules/notifications/notifications.se
 import { AuditService } from 'src/modules/audit/audit.service';
 
 export function extractObjectId(ref: unknown): string {
+  if (ref === null || ref === undefined) {
+    return '';
+  }
   if (ref instanceof Types.ObjectId) {
     return ref.toHexString();
   }
   if (ref && typeof ref === 'object' && '_id' in ref) {
     const id = (ref as { _id: unknown })._id;
+    if (id === null || id === undefined) {
+      return '';
+    }
     return id instanceof Types.ObjectId ? id.toHexString() : String(id);
   }
   return String(ref);
@@ -95,10 +101,19 @@ export function computeStudentAssignmentLifecycleStatus(
   const openMs = new Date(assignment.openAt).getTime();
   const effectiveDeadlineMs = new Date(studentAssignment.effectiveDeadlineAt).getTime();
 
+  const attemptsCount =
+    studentAssignment.attemptsCount ?? (studentAssignment.lastSubmittedAt ? 1 : 0);
+  const maxAttempts = assignment?.maxAttempts;
+  const canRetakeSubmitted =
+    studentAssignment.status === StudentAssignmentStatus.SUBMITTED &&
+    Boolean(assignment?.allowRetake) &&
+    (maxAttempts === undefined || maxAttempts === null || attemptsCount < maxAttempts);
+
   const isCompleted =
+    Boolean(studentAssignment.isTargetAchieved) ||
     studentAssignment.status === StudentAssignmentStatus.PASSED ||
-    studentAssignment.status === StudentAssignmentStatus.SUBMITTED ||
-    studentAssignment.status === StudentAssignmentStatus.COMPLETED;
+    studentAssignment.status === StudentAssignmentStatus.COMPLETED ||
+    (studentAssignment.status === StudentAssignmentStatus.SUBMITTED && !canRetakeSubmitted);
 
   if (isCompleted) {
     return {
@@ -152,7 +167,202 @@ export class AssignmentsService implements OnModuleInit {
     @InjectModel(TranslationSubmission.name) @Optional() private translationModel?: Model<TranslationSubmissionDocument>,
     @Optional() private notificationsService?: NotificationsService,
     @Optional() private auditService?: AuditService,
+    @Optional() @InjectConnection() private readonly connection?: Connection,
   ) {}
+
+  private async runInTransaction<T>(work: (session?: any) => Promise<T>): Promise<T> {
+    if (typeof this.connection?.startSession !== 'function') {
+      return await work(undefined);
+    }
+
+    const session = await this.connection.startSession();
+    try {
+      if (typeof session?.withTransaction === 'function') {
+        let result!: T;
+        await session.withTransaction(async () => {
+          result = await work(session);
+        });
+        return result;
+      }
+      return await work(session);
+    } finally {
+      if (typeof session?.endSession === 'function') {
+        await session.endSession();
+      }
+    }
+  }
+
+  private async execWithOptionalSession<T>(query: any, session?: any): Promise<T> {
+    if (!query) return query;
+    const bound = session && typeof query.session === 'function' ? query.session(session) : query;
+    return typeof bound?.exec === 'function' ? await bound.exec() : await bound;
+  }
+
+  private async execQuery<T>(query: any): Promise<T> {
+    if (!query) return query;
+    return typeof query.exec === 'function' ? await query.exec() : await query;
+  }
+
+  private async hydrateAssignmentRefs(assignments: any[]): Promise<{
+    exerciseMap: Map<string, any>;
+    examTestMap: Map<string, any>;
+  }> {
+    const exerciseMap = new Map<string, any>();
+    const examTestMap = new Map<string, any>();
+    const exerciseLookupIds = new Set<string>();
+    const examTestLookupIds = new Set<string>();
+
+    for (const asg of assignments || []) {
+      if (!asg) continue;
+      const raw = typeof asg.toObject === 'function' ? asg.toObject() : asg;
+
+      if (raw.exerciseId && typeof raw.exerciseId === 'object' && (raw.exerciseId.title || raw.exerciseId.type)) {
+        const idStr = extractObjectId(raw.exerciseId);
+        if (idStr) exerciseMap.set(idStr, raw.exerciseId);
+      } else if (raw.exerciseId != null) {
+        const idStr = extractObjectId(raw.exerciseId);
+        if (idStr) exerciseLookupIds.add(idStr);
+      }
+
+      if (raw.examTestId && typeof raw.examTestId === 'object' && (raw.examTestId.title || raw.examTestId.skill)) {
+        const idStr = extractObjectId(raw.examTestId);
+        if (idStr) examTestMap.set(idStr, raw.examTestId);
+      } else if (raw.examTestId != null) {
+        const idStr = extractObjectId(raw.examTestId);
+        if (idStr) examTestLookupIds.add(idStr);
+      }
+    }
+
+    const exerciseIdsToFetch = Array.from(exerciseLookupIds).filter((id) => !exerciseMap.has(id));
+    if (exerciseIdsToFetch.length > 0 && this.exerciseModel) {
+      const objectIds = exerciseIdsToFetch.map((id) =>
+        Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+      );
+      if (typeof this.exerciseModel.find === 'function') {
+        const q = this.exerciseModel.find({ _id: { $in: objectIds } });
+        const docs = await (typeof q?.select === 'function'
+          ? this.execQuery<any[]>(q.select('title type passScore'))
+          : this.execQuery<any[]>(q));
+        for (const ex of docs || []) {
+          const exId = extractObjectId(ex._id);
+          if (exId) exerciseMap.set(exId, ex);
+        }
+      } else if (typeof this.exerciseModel.findById === 'function') {
+        for (const id of exerciseIdsToFetch) {
+          const q = this.exerciseModel.findById(id);
+          const ex = q
+            ? await (typeof q?.select === 'function'
+                ? this.execQuery<any>(q.select('title type passScore'))
+                : this.execQuery<any>(q))
+            : null;
+          if (ex) {
+            const exId = extractObjectId(ex._id);
+            if (exId) exerciseMap.set(exId, ex);
+          }
+        }
+      }
+    }
+
+    // Legacy ExamTest assignments store the ExamTest._id in exerciseId without examTestId
+    for (const id of exerciseLookupIds) {
+      if (!exerciseMap.has(id)) {
+        examTestLookupIds.add(id);
+      }
+    }
+
+    const examTestIdsToFetch = Array.from(examTestLookupIds).filter((id) => !examTestMap.has(id));
+    if (examTestIdsToFetch.length > 0 && this.examTestModel) {
+      const objectIds = examTestIdsToFetch.map((id) =>
+        Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+      );
+      if (typeof this.examTestModel.find === 'function') {
+        const q = this.examTestModel.find({ _id: { $in: objectIds } });
+        const docs = await (typeof q?.select === 'function'
+          ? this.execQuery<any[]>(q.select('title skill passScore'))
+          : this.execQuery<any[]>(q));
+        for (const t of docs || []) {
+          const tId = extractObjectId(t._id);
+          if (tId) examTestMap.set(tId, t);
+        }
+      } else if (typeof this.examTestModel.findById === 'function') {
+        for (const id of examTestIdsToFetch) {
+          const q = this.examTestModel.findById(id);
+          const t = q
+            ? await (typeof q?.select === 'function'
+                ? this.execQuery<any>(q.select('title skill passScore'))
+                : this.execQuery<any>(q))
+            : null;
+          if (t) {
+            const tId = extractObjectId(t._id);
+            if (tId) examTestMap.set(tId, t);
+          }
+        }
+      }
+    }
+
+    return { exerciseMap, examTestMap };
+  }
+
+  private resolveAssignmentMediaMeta(
+    raw: any,
+    refs?: { exerciseMap: Map<string, any>; examTestMap: Map<string, any> },
+  ): {
+    exerciseId: string;
+    examTestId?: string;
+    exercise?: { id: string; title: string; type: string; passScore?: number };
+    exerciseType: string;
+  } {
+    const rawExerciseId = raw.exerciseId != null ? extractObjectId(raw.exerciseId) : '';
+    const rawExamTestId = raw.examTestId != null ? extractObjectId(raw.examTestId) : '';
+
+    const resolvedExercise =
+      raw.exerciseId && typeof raw.exerciseId === 'object' && (raw.exerciseId.title || raw.exerciseId.type)
+        ? raw.exerciseId
+        : rawExerciseId
+          ? refs?.exerciseMap?.get(rawExerciseId)
+          : undefined;
+
+    const resolvedExamTest =
+      raw.examTestId && typeof raw.examTestId === 'object' && (raw.examTestId.title || raw.examTestId.skill)
+        ? raw.examTestId
+        : (rawExamTestId ? refs?.examTestMap?.get(rawExamTestId) : undefined) ||
+          (rawExerciseId ? refs?.examTestMap?.get(rawExerciseId) : undefined);
+
+    const effectiveExamTestId =
+      rawExamTestId || (resolvedExamTest ? extractObjectId(resolvedExamTest._id || resolvedExamTest) : undefined);
+
+    const effectiveExerciseId = rawExerciseId || effectiveExamTestId || '';
+
+    const resolvedType =
+      raw.exerciseType ||
+      resolvedExercise?.type ||
+      (resolvedExamTest?.skill ? String(resolvedExamTest.skill).toLowerCase() : undefined) ||
+      (raw.exerciseSnapshot?.type ? String(raw.exerciseSnapshot.type).toLowerCase() : undefined) ||
+      'reading';
+
+    const exercise = resolvedExercise
+      ? {
+          id: extractObjectId(resolvedExercise._id),
+          title: resolvedExercise.title,
+          type: resolvedExercise.type,
+          passScore: resolvedExercise.passScore,
+        }
+      : resolvedExamTest
+        ? {
+            id: extractObjectId(resolvedExamTest._id),
+            title: resolvedExamTest.title,
+            type: String(resolvedExamTest.skill || resolvedType).toLowerCase(),
+            passScore: resolvedExamTest.passScore,
+          }
+        : undefined;
+
+    return {
+      exerciseId: effectiveExerciseId,
+      examTestId: effectiveExamTestId,
+      exercise,
+      exerciseType: String(resolvedType).toLowerCase(),
+    };
+  }
 
   async onModuleInit() {
     try {
@@ -170,40 +380,157 @@ export class AssignmentsService implements OnModuleInit {
         { $set: { allowRetake: true } },
       );
 
-      // Auto-heal existing passed student_assignments
+      // Ensure already-passed student_assignments keep isTargetAchieved = true
       await this.studentAssignmentModel.updateMany(
         {
-          $or: [
-            { status: StudentAssignmentStatus.PASSED },
-            { bestScore: { $gte: 70 } },
-          ],
+          status: StudentAssignmentStatus.PASSED,
+          isTargetAchieved: { $ne: true },
         },
         {
           $set: {
             isTargetAchieved: true,
-            status: StudentAssignmentStatus.PASSED,
           },
         },
       );
 
-      // Auto-heal attemptsCount from submissions
+      // Evaluate unpassed student_assignments against each assignment's configured targetScorePercent (default 70)
+      if (
+        typeof this.studentAssignmentModel?.find === 'function' &&
+        typeof this.assignmentModel?.find === 'function'
+      ) {
+        const candidateSas = await this.execQuery<any[]>(
+          this.studentAssignmentModel
+            .find({
+              status: { $ne: StudentAssignmentStatus.PASSED },
+              bestScore: { $ne: null },
+            })
+            .select('_id assignmentId bestScore'),
+        );
+
+        if (candidateSas && candidateSas.length > 0) {
+          const asgIds = Array.from(
+            new Set(candidateSas.map((sa) => extractObjectId(sa.assignmentId)).filter(Boolean)),
+          );
+          const assignments = await this.execQuery<any[]>(
+            this.assignmentModel
+              .find({
+                _id: {
+                  $in: asgIds.map((id) =>
+                    Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+                  ),
+                },
+              })
+              .select('targetScorePercent'),
+          );
+          const targetMap = new Map<string, number>();
+          for (const a of assignments || []) {
+            targetMap.set(extractObjectId(a._id), a.targetScorePercent ?? 70);
+          }
+
+          for (const sa of candidateSas) {
+            const targetScore = targetMap.get(extractObjectId(sa.assignmentId)) ?? 70;
+            if (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= targetScore) {
+              await this.studentAssignmentModel.updateOne(
+                { _id: sa._id },
+                {
+                  $set: {
+                    isTargetAchieved: true,
+                    status: StudentAssignmentStatus.PASSED,
+                  },
+                },
+              );
+            }
+          }
+        }
+      }
+
+      // Auto-publish scheduled assignments whose openAt has arrived
+      await this.assignmentModel.updateMany(
+        {
+          status: { $in: [AssignmentStatus.SCHEDULED, 'scheduled', 'SCHEDULED'] },
+          openAt: { $lte: new Date() },
+          deadlineAt: { $gt: new Date() },
+        },
+        { $set: { status: AssignmentStatus.PUBLISHED } },
+      );
+
+      // Auto-heal attemptsCount from submissions, respecting each assignment's targetScorePercent
       if (this.submissionModel) {
         const counts = await this.submissionModel.aggregate([
-          { $group: { _id: '$studentAssignmentId', count: { $sum: 1 }, maxScore: { $max: '$scorePercent' } } },
+          {
+            $group: {
+              _id: '$studentAssignmentId',
+              assignmentId: { $first: '$assignmentId' },
+              count: { $sum: 1 },
+              maxScore: { $max: '$scorePercent' },
+            },
+          },
         ]);
-        for (const c of counts) {
-          if (c._id) {
-            await this.studentAssignmentModel.updateOne(
-              { _id: c._id },
-              {
-                $set: {
-                  attemptsCount: c.count,
-                  ...(c.maxScore !== undefined && c.maxScore >= 70
-                    ? { isTargetAchieved: true, status: StudentAssignmentStatus.PASSED }
-                    : {}),
-                },
-              },
+        if (counts && counts.length > 0) {
+          const targetByAsgId = new Map<string, number>();
+          const missingAsgSaIds: any[] = [];
+          const asgIdsToLoad = new Set<string>();
+
+          for (const c of counts) {
+            if (c.assignmentId) {
+              asgIdsToLoad.add(extractObjectId(c.assignmentId));
+            } else if (c._id) {
+              missingAsgSaIds.push(c._id);
+            }
+          }
+
+          const saToAsgMap = new Map<string, string>();
+          if (missingAsgSaIds.length > 0 && typeof this.studentAssignmentModel?.find === 'function') {
+            const sas = await this.execQuery<any[]>(
+              this.studentAssignmentModel
+                .find({ _id: { $in: missingAsgSaIds } })
+                .select('_id assignmentId'),
             );
+            for (const sa of sas || []) {
+              const aId = extractObjectId(sa.assignmentId);
+              if (aId) {
+                saToAsgMap.set(extractObjectId(sa._id), aId);
+                asgIdsToLoad.add(aId);
+              }
+            }
+          }
+
+          if (asgIdsToLoad.size > 0 && typeof this.assignmentModel?.find === 'function') {
+            const asgs = await this.execQuery<any[]>(
+              this.assignmentModel
+                .find({
+                  _id: {
+                    $in: Array.from(asgIdsToLoad).map((id) =>
+                      Types.ObjectId.isValid(id) ? new Types.ObjectId(id) : id,
+                    ),
+                  },
+                })
+                .select('targetScorePercent'),
+            );
+            for (const a of asgs || []) {
+              targetByAsgId.set(extractObjectId(a._id), a.targetScorePercent ?? 70);
+            }
+          }
+
+          for (const c of counts) {
+            if (c._id) {
+              const saIdStr = extractObjectId(c._id);
+              const asgIdStr = c.assignmentId
+                ? extractObjectId(c.assignmentId)
+                : saToAsgMap.get(saIdStr);
+              const targetScore = asgIdStr ? (targetByAsgId.get(asgIdStr) ?? 70) : 70;
+              await this.studentAssignmentModel.updateOne(
+                { _id: c._id },
+                {
+                  $set: {
+                    attemptsCount: c.count,
+                    ...(c.maxScore !== undefined && c.maxScore >= targetScore
+                      ? { isTargetAchieved: true, status: StudentAssignmentStatus.PASSED }
+                      : {}),
+                  },
+                },
+              );
+            }
           }
         }
       }
@@ -522,7 +849,7 @@ export class AssignmentsService implements OnModuleInit {
       .findById(id)
       .select('+exerciseSnapshot')
       .populate('courseId', 'code title teacherId')
-      .populate('exerciseId', 'title type passScore')
+      .populate('examTestId', 'title skill passScore')
       .exec();
     if (!assignment) {
       throw new NotFoundException('Assignment not found');
@@ -538,6 +865,11 @@ export class AssignmentsService implements OnModuleInit {
       courseId: course._id,
       status: EnrollmentStatus.ACTIVE,
     });
+    const refs = await this.hydrateAssignmentRefs([assignment]);
+    const meta = this.resolveAssignmentMediaMeta(
+      typeof assignment.toObject === 'function' ? assignment.toObject() : assignment,
+      refs,
+    );
     const snapshot: any = assignment.exerciseSnapshot || {};
     const questions = snapshot.questions || [];
     const totalPoints = questions.reduce((sum: number, q: any) => sum + (q.points || 1), 0);
@@ -546,6 +878,9 @@ export class AssignmentsService implements OnModuleInit {
       id: extractObjectId(assignment._id),
       course: { id: extractObjectId(course._id), code: course.code, title: course.title },
       title: assignment.title,
+      exerciseId: meta.exerciseId,
+      ...(meta.examTestId ? { examTestId: meta.examTestId } : {}),
+      exerciseType: meta.exerciseType,
       scope: assignment.requiredScope || 'FULL',
       requiredPartId: assignment.requiredPartId || null,
       assignedDate: assignment.assignedDate || formatVnDateTime(assignment.openAt).slice(0, 10),
@@ -610,11 +945,12 @@ export class AssignmentsService implements OnModuleInit {
       const existing = q?.populate
         ? await q
             .populate('courseId', 'code title')
-            .populate('exerciseId', 'title type')
+            .populate('examTestId', 'title skill passScore')
             .exec()
         : await q;
       if (existing) {
-        return this.formatAssignment(existing);
+        const refs = await this.hydrateAssignmentRefs([existing]);
+        return this.formatAssignment(existing, false, refs);
       }
     }
 
@@ -750,12 +1086,13 @@ export class AssignmentsService implements OnModuleInit {
       const duplicate = q?.populate
         ? await q
             .populate('courseId', 'code title')
-            .populate('exerciseId', 'title type')
+            .populate('examTestId', 'title skill passScore')
             .exec()
         : await q;
 
       if (duplicate) {
-        return this.formatAssignment(duplicate);
+        const refs = await this.hydrateAssignmentRefs([duplicate]);
+        return this.formatAssignment(duplicate, false, refs);
       }
     }
 
@@ -779,6 +1116,7 @@ export class AssignmentsService implements OnModuleInit {
     const assignment = new this.assignmentModel({
       courseId: course._id,
       exerciseId: new Types.ObjectId(targetExerciseId),
+      ...(examTest ? { examTestId: examTest._id } : {}),
       exerciseVersion,
       exerciseSnapshot,
       assignedBy: actor._id,
@@ -803,7 +1141,32 @@ export class AssignmentsService implements OnModuleInit {
       status,
     });
 
-    await assignment.save();
+    let dispatchedEnrollments: any[] = [];
+    try {
+      await this.runInTransaction(async (session) => {
+        await assignment.save(session ? { session } : undefined);
+
+        // If published or scheduled, dispatch student assignments for all actively enrolled students
+        if (status !== AssignmentStatus.DRAFT) {
+          dispatchedEnrollments = await this.dispatchStudentAssignmentsInternal(assignment, session);
+        }
+      });
+    } catch (err: any) {
+      if (err?.code === 11000 && dto.idempotencyKey && typeof this.assignmentModel.findOne === 'function') {
+        const q = this.assignmentModel.findOne({ idempotencyKey: dto.idempotencyKey });
+        const existing = q?.populate
+          ? await q
+              .populate('courseId', 'code title')
+              .populate('examTestId', 'title skill passScore')
+              .exec()
+          : await q;
+        if (existing) {
+          const refs = await this.hydrateAssignmentRefs([existing]);
+          return this.formatAssignment(existing, false, refs);
+        }
+      }
+      throw err;
+    }
 
     if (this.auditService) {
       this.auditService
@@ -817,12 +1180,20 @@ export class AssignmentsService implements OnModuleInit {
         .catch((err) => this.logger.warn(`Failed to audit assignment: ${err.message}`));
     }
 
-    // If published or scheduled, dispatch student assignments for all actively enrolled students
-    if (status !== AssignmentStatus.DRAFT) {
-      await this.dispatchStudentAssignments(assignment);
+    if (dispatchedEnrollments.length > 0) {
+      this.notifyDispatchedStudents(assignment, dispatchedEnrollments);
     }
 
-    return this.formatAssignment(assignment, true);
+    const exerciseMap = new Map<string, any>();
+    const examTestMap = new Map<string, any>();
+    if (exercise) {
+      exerciseMap.set(extractObjectId(exercise._id), exercise);
+    }
+    if (examTest) {
+      examTestMap.set(extractObjectId(examTest._id), examTest);
+    }
+
+    return this.formatAssignment(assignment, true, { exerciseMap, examTestMap });
   }
 
   async findAll(actor: UserDocument, query: AssignmentQueryDto) {
@@ -865,6 +1236,22 @@ export class AssignmentsService implements OnModuleInit {
       filter.status = query.status;
     }
 
+    if (query.assignedDate) {
+      const trimmedDate = query.assignedDate.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmedDate)) {
+        const bounds = createVnDailyBounds(trimmedDate);
+        filter.$or = [
+          { assignedDate: trimmedDate },
+          {
+            assignedDate: { $in: [null, ''] },
+            openAt: { $gte: bounds.openAt, $lte: bounds.deadlineAt },
+          },
+        ];
+      } else {
+        filter.assignedDate = trimmedDate;
+      }
+    }
+
     if (query.from || query.to) {
       if (query.from) {
         filter.openAt = { ...(filter.openAt || {}), $gte: new Date(query.from) };
@@ -878,7 +1265,6 @@ export class AssignmentsService implements OnModuleInit {
       this.assignmentModel
         .find(filter)
         .populate('courseId', 'code title')
-        .populate('exerciseId', 'title type')
         .skip((page - 1) * limit)
         .limit(limit)
         .sort({ createdAt: -1 })
@@ -886,8 +1272,10 @@ export class AssignmentsService implements OnModuleInit {
       this.assignmentModel.countDocuments(filter).exec(),
     ]);
 
+    const refs = await this.hydrateAssignmentRefs(docs);
+
     return {
-      items: docs.map((d) => this.formatAssignment(d)),
+      items: docs.map((d) => this.formatAssignment(d, false, refs)),
       total,
       page,
       limit,
@@ -917,7 +1305,7 @@ export class AssignmentsService implements OnModuleInit {
         const nonDraftAssignments = await this.assignmentModel
           .find({
             courseId: { $in: activeCourseIds },
-            status: { $in: [AssignmentStatus.PUBLISHED, AssignmentStatus.SCHEDULED] },
+            status: { $in: [AssignmentStatus.PUBLISHED, AssignmentStatus.SCHEDULED, AssignmentStatus.AVAILABLE] },
           })
           .select('_id deadlineAt')
           .exec();
@@ -961,7 +1349,7 @@ export class AssignmentsService implements OnModuleInit {
         select: '-exerciseSnapshot',
         populate: [
           { path: 'courseId', select: 'code title' },
-          { path: 'exerciseId', select: 'title type passScore' },
+          { path: 'examTestId', select: 'title skill passScore' },
         ],
       })
       .sort({ createdAt: -1 })
@@ -978,6 +1366,15 @@ export class AssignmentsService implements OnModuleInit {
           extractObjectId(sa.assignmentId.courseId?._id || sa.assignmentId.courseId) ===
           query.courseId,
       );
+    }
+
+    if (query.assignedDate) {
+      filtered = filtered.filter((sa: any) => {
+        const asgDate =
+          sa.assignmentId.assignedDate ||
+          (sa.assignmentId.openAt ? formatVnDateTime(sa.assignmentId.openAt).slice(0, 10) : '');
+        return asgDate === query.assignedDate;
+      });
     }
 
     if (query.status) {
@@ -1013,30 +1410,41 @@ export class AssignmentsService implements OnModuleInit {
       }
     }
 
+    const refs = await this.hydrateAssignmentRefs(paginated.map((sa: any) => sa.assignmentId));
+
     const items = paginated.map((sa: any) => {
       const assignment = sa.assignmentId;
-      const studentLifecycle = computeStudentAssignmentLifecycleStatus(assignment, sa, now);
       const asgIdStr = extractObjectId(assignment._id);
       const saIdStr = extractObjectId(sa._id);
+      const actualAttempts =
+        attemptsCountMap[saIdStr] ??
+        sa.attemptsCount ??
+        (sa.lastSubmittedAt ? 1 : 0);
+      const rawSaForLifecycle = {
+        ...(typeof sa.toObject === 'function' ? sa.toObject() : sa),
+        attemptsCount: actualAttempts,
+      };
+      const studentLifecycle = computeStudentAssignmentLifecycleStatus(assignment, rawSaForLifecycle, now);
       const isPassed = Boolean(
         sa.isTargetAchieved ||
         sa.status === StudentAssignmentStatus.PASSED ||
         sa.status === 'passed' ||
         (sa.bestScore !== undefined && sa.bestScore !== null && sa.bestScore >= (assignment.targetScorePercent ?? 70)),
       );
-      const exType = assignment.exerciseId?.type || 'reading';
+      const meta = this.resolveAssignmentMediaMeta(
+        typeof assignment.toObject === 'function' ? assignment.toObject() : assignment,
+        refs,
+      );
+      const exType = meta.exerciseType;
       const isReadingEx = String(exType).toLowerCase() === 'reading';
-      const actualAttempts =
-        attemptsCountMap[saIdStr] ??
-        sa.attemptsCount ??
-        (sa.lastSubmittedAt ? 1 : 0);
 
       return {
         id: asgIdStr,
         _id: asgIdStr,
         studentAssignmentId: saIdStr,
         assignmentId: asgIdStr,
-        examTestId: assignment.examTestId ? extractObjectId(assignment.examTestId) : undefined,
+        examTestId: meta.examTestId,
+        exerciseId: meta.exerciseId,
         requiredScope: assignment.requiredScope,
         requiredPartId: assignment.requiredPartId,
         durationSecondsOverride: assignment.durationSecondsOverride,
@@ -1048,14 +1456,7 @@ export class AssignmentsService implements OnModuleInit {
               title: assignment.courseId.title,
             }
           : undefined,
-        exercise: assignment.exerciseId
-          ? {
-              id: extractObjectId(assignment.exerciseId._id || assignment.exerciseId),
-              title: assignment.exerciseId.title,
-              type: assignment.exerciseId.type,
-              passScore: assignment.exerciseId.passScore,
-            }
-          : undefined,
+        exercise: meta.exercise,
         assignedDate: assignment.assignedDate || formatVnDateTime(assignment.openAt).slice(0, 10),
         targetScorePercent: assignment.targetScorePercent ?? 70,
         openAt: assignment.openAt,
@@ -1077,7 +1478,7 @@ export class AssignmentsService implements OnModuleInit {
         answerReviewUnlocked: isPassed,
         translationAvailable: Boolean(isPassed && isReadingEx),
         translationStatus: sa.translationStatus || 'not_started',
-        penaltyApplied: Boolean(sa.penaltyApplied),
+        penaltyApplied: Boolean(sa.penaltyAppliedAt),
         status: isPassed ? StudentAssignmentStatus.PASSED : sa.status,
         scheduleStatus: studentLifecycle.scheduleStatus,
         isAvailable: studentLifecycle.isAvailable,
@@ -1108,7 +1509,7 @@ export class AssignmentsService implements OnModuleInit {
       .findById(id)
       .select('+exerciseSnapshot')
       .populate('courseId', 'code title teacherId status')
-      .populate('exerciseId', 'title type passScore')
+      .populate('examTestId', 'title skill passScore')
       .exec();
 
     if (!assignment) {
@@ -1118,7 +1519,8 @@ export class AssignmentsService implements OnModuleInit {
     const course: any = assignment.courseId;
 
     if (actor.role === UserRole.ADMIN) {
-      return this.formatAssignment(assignment, true);
+      const refs = await this.hydrateAssignmentRefs([assignment]);
+      return this.formatAssignment(assignment, true, refs);
     }
 
     if (actor.role === UserRole.TEACHER) {
@@ -1126,7 +1528,8 @@ export class AssignmentsService implements OnModuleInit {
       if (!isTeacher) {
         throw new ForbiddenException('You do not teach this course');
       }
-      return this.formatAssignment(assignment, true);
+      const refs = await this.hydrateAssignmentRefs([assignment]);
+      return this.formatAssignment(assignment, true, refs);
     }
 
     // Role is STUDENT:
@@ -1145,7 +1548,8 @@ export class AssignmentsService implements OnModuleInit {
       throw new ForbiddenException('You are not assigned to this assignment');
     }
 
-    return this.formatAssignmentForStudent(assignment, studentAssignment);
+    const refs = await this.hydrateAssignmentRefs([assignment]);
+    return this.formatAssignmentForStudent(assignment, studentAssignment, refs);
   }
 
   async update(id: string, dto: UpdateAssignmentDto, actor: UserDocument) {
@@ -1209,8 +1613,9 @@ export class AssignmentsService implements OnModuleInit {
         newOpenAt = new Date(dto.openAt);
         datesModified = true;
       }
-      if (dto.deadlineAt) {
-        newDeadlineAt = new Date(dto.deadlineAt);
+      const deadlineInput = dto.deadlineAt || dto.dueAt;
+      if (deadlineInput) {
+        newDeadlineAt = new Date(deadlineInput);
         datesModified = true;
       }
     }
@@ -1259,7 +1664,8 @@ export class AssignmentsService implements OnModuleInit {
     }
 
     await assignment.save();
-    return this.formatAssignment(assignment, true);
+    const refs = await this.hydrateAssignmentRefs([assignment]);
+    return this.formatAssignment(assignment, true, refs);
   }
 
   async getStudents(assignmentId: string, actor: UserDocument, page = 1, limit = 20) {
@@ -1339,7 +1745,10 @@ export class AssignmentsService implements OnModuleInit {
       }
     }
 
+    const refs = await this.hydrateAssignmentRefs([assignment]);
     const asg = assignment as any;
+    const rawAsg = typeof asg.toObject === 'function' ? asg.toObject() : asg;
+    const mediaMeta = this.resolveAssignmentMediaMeta(rawAsg, refs);
     const passThreshold = asg.targetScorePercent ?? asg.passScore ?? 70;
 
     const items = docs.map((doc: any) => {
@@ -1372,6 +1781,8 @@ export class AssignmentsService implements OnModuleInit {
         _id: saIdStr,
         studentAssignmentId: saIdStr,
         assignmentId: extractObjectId(asg._id),
+        examTestId: mediaMeta.examTestId,
+        exerciseId: mediaMeta.exerciseId,
         courseId: extractObjectId(asg.courseId),
         courseTitle: course?.title || '',
         studentId: studentIdStr,
@@ -1388,7 +1799,7 @@ export class AssignmentsService implements OnModuleInit {
             }
           : undefined,
         title: asg.title,
-        exerciseType: asg.exerciseType || 'reading',
+        exerciseType: mediaMeta.exerciseType,
         assignedDate: asg.assignedDate || (asg.openAt ? formatVnDateTime(asg.openAt).slice(0, 10) : ''),
         openAt: asg.openAt,
         dueAt: asg.deadlineAt,
@@ -1403,7 +1814,7 @@ export class AssignmentsService implements OnModuleInit {
         bestScore: doc.bestScore ?? null,
         passed: isPassed,
         answerReviewUnlocked: isPassed,
-        translationAvailable: Boolean(asg.exerciseType === 'reading'),
+        translationAvailable: Boolean(mediaMeta.exerciseType === 'reading'),
         translationStatus: trStatus,
         penaltyApplied: Boolean(doc.penaltyAppliedAt),
         passedAt: doc.passedAt,
@@ -1482,20 +1893,33 @@ export class AssignmentsService implements OnModuleInit {
     };
   }
 
-  private async dispatchStudentAssignments(assignment: AssignmentDocument): Promise<number> {
+  private async dispatchStudentAssignments(
+    assignment: AssignmentDocument,
+    session?: any,
+  ): Promise<number> {
+    const activeEnrollments = await this.dispatchStudentAssignmentsInternal(assignment, session);
+    if (activeEnrollments.length > 0) {
+      this.notifyDispatchedStudents(assignment, activeEnrollments);
+    }
+    return activeEnrollments.length;
+  }
+
+  private async dispatchStudentAssignmentsInternal(
+    assignment: AssignmentDocument,
+    session?: any,
+  ): Promise<any[]> {
     const rawCourseId = assignment.courseId;
     const courseIdObj =
       typeof rawCourseId === 'string'
         ? new Types.ObjectId(rawCourseId)
         : (rawCourseId as Types.ObjectId);
-    const activeEnrollments = await this.enrollmentModel
-      .find({
-        courseId: { $in: [courseIdObj, courseIdObj.toHexString()] },
-        status: EnrollmentStatus.ACTIVE,
-      })
-      .exec();
+    const enrollmentQuery = this.enrollmentModel.find({
+      courseId: { $in: [courseIdObj, courseIdObj.toHexString()] },
+      status: EnrollmentStatus.ACTIVE,
+    });
+    const activeEnrollments = await this.execWithOptionalSession<any[]>(enrollmentQuery, session);
 
-    if (activeEnrollments.length === 0) return 0;
+    if (!activeEnrollments || activeEnrollments.length === 0) return [];
 
     const toInsert = activeEnrollments.map((enr) => ({
       assignmentId: assignment._id,
@@ -1505,43 +1929,48 @@ export class AssignmentsService implements OnModuleInit {
       status: StudentAssignmentStatus.NOT_STARTED,
     }));
 
+    const insertOptions = session ? { ordered: false, session } : { ordered: false };
+
     try {
-      const result = await this.studentAssignmentModel.insertMany(toInsert, { ordered: false });
-
-      // Notify enrolled students asynchronously
-      if (this.notificationsService) {
-        for (const enr of activeEnrollments) {
-          this.notificationsService
-            .create({
-              userId: enr.studentId.toString(),
-              type: NotificationType.NEW_ASSIGNMENT,
-              title: `Bài tập mới: ${assignment.title}`,
-              body: `Bạn có bài tập mới cần hoàn thành trước ${formatVnDateTime(assignment.deadlineAt)}.`,
-              payload: {
-                assignmentId: assignment._id.toString(),
-                courseId: assignment.courseId.toString(),
-                title: assignment.title,
-                deadlineAt: assignment.deadlineAt.toISOString(),
-                deadlineAtVn: formatVnDateTime(assignment.deadlineAt),
-              },
-              sendEmail: true,
-              emailTemplateKey: 'assignment-published',
-            })
-            .catch((err) => this.logger.warn(`Failed to notify student ${enr.studentId}: ${err.message}`));
-        }
-      }
-
-      return result.length;
+      await this.studentAssignmentModel.insertMany(toInsert, insertOptions);
+      return activeEnrollments;
     } catch (err: any) {
       // Ignore duplicate key error (code 11000) for idempotency
       if (err.code === 11000 || (err.writeErrors && err.writeErrors.length > 0)) {
-        return err.insertedDocs ? err.insertedDocs.length : 0;
+        return [];
       }
       throw err;
     }
   }
 
-  private formatAssignment(assignment: any, includeSnapshot = false) {
+  private notifyDispatchedStudents(assignment: AssignmentDocument, activeEnrollments: any[]): void {
+    if (!this.notificationsService) return;
+    for (const enr of activeEnrollments) {
+      this.notificationsService
+        .create({
+          userId: enr.studentId.toString(),
+          type: NotificationType.NEW_ASSIGNMENT,
+          title: `Bài tập mới: ${assignment.title}`,
+          body: `Bạn có bài tập mới cần hoàn thành trước ${formatVnDateTime(assignment.deadlineAt)}.`,
+          payload: {
+            assignmentId: assignment._id.toString(),
+            courseId: assignment.courseId.toString(),
+            title: assignment.title,
+            deadlineAt: assignment.deadlineAt.toISOString(),
+            deadlineAtVn: formatVnDateTime(assignment.deadlineAt),
+          },
+          sendEmail: true,
+          emailTemplateKey: 'assignment-published',
+        })
+        .catch((err) => this.logger.warn(`Failed to notify student ${enr.studentId}: ${err.message}`));
+    }
+  }
+
+  private formatAssignment(
+    assignment: any,
+    includeSnapshot = false,
+    refs?: { exerciseMap: Map<string, any>; examTestMap: Map<string, any> },
+  ) {
     const raw = typeof assignment.toObject === 'function' ? assignment.toObject() : assignment;
     const courseObj =
       raw.courseId && typeof raw.courseId === 'object' && raw.courseId._id
@@ -1553,15 +1982,14 @@ export class AssignmentsService implements OnModuleInit {
         : undefined;
     const courseIdStr = courseObj ? courseObj.id : extractObjectId(raw.courseId);
 
-    const exerciseObj =
-      raw.exerciseId && typeof raw.exerciseId === 'object' && raw.exerciseId._id
-        ? {
-            id: extractObjectId(raw.exerciseId._id),
-            title: raw.exerciseId.title,
-            type: raw.exerciseId.type,
-          }
-        : undefined;
-    const exerciseIdStr = exerciseObj ? exerciseObj.id : extractObjectId(raw.exerciseId);
+    const meta = this.resolveAssignmentMediaMeta(raw, refs);
+    const exerciseObj = meta.exercise
+      ? {
+          id: meta.exercise.id,
+          title: meta.exercise.title,
+          type: meta.exercise.type,
+        }
+      : undefined;
 
     const now = new Date();
     const lifecycleStatus = computeAssignmentLifecycleStatus(raw, now);
@@ -1573,10 +2001,11 @@ export class AssignmentsService implements OnModuleInit {
       courseId: courseIdStr,
       course: courseObj,
       courseTitle: raw.courseTitle || courseObj?.title || '',
-      exerciseId: exerciseIdStr,
+      exerciseId: meta.exerciseId,
+      ...(meta.examTestId ? { examTestId: meta.examTestId } : {}),
       exercise: exerciseObj,
       exerciseTitle: raw.exerciseTitle || exerciseObj?.title || raw.title || '',
-      exerciseType: raw.exerciseType || exerciseObj?.type || 'reading',
+      exerciseType: meta.exerciseType,
       exerciseVersion: raw.exerciseVersion,
       assignedBy: extractObjectId(raw.assignedBy),
       title: raw.title,
@@ -1598,7 +2027,7 @@ export class AssignmentsService implements OnModuleInit {
       dueAtVn: formatVnDateTime(raw.deadlineAt),
       allowRetake: raw.allowRetake,
       maxAttempts: raw.maxAttempts,
-      status: raw.status,
+      status: lifecycleStatus.toLowerCase(),
       rawStatus: raw.status,
       scheduleStatus: lifecycleStatus,
       createdAt: raw.createdAt,
@@ -1612,7 +2041,11 @@ export class AssignmentsService implements OnModuleInit {
     return res;
   }
 
-  private formatAssignmentForStudent(assignment: any, studentAssignment: any) {
+  private formatAssignmentForStudent(
+    assignment: any,
+    studentAssignment: any,
+    refs?: { exerciseMap: Map<string, any>; examTestMap: Map<string, any> },
+  ) {
     const raw = typeof assignment.toObject === 'function' ? assignment.toObject() : assignment;
     const rawSa =
       typeof studentAssignment.toObject === 'function'
@@ -1625,7 +2058,6 @@ export class AssignmentsService implements OnModuleInit {
     let sanitizedExercise: any = undefined;
     // CRITICAL: Students must NOT access protected questions/passages before availableAt!
     const isLocked =
-      raw.status === AssignmentStatus.SCHEDULED ||
       studentLifecycle.scheduleStatus === 'SCHEDULED' ||
       now.getTime() < new Date(raw.openAt).getTime();
 
@@ -1652,15 +2084,7 @@ export class AssignmentsService implements OnModuleInit {
         : undefined;
     const courseIdStr = courseObj ? courseObj.id : extractObjectId(raw.courseId);
 
-    const exerciseObj =
-      raw.exerciseId && typeof raw.exerciseId === 'object' && raw.exerciseId._id
-        ? {
-            id: extractObjectId(raw.exerciseId._id),
-            title: raw.exerciseId.title,
-            type: raw.exerciseId.type,
-          }
-        : undefined;
-    const exerciseIdStr = exerciseObj ? exerciseObj.id : extractObjectId(raw.exerciseId);
+    const meta = this.resolveAssignmentMediaMeta(raw, refs);
 
     return {
       id: idStr,
@@ -1670,10 +2094,11 @@ export class AssignmentsService implements OnModuleInit {
       courseId: courseIdStr,
       course: courseObj,
       courseTitle: raw.courseTitle || courseObj?.title || '',
-      exerciseId: exerciseIdStr,
+      exerciseId: meta.exerciseId,
+      ...(meta.examTestId ? { examTestId: meta.examTestId } : {}),
       exercise: sanitizedExercise,
-      exerciseTitle: raw.exerciseTitle || exerciseObj?.title || raw.title || '',
-      exerciseType: raw.exerciseType || exerciseObj?.type || 'reading',
+      exerciseTitle: raw.exerciseTitle || meta.exercise?.title || raw.title || '',
+      exerciseType: meta.exerciseType,
       exerciseVersion: raw.exerciseVersion,
       title: raw.title,
       requiredScope: raw.requiredScope || 'FULL',

@@ -125,6 +125,40 @@ export function normalizeQuestionOptions(
   });
 }
 
+export function isMultiSelectQuestionType(type: string | undefined): boolean {
+  if (!type) return false;
+  const upper = String(type).toUpperCase().trim();
+  return upper === 'MULTIPLE_CHOICE_MULTIPLE' || upper === 'MCQ_MULTIPLE';
+}
+
+function parseMultiSelectAnswer(studentAnswer: any): string[] {
+  if (Array.isArray(studentAnswer)) {
+    return studentAnswer.map((s) => normalizeText(String(s), false)).filter(Boolean);
+  }
+  if (typeof studentAnswer === 'string') {
+    const trimmed = studentAnswer.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((s) => normalizeText(String(s), false)).filter(Boolean);
+        }
+      } catch {
+        // Fall through to delimiter/single parsing
+      }
+    }
+    if (trimmed.includes(',')) {
+      return trimmed
+        .split(',')
+        .map((s) => normalizeText(s, false))
+        .filter(Boolean);
+    }
+    return [normalizeText(trimmed, false)];
+  }
+  return [];
+}
+
 export function gradeExamQuestion(
   type: string,
   studentAnswer: any,
@@ -137,6 +171,23 @@ export function gradeExamQuestion(
 
   const acceptedKeys: string[] = gradingSpec.acceptedKeys;
   const caseSensitive = Boolean(gradingSpec.caseSensitive);
+
+  if (isMultiSelectQuestionType(type)) {
+    const expectedSet = new Set(
+      acceptedKeys.map((k) => normalizeText(String(k), false)).filter(Boolean),
+    );
+    const studentSet = new Set(parseMultiSelectAnswer(studentAnswer));
+    const isCorrect =
+      expectedSet.size > 0 &&
+      expectedSet.size === studentSet.size &&
+      Array.from(studentSet).every((item) => expectedSet.has(item));
+
+    return {
+      isCorrect,
+      awardedPoints: isCorrect ? points : 0,
+    };
+  }
+
   const normType = normalizeQuestionType(type);
   const valStr = typeof studentAnswer === 'string' ? studentAnswer : String(studentAnswer || '');
 
@@ -220,7 +271,15 @@ export class SubmissionsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    if (assignment.status !== AssignmentStatus.PUBLISHED) {
+    // Accept PUBLISHED or SCHEDULED (time-based: opened when now >= openAt)
+    const isPublishedOrOpen =
+      assignment.status === AssignmentStatus.PUBLISHED ||
+      assignment.status === AssignmentStatus.SCHEDULED ||
+      assignment.status === AssignmentStatus.AVAILABLE ||
+      String(assignment.status).toLowerCase() === 'published' ||
+      String(assignment.status).toLowerCase() === 'scheduled' ||
+      String(assignment.status).toLowerCase() === 'available';
+    if (!isPublishedOrOpen) {
       throw new BadRequestException('This assignment is not active');
     }
 
@@ -282,9 +341,9 @@ export class SubmissionsService {
     }
 
     // Auto-grading engine
-    const studentAnswerMap = new Map<string, string>();
+    const studentAnswerMap = new Map<string, any>();
     for (const ans of dto.answers) {
-      studentAnswerMap.set(ans.questionId, ans.value || '');
+      studentAnswerMap.set(ans.questionId, ans.value ?? '');
     }
 
     let earnedPoints = 0;
@@ -302,8 +361,8 @@ export class SubmissionsService {
         q.questionId || (q.number !== undefined ? String(q.number) : undefined) || q.id || ''
       );
       const rawVal =
-        studentAnswerMap.get(qId) ||
-        (q.questionId ? studentAnswerMap.get(q.questionId) : '') ||
+        studentAnswerMap.get(qId) ??
+        (q.questionId ? studentAnswerMap.get(q.questionId) : undefined) ??
         '';
       const spec = q.answerSpecification;
       const grading = q.grading;
@@ -318,40 +377,55 @@ export class SubmissionsService {
       else if (spec) {
         const correctKey = spec.correctKey;
         const acceptedAnswers = spec.acceptedAnswers || [];
-        const normType = normalizeQuestionType(q.type);
+        if (isMultiSelectQuestionType(q.type)) {
+          const keys =
+            acceptedAnswers.length > 0
+              ? acceptedAnswers
+              : correctKey
+                ? String(correctKey)
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : [];
+          if (keys.length > 0) {
+            isCorrect = gradeExamQuestion(q.type, rawVal, { acceptedKeys: keys }, qPoints).isCorrect;
+          }
+        } else {
+          const normType = normalizeQuestionType(q.type);
 
-        switch (normType) {
-          case 'mcq':
-          case 'matching':
-            if (correctKey) {
-              isCorrect =
-                normalizeText(rawVal, false) === normalizeText(correctKey, false);
-            }
-            break;
+          switch (normType) {
+            case 'mcq':
+            case 'matching':
+              if (correctKey) {
+                isCorrect =
+                  normalizeText(String(rawVal ?? ''), false) === normalizeText(correctKey, false);
+              }
+              break;
 
-          case 'tfng':
-          case 'ynng':
-            if (correctKey) {
-              isCorrect = normalizeTFNG(rawVal) === normalizeTFNG(correctKey);
-            }
-            break;
+            case 'tfng':
+            case 'ynng':
+              if (correctKey) {
+                isCorrect = normalizeTFNG(String(rawVal ?? '')) === normalizeTFNG(correctKey);
+              }
+              break;
 
-          case 'fill_blank':
-          case 'short_answer':
-            if (acceptedAnswers && acceptedAnswers.length > 0) {
-              const caseSensitive = Boolean(spec.caseSensitive);
-              const normalizedInput = normalizeText(rawVal, caseSensitive);
-              isCorrect = acceptedAnswers.some(
-                (acc: string) => normalizeText(acc, caseSensitive) === normalizedInput,
-              );
-            } else if (correctKey) {
-              isCorrect =
-                normalizeText(rawVal, false) === normalizeText(correctKey, false);
-            }
-            break;
+            case 'fill_blank':
+            case 'short_answer':
+              if (acceptedAnswers && acceptedAnswers.length > 0) {
+                const caseSensitive = Boolean(spec.caseSensitive);
+                const normalizedInput = normalizeText(String(rawVal ?? ''), caseSensitive);
+                isCorrect = acceptedAnswers.some(
+                  (acc: string) => normalizeText(acc, caseSensitive) === normalizedInput,
+                );
+              } else if (correctKey) {
+                isCorrect =
+                  normalizeText(String(rawVal ?? ''), false) === normalizeText(correctKey, false);
+              }
+              break;
 
-          default:
-            break;
+            default:
+              break;
+          }
         }
       }
 
@@ -363,20 +437,24 @@ export class SubmissionsService {
 
       submissionAnswers.push({
         questionId: qId || q.questionId,
-        value: rawVal,
+        value:
+          Array.isArray(rawVal) || (typeof rawVal === 'object' && rawVal !== null)
+            ? JSON.stringify(rawVal)
+            : String(rawVal ?? ''),
         awardedPoints,
       });
     }
 
     // Exact raw percentage: unrounded comparison for pass threshold
     const rawScorePercent = totalPossiblePoints > 0 ? (earnedPoints / totalPossiblePoints) * 100 : 0;
-    const passThreshold = snapshot.passScore ?? 70;
+    const passThreshold = assignment.targetScorePercent ?? snapshot.passScore ?? 70;
 
-    // Strict threshold check: exactly 70.0% is PASS, 69.999% is NOT PASS
+    // Strict threshold check: compare against assignment.targetScorePercent ?? snapshot.passScore ?? 70
     const isPassed = rawScorePercent >= passThreshold;
     const displayScorePercent = Math.round(rawScorePercent * 100) / 100;
 
     const alreadyPassedBefore =
+      Boolean(studentAssignment.isTargetAchieved) ||
       studentAssignment.status === StudentAssignmentStatus.PASSED ||
       existingSubmissions.some((s) => s.isPassed);
 
@@ -518,11 +596,14 @@ export class SubmissionsService {
         .exec();
 
       const hasPassed =
-        studentAssignment.status === StudentAssignmentStatus.PASSED || Boolean(passedSubmission);
+        Boolean(studentAssignment.isTargetAchieved) ||
+        studentAssignment.status === StudentAssignmentStatus.PASSED ||
+        Boolean(passedSubmission);
 
       if (!hasPassed) {
+        const targetScore = assignment.targetScorePercent ?? snapshot.passScore ?? 70;
         throw new ForbiddenException(
-          'Answer keys and explanations are locked until you achieve a PASS score (>= 70%)',
+          `Answer keys and explanations are locked until you achieve a PASS score (>= ${targetScore}%)`,
         );
       }
     } else if (actor.role === UserRole.TEACHER) {

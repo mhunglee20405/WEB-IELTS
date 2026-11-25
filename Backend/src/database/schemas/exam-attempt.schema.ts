@@ -93,6 +93,12 @@ export class ExamAttempt {
   @Prop({ type: Map, of: Object, default: {} })
   savedAnswers: Map<string, unknown>;
 
+  @Prop({ type: Number })
+  scorePercent?: number;
+
+  @Prop({ type: Boolean })
+  passed?: boolean;
+
   /**
    * Client-supplied idempotency key (UUID v4) to prevent duplicate attempts
    * from network retries. Sparse-unique so it can be absent on legacy docs.
@@ -108,6 +114,13 @@ export const ExamAttemptSchema = SchemaFactory.createForClass(ExamAttempt);
 
 ExamAttemptSchema.index({ studentId: 1, status: 1 });
 ExamAttemptSchema.index({ testId: 1, studentId: 1 });
+ExamAttemptSchema.index(
+  { studentId: 1, testId: 1, mode: 1, partId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: AttemptStatus.IN_PROGRESS },
+  },
+);
 ExamAttemptSchema.index(
   { idempotencyKey: 1 },
   { unique: true, sparse: true },

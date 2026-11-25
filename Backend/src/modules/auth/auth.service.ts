@@ -21,7 +21,10 @@ import { UserStatus } from 'src/database/schemas/enums';
 import { LoginDto } from './dto/login.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuditService } from '../audit/audit.service';
+import { MailService } from '../mail/mail.service';
 
 export interface TokenPair {
   accessToken: string;
@@ -40,6 +43,7 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AuthService.name);
   private redisClient: Redis | null = null;
   private isRedisConnected = false;
+  private readonly redisKeyPrefix: string;
 
   // In-memory fallback store for unit tests or when Redis is offline
   private readonly fallbackStore = new Map<string, { payload: string; expiresAt: number }>();
@@ -50,7 +54,11 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     private configService: ConfigService,
     private auditService: AuditService,
     @Optional() @Inject('AUTH_REDIS_CLIENT') private injectedRedis?: Redis,
-  ) {}
+    @Optional() private readonly mailService?: MailService,
+  ) {
+    this.redisKeyPrefix =
+      this.configService.get<string>('redis.keyPrefix', 'ielts:customer:') ?? 'ielts:customer:';
+  }
 
   async onModuleInit() {
     if (this.injectedRedis) {
@@ -63,14 +71,13 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     const host = this.configService.get<string>('redis.host', 'localhost');
     const port = this.configService.get<number>('redis.port', 6379);
     const password = this.configService.get<string>('redis.password', '') || undefined;
-    const keyPrefix = this.configService.get<string>('redis.keyPrefix', 'ielts:customer:');
 
     try {
       const client = new Redis({
         host,
         port,
         password,
-        keyPrefix,
+        keyPrefix: this.redisKeyPrefix,
         lazyConnect: true,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
@@ -232,29 +239,52 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     if (this.isRedisConnected && this.redisClient) {
       try {
         const stream = this.redisClient.scanStream({
-          match: 'auth:refresh:*',
+          match: `${this.redisKeyPrefix}auth:refresh:*`,
           count: 100,
         });
 
+        const pending: Promise<void>[] = [];
         await new Promise<void>((resolve) => {
-          stream.on('data', async (keys: string[]) => {
-            if (!keys.length) return;
-            for (const key of keys) {
-              try {
-                const val = await this.redisClient?.get(key);
-                if (val) {
-                  const parsed = JSON.parse(val);
-                  if (parsed.userId === userId) {
-                    await this.redisClient?.del(key);
+          stream.on('data', (keys: string[]) => {
+            if (!keys?.length) return;
+            const work = (async () => {
+              for (const rawKey of keys) {
+                const key =
+                  this.redisKeyPrefix && rawKey.startsWith(this.redisKeyPrefix)
+                    ? rawKey.slice(this.redisKeyPrefix.length)
+                    : rawKey;
+                try {
+                  const val = await this.redisClient?.get(key);
+                  if (val) {
+                    const parsed = JSON.parse(val);
+                    if (parsed.userId === userId) {
+                      await this.redisClient?.del(key);
+                    }
                   }
+                } catch {
+                  // ignore malformed payload or transient per-key failure
                 }
-              } catch {
-                // ignore
               }
+            })();
+            pending.push(work);
+          });
+          stream.on('end', async () => {
+            try {
+              await Promise.all(pending);
+            } finally {
+              resolve();
             }
           });
-          stream.on('end', () => resolve());
-          stream.on('error', () => resolve());
+          stream.on('error', async (err: any) => {
+            this.logger.warn(
+              `Redis scanStream error revoking sessions for user ${userId}: ${err?.message || err}`,
+            );
+            try {
+              await Promise.allSettled(pending);
+            } finally {
+              resolve();
+            }
+          });
         });
       } catch (err: any) {
         this.logger.warn(`Could not revoke Redis sessions for user ${userId}: ${err.message}`);
@@ -386,6 +416,114 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
     return {
       success: true,
       message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
+    };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ ok: boolean; message: string }> {
+    const normalizedEmail = dto.email.toLowerCase().trim();
+    const user = await this.userModel
+      .findOne({ email: normalizedEmail, status: UserStatus.ACTIVE })
+      .exec();
+
+    if (user) {
+      const tokenId = uuidv4();
+      const rawSecret = uuidv4();
+      const tokenHash = await argon2.hash(rawSecret, { type: argon2.argon2id });
+      const resetPayload = JSON.stringify({
+        userId: (user._id as Types.ObjectId).toHexString(),
+        tokenHash,
+      });
+      // 15 minutes TTL
+      await this.setStoreKey(`auth:reset:${tokenId}`, resetPayload, 15 * 60);
+
+      const resetToken = `${tokenId}.${rawSecret}`;
+      const frontendUrl = (this.configService.get<string>('frontendUrl', '') || '').replace(
+        /\/+$/,
+        '',
+      );
+      const resetUrl = frontendUrl
+        ? `${frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`
+        : '';
+
+      if (this.mailService) {
+        try {
+          const rendered = this.mailService.renderTemplate('password-reset', {
+            fullName: user.fullName,
+            resetToken,
+            resetUrl,
+            expiresInMinutes: 15,
+          });
+          await this.mailService.sendMail({
+            to: user.email,
+            ...rendered,
+          });
+        } catch (err: any) {
+          this.logger.warn(
+            `Failed to send password reset email to ${user.email}: ${err?.message || err}`,
+          );
+        }
+      }
+
+      await this.auditService.log({
+        action: 'USER_PASSWORD_RESET_REQUESTED',
+        entityType: 'User',
+        entityId: user._id,
+        actorId: user._id,
+      });
+    }
+
+    // Non-enumerating response: identical whether email exists or not
+    return {
+      ok: true,
+      message: 'Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.',
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<{ ok: boolean; message: string }> {
+    const rawToken = dto.token.trim();
+    if (!rawToken.includes('.')) {
+      throw new BadRequestException('Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+    const [tokenId, ...secretParts] = rawToken.split('.');
+    const rawSecret = secretParts.join('.');
+
+    const rawPayload = await this.atomicGetAndDel(`auth:reset:${tokenId}`);
+    if (!rawPayload) {
+      throw new BadRequestException('Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+
+    let parsed: { userId: string; tokenHash: string };
+    try {
+      parsed = JSON.parse(rawPayload);
+    } catch {
+      throw new BadRequestException('Mã đặt lại mật khẩu không hợp lệ.');
+    }
+
+    const valid = await argon2.verify(parsed.tokenHash, rawSecret);
+    if (!valid) {
+      throw new BadRequestException('Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.');
+    }
+
+    const user = await this.userModel.findById(parsed.userId).exec();
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Tài khoản không tồn tại hoặc đã bị vô hiệu hóa.');
+    }
+
+    user.passwordHash = await argon2.hash(dto.newPassword, { type: argon2.argon2id });
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    await user.save();
+
+    await this.revokeAllUserSessions((user._id as Types.ObjectId).toHexString());
+    await this.auditService.log({
+      action: 'USER_PASSWORD_RESET_COMPLETED',
+      entityType: 'User',
+      entityId: user._id,
+      actorId: user._id,
+    });
+
+    return {
+      ok: true,
+      message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
     };
   }
 

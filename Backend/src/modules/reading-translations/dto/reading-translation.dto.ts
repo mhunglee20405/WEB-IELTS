@@ -98,6 +98,11 @@ export class TeacherTranslationQueryDto {
   @IsMongoId()
   courseId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by ExamTest ObjectId' })
+  @IsOptional()
+  @IsMongoId()
+  testId?: string;
+
   @ApiPropertyOptional({ enum: TranslationSubmissionStatus })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))

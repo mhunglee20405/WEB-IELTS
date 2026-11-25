@@ -11,6 +11,7 @@ import {
   MaxLength,
   Matches,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { AssignmentStatus } from 'src/database/schemas/enums';
 
@@ -36,6 +37,11 @@ export class UpdateAssignmentDto {
   @IsDateString()
   deadlineAt?: string;
 
+  @ApiPropertyOptional({ example: '2026-11-21T06:00:00.000Z', description: 'Alias for deadlineAt' })
+  @IsOptional()
+  @IsDateString()
+  dueAt?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
@@ -49,6 +55,11 @@ export class UpdateAssignmentDto {
 
   @ApiPropertyOptional({ enum: AssignmentStatus })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const lower = value.toLowerCase();
+    return lower === 'active' ? AssignmentStatus.AVAILABLE : lower;
+  })
   @IsEnum(AssignmentStatus)
   status?: AssignmentStatus;
 

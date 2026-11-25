@@ -1,4 +1,5 @@
 import { apiRequest, buildQueryString } from "../client";
+import { CourseSchema } from "../schemas";
 import type {
   AddCourseStudentRequest,
   Course,
@@ -15,83 +16,122 @@ export interface ListCoursesQuery {
   search?: string;
 }
 
+function normalizeCourse(raw: unknown): Course {
+  return CourseSchema.parse(raw);
+}
+
+function normalizeCoursePage(
+  raw: PaginatedResponse<unknown>,
+  fallbackPage: number,
+  fallbackLimit: number,
+): PaginatedResponse<Course> {
+  const rawItems = Array.isArray(raw?.items) ? raw.items : [];
+  const items = rawItems.map((item) => normalizeCourse(item));
+  const total = typeof raw?.total === "number" ? raw.total : items.length;
+  const page = typeof raw?.page === "number" ? raw.page : fallbackPage;
+  const limit = typeof raw?.limit === "number" ? raw.limit : fallbackLimit;
+  const totalPages =
+    typeof raw?.totalPages === "number"
+      ? raw.totalPages
+      : Math.max(1, Math.ceil(total / Math.max(1, limit)));
+
+  return { items, page, limit, total, totalPages };
+}
+
 export const coursesApi = {
-  list(query: ListCoursesQuery = {}): Promise<PaginatedResponse<Course>> {
+  async list(query: ListCoursesQuery = {}): Promise<PaginatedResponse<Course>> {
     const qs = buildQueryString({ ...query });
-    return apiRequest<PaginatedResponse<Course>>({
+    const raw = await apiRequest<PaginatedResponse<unknown>>({
       method: "GET",
       path: `/courses${qs}`,
     });
+    return normalizeCoursePage(raw, query.page ?? 1, query.limit ?? 20);
   },
 
-  listMine(query: ListCoursesQuery = {}): Promise<PaginatedResponse<Course>> {
+  async listMine(query: ListCoursesQuery = {}): Promise<PaginatedResponse<Course>> {
     const qs = buildQueryString({ ...query });
-    return apiRequest<PaginatedResponse<Course>>({
+    const raw = await apiRequest<PaginatedResponse<unknown>>({
       method: "GET",
       path: `/courses/mine${qs}`,
     });
+    return normalizeCoursePage(raw, query.page ?? 1, query.limit ?? 20);
   },
 
-  create(payload: CreateCourseRequest): Promise<Course> {
+  async create(payload: CreateCourseRequest): Promise<Course> {
     const rawPayload = payload as unknown as Record<string, unknown>;
     const rawType = (payload.courseType || rawPayload.type || "group") as string;
     const type = rawType === "1:1" || rawType === "one_to_one" ? "one_to_one" : "group";
-    const body = {
+    const body: Record<string, unknown> = {
       code: payload.code,
       title: payload.title,
-      description: payload.description,
       startBand: Number(payload.startBand ?? 5.0),
       targetBand: Number(payload.targetBand ?? 6.5),
       type,
       courseType: rawType,
       teacherId: payload.teacherId,
-      status: payload.status,
-      startAt: payload.startDate || (rawPayload.startAt as string | undefined) || undefined,
-      endAt: payload.endDate || (rawPayload.endAt as string | undefined) || undefined,
-      startDate: payload.startDate || undefined,
-      endDate: payload.endDate || undefined,
-      timezone: payload.timezone,
     };
-    return apiRequest<Course, typeof body>({
+    if (payload.description !== undefined) body.description = payload.description;
+    if (payload.status !== undefined) body.status = payload.status;
+    if (payload.timezone !== undefined) body.timezone = payload.timezone;
+    const startVal = payload.startDate || (rawPayload.startAt as string | undefined);
+    if (startVal) {
+      body.startAt = startVal;
+      body.startDate = payload.startDate || startVal;
+    }
+    const endVal = payload.endDate || (rawPayload.endAt as string | undefined);
+    if (endVal) {
+      body.endAt = endVal;
+      body.endDate = payload.endDate || endVal;
+    }
+    const raw = await apiRequest<unknown, typeof body>({
       method: "POST",
       path: "/courses",
       body,
     });
+    return normalizeCourse(raw);
   },
 
-  getById(id: string): Promise<Course> {
-    return apiRequest<Course>({
+  async getById(id: string): Promise<Course> {
+    const raw = await apiRequest<unknown>({
       method: "GET",
       path: `/courses/${encodeURIComponent(id)}`,
     });
+    return normalizeCourse(raw);
   },
 
-  update(id: string, payload: UpdateCourseRequest): Promise<Course> {
+  async update(id: string, payload: UpdateCourseRequest): Promise<Course> {
     const rawPayload = payload as unknown as Record<string, unknown>;
     const rawType = (payload.courseType || rawPayload.type) as string | undefined;
-    const body: Record<string, unknown> = {
-      title: payload.title,
-      description: payload.description,
-      startBand: payload.startBand !== undefined ? Number(payload.startBand) : undefined,
-      targetBand: payload.targetBand !== undefined ? Number(payload.targetBand) : undefined,
-      teacherId: payload.teacherId,
-      status: payload.status,
-      startAt: payload.startDate || (rawPayload.startAt as string | undefined) || undefined,
-      endAt: payload.endDate || (rawPayload.endAt as string | undefined) || undefined,
-      startDate: payload.startDate || undefined,
-      endDate: payload.endDate || undefined,
-      timezone: payload.timezone,
-    };
+    const body: Record<string, unknown> = {};
+    if (payload.title !== undefined) body.title = payload.title;
+    if (payload.description !== undefined) body.description = payload.description;
+    if (payload.startBand !== undefined) body.startBand = Number(payload.startBand);
+    if (payload.targetBand !== undefined) body.targetBand = Number(payload.targetBand);
+    if (payload.teacherId !== undefined) body.teacherId = payload.teacherId;
+    if (payload.status !== undefined) body.status = payload.status;
+    if (payload.timezone !== undefined) body.timezone = payload.timezone;
+
+    const startVal = payload.startDate || (rawPayload.startAt as string | undefined);
+    if (startVal) {
+      body.startAt = startVal;
+      body.startDate = payload.startDate || startVal;
+    }
+    const endVal = payload.endDate || (rawPayload.endAt as string | undefined);
+    if (endVal) {
+      body.endAt = endVal;
+      body.endDate = payload.endDate || endVal;
+    }
     if (rawType) {
       const type = rawType === "1:1" || rawType === "one_to_one" ? "one_to_one" : "group";
       body.type = type;
       body.courseType = rawType;
     }
-    return apiRequest<Course, typeof body>({
+    const raw = await apiRequest<unknown, typeof body>({
       method: "PATCH",
       path: `/courses/${encodeURIComponent(id)}`,
       body,
     });
+    return normalizeCourse(raw);
   },
 
   async listStudents(

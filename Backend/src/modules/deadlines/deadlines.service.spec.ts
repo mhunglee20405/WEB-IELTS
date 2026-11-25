@@ -37,6 +37,7 @@ describe('DeadlinesService', () => {
 
     studentAssignmentModel = {
       find: jest.fn(),
+      findOneAndUpdate: jest.fn(),
       countDocuments: jest.fn(),
     };
 
@@ -120,6 +121,7 @@ describe('DeadlinesService', () => {
   describe('processOverdueAssignments', () => {
     it('processes overdue assignments, sets status to OVERDUE, and creates idempotent penalty', async () => {
       const pastDeadline = new Date('2026-11-20T23:59:59.999Z');
+      const referenceDate = new Date('2026-11-21T08:00:00Z');
       const mockOverdueDoc: any = {
         _id: studentAssignmentId,
         studentId,
@@ -137,18 +139,43 @@ describe('DeadlinesService', () => {
         }),
       });
 
+      studentAssignmentModel.findOneAndUpdate.mockImplementation(async (filter: any, update: any) => {
+        Object.assign(mockOverdueDoc, update?.$set || {});
+        return mockOverdueDoc;
+      });
+
       penaltyModel.findOne.mockReturnValue({
         session: jest.fn().mockReturnValue({
           exec: jest.fn().mockResolvedValue(null), // No penalty exists yet
         }),
       });
 
-      const res = await service.processOverdueAssignments({}, undefined, new Date('2026-11-21T08:00:00Z'));
+      const res = await service.processOverdueAssignments({}, undefined, referenceDate);
 
       expect(res.evaluatedCount).toBe(1);
       expect(res.processedCount).toBe(1);
       expect(res.newPenaltiesCount).toBe(1);
       expect(mockOverdueDoc.status).toBe(StudentAssignmentStatus.OVERDUE);
+      expect(studentAssignmentModel.findOneAndUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          _id: studentAssignmentId,
+          status: {
+            $nin: [
+              StudentAssignmentStatus.PASSED,
+              StudentAssignmentStatus.OVERDUE,
+              StudentAssignmentStatus.EXCUSED,
+            ],
+          },
+          effectiveDeadlineAt: { $lt: referenceDate },
+        }),
+        {
+          $set: {
+            status: StudentAssignmentStatus.OVERDUE,
+            penaltyAppliedAt: referenceDate,
+          },
+        },
+        expect.objectContaining({ new: true, session: expect.anything() }),
+      );
       expect(studentProfileModel.updateOne).toHaveBeenCalledWith(
         { userId: studentId },
         { $inc: { penaltyPointsCache: 1 } },
@@ -175,6 +202,11 @@ describe('DeadlinesService', () => {
         }),
       });
 
+      studentAssignmentModel.findOneAndUpdate.mockResolvedValue({
+        ...mockOverdueDoc,
+        status: StudentAssignmentStatus.OVERDUE,
+      });
+
       // Existing penalty already found
       penaltyModel.findOne.mockReturnValue({
         session: jest.fn().mockReturnValue({
@@ -187,6 +219,81 @@ describe('DeadlinesService', () => {
       expect(res.evaluatedCount).toBe(1);
       expect(res.processedCount).toBe(1);
       expect(res.newPenaltiesCount).toBe(0); // 0 new penalties charged!
+    });
+
+    it('skips penalty creation cleanly when findOneAndUpdate returns null due to concurrent pass or extension', async () => {
+      const pastDeadline = new Date('2026-11-20T23:59:59.999Z');
+      const referenceDate = new Date('2026-11-21T08:00:00Z');
+      const mockOverdueDoc: any = {
+        _id: studentAssignmentId,
+        studentId,
+        assignmentId,
+        effectiveDeadlineAt: pastDeadline,
+        status: StudentAssignmentStatus.NOT_STARTED,
+        save: jest.fn().mockResolvedValue(true),
+      };
+
+      studentAssignmentModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            exec: jest.fn().mockResolvedValue([mockOverdueDoc]),
+          }),
+        }),
+      });
+
+      // Student concurrently passed or received an extension before transaction ran
+      studentAssignmentModel.findOneAndUpdate.mockResolvedValue(null);
+
+      const res = await service.processOverdueAssignments({}, undefined, referenceDate);
+
+      expect(res.evaluatedCount).toBe(1);
+      expect(res.processedCount).toBe(0);
+      expect(res.newPenaltiesCount).toBe(0);
+      expect(penaltyModel.findOne).not.toHaveBeenCalled();
+      expect(studentProfileModel.updateOne).not.toHaveBeenCalled();
+    });
+
+    it('does not double-count newPenaltiesCount when MongoDB withTransaction retries after TransientTransactionError', async () => {
+      const pastDeadline = new Date('2026-11-20T23:59:59.999Z');
+      const referenceDate = new Date('2026-11-21T08:00:00Z');
+      const mockOverdueDoc: any = {
+        _id: studentAssignmentId,
+        studentId,
+        assignmentId,
+        effectiveDeadlineAt: pastDeadline,
+        status: StudentAssignmentStatus.NOT_STARTED,
+      };
+
+      studentAssignmentModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            exec: jest.fn().mockResolvedValue([mockOverdueDoc]),
+          }),
+        }),
+      });
+      studentAssignmentModel.findOneAndUpdate.mockResolvedValue({
+        ...mockOverdueDoc,
+        status: StudentAssignmentStatus.OVERDUE,
+      });
+      penaltyModel.findOne.mockReturnValue({
+        session: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue(null),
+        }),
+      });
+
+      connection.startSession.mockResolvedValue({
+        withTransaction: jest.fn().mockImplementation(async (cb: any) => {
+          // Simulate attempt 1 running to completion before transient commit error, then retry attempt 2 succeeding
+          await cb();
+          return await cb();
+        }),
+        endSession: jest.fn().mockResolvedValue(true),
+      });
+
+      const res = await service.processOverdueAssignments({}, undefined, referenceDate);
+
+      expect(res.processedCount).toBe(1);
+      expect(res.newPenaltiesCount).toBe(1);
     });
   });
 });

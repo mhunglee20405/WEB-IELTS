@@ -67,7 +67,18 @@ export class TranslationsService {
       throw new NotFoundException('Assignment not found');
     }
 
-    if (assignment.status !== AssignmentStatus.PUBLISHED) {
+    const nowMs = Date.now();
+    const isOpenTimeArrived =
+      !assignment.openAt || nowMs >= new Date(assignment.openAt).getTime();
+    const isAllowedStatus =
+      assignment.status === AssignmentStatus.PUBLISHED ||
+      assignment.status === AssignmentStatus.AVAILABLE ||
+      assignment.status === AssignmentStatus.SCHEDULED ||
+      String(assignment.status).toLowerCase() === 'published' ||
+      String(assignment.status).toLowerCase() === 'available' ||
+      String(assignment.status).toLowerCase() === 'scheduled';
+
+    if (!isAllowedStatus || !isOpenTimeArrived) {
       throw new BadRequestException('This assignment is not active');
     }
 
@@ -95,8 +106,12 @@ export class TranslationsService {
     const isSubmitted = status === TranslationSubmissionStatus.SUBMITTED;
 
     if (existing) {
-      if (existing.status === TranslationSubmissionStatus.REVIEWED) {
-        throw new BadRequestException('Cannot edit a translation that has already been reviewed by the teacher');
+      const normalizedStatus = String(existing.status || '').toLowerCase();
+      if (
+        normalizedStatus === TranslationSubmissionStatus.SUBMITTED ||
+        normalizedStatus === TranslationSubmissionStatus.REVIEWED
+      ) {
+        throw new BadRequestException('Cannot edit a submitted or reviewed translation');
       }
 
       existing.translatedText = dto.translatedText;
@@ -151,15 +166,19 @@ export class TranslationsService {
       .populate('reviewedBy', 'fullName email')
       .exec();
 
+    const isBeforeOpen =
+      Boolean(assignment.openAt) && Date.now() < new Date(assignment.openAt).getTime();
+    const passage = isBeforeOpen ? undefined : assignment.exerciseSnapshot?.passage;
+
     if (!submission) {
       return {
         assignmentId,
-        passage: assignment.exerciseSnapshot?.passage,
+        passage,
         translation: null,
       };
     }
 
-    return this.formatTranslation(submission, assignment.exerciseSnapshot?.passage);
+    return this.formatTranslation(submission, passage);
   }
 
   async findAllForAssignment(

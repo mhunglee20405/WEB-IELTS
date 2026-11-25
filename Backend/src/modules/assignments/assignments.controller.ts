@@ -81,8 +81,11 @@ export class AssignmentsController {
     @CurrentUser() actor: UserDocument,
     @Query() query: AssignmentQueryDto,
   ) {
-    query.courseId = courseId;
-    return this.assignmentsService.findAll(actor, query);
+    const scopedQuery = { ...query, courseId } as AssignmentQueryDto;
+    if (actor.role === UserRole.STUDENT) {
+      return this.assignmentsService.findMine(actor, scopedQuery);
+    }
+    return this.assignmentsService.findAll(actor, scopedQuery);
   }
 
   @Get('mine')

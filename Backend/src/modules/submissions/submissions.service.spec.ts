@@ -6,7 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { SubmissionsService, normalizeText, normalizeTFNG } from './submissions.service';
+import {
+  SubmissionsService,
+  normalizeText,
+  normalizeTFNG,
+  gradeExamQuestion,
+} from './submissions.service';
 import { Submission } from 'src/database/schemas/submission.schema';
 import { Assignment } from 'src/database/schemas/assignment.schema';
 import { Course } from 'src/database/schemas/course.schema';
@@ -167,6 +172,30 @@ describe('SubmissionsService', () => {
       expect(normalizeTFNG('ng')).toBe('NOT GIVEN');
       expect(normalizeTFNG('  True ')).toBe('TRUE');
     });
+
+    it('grades MULTIPLE_CHOICE_MULTIPLE using normalized set equality', () => {
+      const spec = { acceptedKeys: ['A', 'C'] };
+      expect(gradeExamQuestion('MULTIPLE_CHOICE_MULTIPLE', ['A', 'C'], spec, 2)).toEqual({
+        isCorrect: true,
+        awardedPoints: 2,
+      });
+      expect(gradeExamQuestion('MULTIPLE_CHOICE_MULTIPLE', [' c ', 'a'], spec, 2)).toEqual({
+        isCorrect: true,
+        awardedPoints: 2,
+      });
+      expect(gradeExamQuestion('MULTIPLE_CHOICE_MULTIPLE', ['A'], spec, 2)).toEqual({
+        isCorrect: false,
+        awardedPoints: 0,
+      });
+      expect(gradeExamQuestion('MULTIPLE_CHOICE_MULTIPLE', ['A', 'B'], spec, 2)).toEqual({
+        isCorrect: false,
+        awardedPoints: 0,
+      });
+      expect(gradeExamQuestion('MULTIPLE_CHOICE_MULTIPLE', ['A', 'B', 'C'], spec, 2)).toEqual({
+        isCorrect: false,
+        awardedPoints: 0,
+      });
+    });
   });
 
   describe('submit', () => {
@@ -320,6 +349,146 @@ describe('SubmissionsService', () => {
           studentActor,
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('grades MULTIPLE_CHOICE_MULTIPLE in submit() using exact set equality', async () => {
+      const multiSnapshot = {
+        title: 'Multi Select Test',
+        type: ExerciseType.READING,
+        passScore: 70,
+        version: 1,
+        questions: [
+          {
+            questionId: 'q-multi',
+            type: 'MULTIPLE_CHOICE_MULTIPLE',
+            prompt: 'Choose TWO letters',
+            points: 2,
+            grading: { acceptedKeys: ['A', 'C'] },
+          },
+        ],
+      };
+
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...sampleAssignment,
+            exerciseSnapshot: multiSnapshot,
+          }),
+        }),
+      });
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...sampleStudentAssignment }),
+      });
+      submissionModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([]),
+        }),
+      });
+
+      const partialRes = await service.submit(
+        assignmentId.toHexString(),
+        { answers: [{ questionId: 'q-multi', value: ['A'] as any }] },
+        studentActor,
+      );
+      expect(partialRes.scorePercent).toBe(0);
+      expect(partialRes.isPassed).toBe(false);
+
+      const wrongPairRes = await service.submit(
+        assignmentId.toHexString(),
+        { answers: [{ questionId: 'q-multi', value: ['A', 'B'] as any }] },
+        studentActor,
+      );
+      expect(wrongPairRes.scorePercent).toBe(0);
+      expect(wrongPairRes.isPassed).toBe(false);
+
+      const exactRes = await service.submit(
+        assignmentId.toHexString(),
+        { answers: [{ questionId: 'q-multi', value: ['C', 'A'] as any }] },
+        studentActor,
+      );
+      expect(exactRes.scorePercent).toBe(100);
+      expect(exactRes.isPassed).toBe(true);
+    });
+
+    it('evaluates isPassed against assignment.targetScorePercent and does not regress PASSED/isTargetAchieved on failed retake', async () => {
+      const tenQuestionsSnapshot = {
+        title: 'Target 85 Test',
+        type: ExerciseType.READING,
+        passScore: 70,
+        version: 1,
+        questions: Array.from({ length: 10 }, (_, i) => ({
+          questionId: `q-${i + 1}`,
+          type: QuestionType.MULTIPLE_CHOICE,
+          prompt: `Question ${i + 1}`,
+          points: 1,
+          answerSpecification: { correctKey: 'A' },
+        })),
+      };
+
+      assignmentModel.findById.mockReturnValue({
+        select: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({
+            ...sampleAssignment,
+            targetScorePercent: 85,
+            exerciseSnapshot: tenQuestionsSnapshot,
+          }),
+        }),
+      });
+
+      const saDoc = {
+        ...sampleStudentAssignment,
+        status: StudentAssignmentStatus.NOT_STARTED,
+        isTargetAchieved: false,
+        save: jest.fn().mockResolvedValue(true),
+      };
+      studentAssignmentModel.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(saDoc),
+      });
+      submissionModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([]),
+        }),
+      });
+
+      // 8/10 = 80%: above snapshot.passScore (70), below assignment.targetScorePercent (85) -> FAIL
+      const eightyAnswers = Array.from({ length: 10 }, (_, i) => ({
+        questionId: `q-${i + 1}`,
+        value: i < 8 ? 'A' : 'B',
+      }));
+      const fail80 = await service.submit(
+        assignmentId.toHexString(),
+        { answers: eightyAnswers },
+        studentActor,
+      );
+      expect(fail80.scorePercent).toBe(80);
+      expect(fail80.isPassed).toBe(false);
+      expect(saDoc.status).toBe(StudentAssignmentStatus.SUBMITTED);
+      expect(saDoc.isTargetAchieved).toBeFalsy();
+
+      // Now simulate student already passed previously, and retakes with 50%
+      saDoc.status = StudentAssignmentStatus.PASSED;
+      saDoc.isTargetAchieved = true;
+      saDoc.bestScore = 90;
+      submissionModel.find.mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue([{ attemptNo: 1, isPassed: true }]),
+        }),
+      });
+
+      const fiftyAnswers = Array.from({ length: 10 }, (_, i) => ({
+        questionId: `q-${i + 1}`,
+        value: i < 5 ? 'A' : 'B',
+      }));
+      const retake50 = await service.submit(
+        assignmentId.toHexString(),
+        { answers: fiftyAnswers },
+        studentActor,
+      );
+      expect(retake50.scorePercent).toBe(50);
+      expect(retake50.isPassed).toBe(false);
+      expect(saDoc.status).toBe(StudentAssignmentStatus.PASSED);
+      expect(saDoc.isTargetAchieved).toBe(true);
+      expect(saDoc.bestScore).toBe(90);
     });
   });
 

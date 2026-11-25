@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getModelToken } from '@nestjs/mongoose';
+import { getModelToken, getConnectionToken } from '@nestjs/mongoose';
 import {
   BadRequestException,
   ConflictException,
@@ -17,6 +17,7 @@ import { Lesson } from 'src/database/schemas/lesson.schema';
 import {
   CourseStatus,
   CourseType,
+  EnrollmentStatus,
   UserRole,
   UserStatus,
 } from 'src/database/schemas/enums';
@@ -105,6 +106,7 @@ describe('CoursesService', () => {
       find: jest.fn().mockReturnValue({ select: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue([]) }) }),
       findOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(null) }),
       countDocuments: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(0) }),
+      updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
     };
 
     const mockUserModel = {
@@ -329,6 +331,83 @@ describe('CoursesService', () => {
       const result = await service.remove(courseId.toHexString());
       expect(result.deleted).toBe(true);
       expect(courseModel.deleteOne).toHaveBeenCalled();
+    });
+  });
+
+  describe('update type transitions (1:1 enrollment sync)', () => {
+    it('sets isOneToOneActive: true on active enrollment inside transaction when transitioning GROUP -> ONE_TO_ONE', async () => {
+      const mockSession = {
+        withTransaction: jest.fn().mockImplementation(async (cb: any) => await cb()),
+        endSession: jest.fn().mockResolvedValue(true),
+      };
+      const connectionMock = {
+        startSession: jest.fn().mockResolvedValue(mockSession),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          CoursesService,
+          { provide: getModelToken(Course.name), useValue: courseModel },
+          { provide: getModelToken(Enrollment.name), useValue: enrollmentModel },
+          { provide: getModelToken(User.name), useValue: userModel },
+          { provide: getModelToken(Assignment.name), useValue: assignmentModel },
+          { provide: getModelToken(Lesson.name), useValue: lessonModel },
+          { provide: getConnectionToken(), useValue: connectionMock },
+        ],
+      }).compile();
+      const txService = module.get<CoursesService>(CoursesService);
+
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...sampleCourse, type: CourseType.GROUP }),
+      });
+      enrollmentModel.countDocuments.mockReturnValue({
+        session: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue(1) }),
+        exec: jest.fn().mockResolvedValue(1),
+      });
+      courseModel.findByIdAndUpdate.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ ...sampleCourse, type: CourseType.ONE_TO_ONE }),
+        }),
+      });
+
+      const updated = await txService.update(
+        courseId.toHexString(),
+        { type: CourseType.ONE_TO_ONE },
+        adminActor,
+      );
+
+      expect(updated.type).toBe(CourseType.ONE_TO_ONE);
+      expect(connectionMock.startSession).toHaveBeenCalledTimes(1);
+      expect(mockSession.withTransaction).toHaveBeenCalledTimes(1);
+      expect(enrollmentModel.updateMany).toHaveBeenCalledWith(
+        { courseId, status: EnrollmentStatus.ACTIVE },
+        { $set: { isOneToOneActive: true } },
+        expect.objectContaining({ session: mockSession }),
+      );
+      expect(mockSession.endSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('unsets isOneToOneActive on enrollments when transitioning ONE_TO_ONE -> GROUP', async () => {
+      courseModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ ...sampleCourse, type: CourseType.ONE_TO_ONE }),
+      });
+      courseModel.findByIdAndUpdate.mockReturnValue({
+        populate: jest.fn().mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ ...sampleCourse, type: CourseType.GROUP }),
+        }),
+      });
+
+      const updated = await service.update(
+        courseId.toHexString(),
+        { type: CourseType.GROUP },
+        adminActor,
+      );
+
+      expect(updated.type).toBe(CourseType.GROUP);
+      expect(enrollmentModel.updateMany).toHaveBeenCalledWith(
+        { courseId },
+        { $unset: { isOneToOneActive: '' } },
+      );
     });
   });
 });

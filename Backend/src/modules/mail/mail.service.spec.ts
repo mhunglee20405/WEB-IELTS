@@ -60,6 +60,31 @@ describe('MailService', () => {
     expect(rendered.html).toContain('Đồng ý hoãn 2 ngày');
   });
 
+  it('renders password-reset template with resetToken, expiry, and optional resetUrl', () => {
+    const rendered = service.renderTemplate('password-reset', {
+      fullName: 'Minh',
+      resetToken: 'tid.sec',
+      expiresInMinutes: 15,
+    });
+
+    expect(rendered.subject).toMatch(/đặt lại mật khẩu|password reset/i);
+    expect(rendered.html).toContain('Minh');
+    expect(rendered.html).toContain('tid.sec');
+    expect(rendered.html).toContain('15');
+    expect(rendered.text).toContain('Minh');
+    expect(rendered.text).toContain('tid.sec');
+    expect(rendered.text).toContain('15');
+
+    const withUrl = service.renderTemplate('password-reset', {
+      fullName: 'Minh',
+      resetToken: 'tid.sec',
+      resetUrl: 'https://lms.example.com/reset-password?token=tid.sec',
+      expiresInMinutes: 15,
+    });
+    expect(withUrl.html).toContain('https://lms.example.com/reset-password?token=tid.sec');
+    expect(withUrl.text).toContain('https://lms.example.com/reset-password?token=tid.sec');
+  });
+
   it('dispatches email in mock mode in test environment', async () => {
     const res = await service.sendMail({
       to: 'student@ielts.local',

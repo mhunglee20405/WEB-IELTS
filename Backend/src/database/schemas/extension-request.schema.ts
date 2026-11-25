@@ -6,13 +6,13 @@ export type ExtensionRequestDocument = ExtensionRequest & Document;
 
 @Schema({ timestamps: true, collection: 'extension_requests' })
 export class ExtensionRequest {
-  @Prop({ type: Types.ObjectId, ref: 'StudentAssignment', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'StudentAssignment', required: true })
   studentAssignmentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
   courseId: Types.ObjectId;
 
   @Prop({ required: true })

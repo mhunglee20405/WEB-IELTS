@@ -146,19 +146,52 @@ export class DeadlinesService {
 
     for (const sa of overdueList) {
       const idempotencyKey = `penalty:overdue:${sa._id}`;
+      let wasProcessed = false;
+      let penaltyCreated = false;
 
       const session = await this.connection.startSession();
       try {
         await session.withTransaction(async () => {
-          sa.status = StudentAssignmentStatus.OVERDUE;
-          await sa.save({ session });
+          wasProcessed = false;
+          penaltyCreated = false;
+          const updateResult = this.studentAssignmentModel.findOneAndUpdate(
+            {
+              _id: sa._id,
+              status: {
+                $nin: [
+                  StudentAssignmentStatus.PASSED,
+                  StudentAssignmentStatus.OVERDUE,
+                  StudentAssignmentStatus.EXCUSED,
+                ],
+              },
+              effectiveDeadlineAt: { $lt: referenceDate },
+            },
+            {
+              $set: {
+                status: StudentAssignmentStatus.OVERDUE,
+                penaltyAppliedAt: referenceDate,
+              },
+            },
+            { new: true, session },
+          );
+          const lockedSa =
+            typeof (updateResult as any)?.exec === 'function'
+              ? await (updateResult as any).exec()
+              : await updateResult;
+
+          if (!lockedSa) {
+            // Student concurrently passed, was excused, already marked overdue, or received an extension
+            return;
+          }
+
+          wasProcessed = true;
 
           // Audit requirement: prevent second penalty for same student assignment even if effectiveDeadline changed
           const existingPenalty = await this.penaltyModel
             .findOne({
               $or: [
                 { idempotencyKey },
-                { studentAssignmentId: sa._id, deltaPoints: { $gt: 0 } },
+                { studentAssignmentId: lockedSa._id, deltaPoints: { $gt: 0 } },
               ],
             })
             .session(session)
@@ -166,8 +199,8 @@ export class DeadlinesService {
 
           if (!existingPenalty) {
             const penalty = new this.penaltyModel({
-              studentId: sa.studentId,
-              studentAssignmentId: sa._id,
+              studentId: lockedSa.studentId,
+              studentAssignmentId: lockedSa._id,
               deltaPoints: 1,
               reason: 'Trễ deadline',
               idempotencyKey,
@@ -175,33 +208,37 @@ export class DeadlinesService {
             await penalty.save({ session });
 
             await this.studentProfileModel.updateOne(
-              { userId: sa.studentId },
+              { userId: lockedSa.studentId },
               { $inc: { penaltyPointsCache: 1 } },
               { session },
             );
-            newPenaltiesCount++;
-
-            // Dispatch notification to student asynchronously
-            if (this.notificationsService) {
-              this.notificationsService
-                .create({
-                  userId: sa.studentId.toString(),
-                  type: NotificationType.OVERDUE,
-                  title: 'Cảnh báo: Bài tập đã quá hạn',
-                  body: `Bài tập của bạn đã quá hạn nộp. Hệ thống đã ghi nhận 1 điểm phạt.`,
-                  payload: {
-                    studentAssignmentId: sa._id.toString(),
-                    effectiveDeadlineAt: sa.effectiveDeadlineAt.toISOString(),
-                  },
-                  sendEmail: true,
-                  emailTemplateKey: 'assignment-overdue',
-                  idempotencyKey: `notif:overdue:${sa._id}`,
-                })
-                .catch((err) => this.logger.warn(`Failed to notify overdue assignment: ${err.message}`));
-            }
+            penaltyCreated = true;
           }
         });
-        processedCount++;
+        if (wasProcessed) {
+          processedCount++;
+        }
+        if (penaltyCreated) {
+          newPenaltiesCount++;
+          if (this.notificationsService) {
+            // Dispatch notification to student asynchronously after commit
+            this.notificationsService
+              .create({
+                userId: sa.studentId.toString(),
+                type: NotificationType.OVERDUE,
+                title: 'Cảnh báo: Bài tập đã quá hạn',
+                body: `Bài tập của bạn đã quá hạn nộp. Hệ thống đã ghi nhận 1 điểm phạt.`,
+                payload: {
+                  studentAssignmentId: sa._id.toString(),
+                  effectiveDeadlineAt: sa.effectiveDeadlineAt.toISOString(),
+                },
+                sendEmail: true,
+                emailTemplateKey: 'assignment-overdue',
+                idempotencyKey: `notif:overdue:${sa._id}`,
+              })
+              .catch((err) => this.logger.warn(`Failed to notify overdue assignment: ${err.message}`));
+          }
+        }
       } catch (err: any) {
         if (err.code === 11000) {
           // Idempotency collision: already charged in concurrent run

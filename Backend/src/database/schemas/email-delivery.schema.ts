@@ -22,7 +22,6 @@ export class EmailDelivery {
     type: String,
     enum: Object.values(EmailDeliveryStatus),
     default: EmailDeliveryStatus.QUEUED,
-    index: true,
   })
   status: EmailDeliveryStatus;
 

@@ -81,18 +81,33 @@ export default function TeacherAssignmentsPage() {
     {
       key: "status",
       header: "Trạng thái",
-      renderCell: (row) => (
-        <StatusBadge
-          status={row.status === "closed" ? "completed" : row.status}
-          labelOverride={
-            row.status === "closed"
-              ? "Đã đóng"
-              : row.status === "scheduled"
-                ? "Sắp mở"
-                : "Đang mở"
-          }
-        />
-      ),
+      renderCell: (row) => {
+        const now = Date.now();
+        const openMs = new Date(row.openAt ?? (row as any).availableAt ?? "").getTime();
+        const dueMs = new Date(row.dueAt ?? (row as any).deadlineAt ?? "").getTime();
+        // Compute live lifecycle from timestamps (overrides stale DB status)
+        let liveStatus: string = row.status ?? "scheduled";
+        if (!Number.isNaN(openMs) && !Number.isNaN(dueMs)) {
+          if (now < openMs) liveStatus = "scheduled";
+          else if (now >= openMs && now < dueMs) liveStatus = "available";
+          else liveStatus = "expired";
+        }
+        const badgeStatus =
+          liveStatus === "closed" || liveStatus === "expired" || liveStatus === "completed"
+            ? "completed"
+            : liveStatus === "available" || liveStatus === "published"
+              ? "passed"
+              : "upcoming";
+        const label =
+          liveStatus === "closed" || liveStatus === "completed"
+            ? "Đã đóng"
+            : liveStatus === "expired"
+              ? "Hết hạn"
+              : liveStatus === "available" || liveStatus === "published"
+                ? "Đang mở"
+                : "Sắp mở";
+        return <StatusBadge status={badgeStatus} labelOverride={label} />;
+      },
     },
     {
       key: "actions",

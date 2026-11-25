@@ -20,7 +20,7 @@ import { usersApi } from "@/lib/api/endpoints";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
 import { adminKeys } from "@/lib/api/query-keys";
 import { CreateUserFormSchema, UpdateUserFormSchema } from "@/lib/api/schemas";
-import type { AuthUser, UserRole, UserStatus } from "@/lib/api/types";
+import type { AuthUser, CreateUserRequest, UserRole, UserStatus } from "@/lib/api/types";
 import { getRoleLabelVi } from "@/lib/auth/roles";
 import { DEFAULT_TIMEZONE } from "@/lib/time/vn-time";
 
@@ -37,11 +37,11 @@ function CreateUserForm({
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
-  const [roles, setRoles] = useState<UserRole[]>(["student"]);
+  const [role, setRole] = useState<UserRole>("student");
   const [fieldError, setFieldError] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: usersApi.create,
+    mutationFn: (payload: CreateUserRequest) => usersApi.create(payload),
     onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: adminKeys.usersRoot });
       onSuccess(`Đã tạo tài khoản "${created.fullName}" (${created.email}).`);
@@ -49,19 +49,13 @@ function CreateUserForm({
     },
   });
 
-  const toggleRole = (role: UserRole) => {
-    setRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
-    );
-  };
-
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const parsed = CreateUserFormSchema.safeParse({
       email,
       fullName,
       password,
-      roles,
+      roles: [role],
       timezone: DEFAULT_TIMEZONE,
     });
     if (!parsed.success) {
@@ -135,15 +129,17 @@ function CreateUserForm({
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-900">Vai trò truy cập</legend>
         <div className="flex flex-wrap gap-3">
-          {ALL_ROLES.map((role) => (
-            <label key={role} className="lms-choice-label">
+          {ALL_ROLES.map((r) => (
+            <label key={r} className="lms-choice-label">
               <input
-                type="checkbox"
-                checked={roles.includes(role)}
-                onChange={() => toggleRole(role)}
+                type="radio"
+                name="create-user-role"
+                value={r}
+                checked={role === r}
+                onChange={() => setRole(r)}
               />
               <span className="text-sm font-medium text-slate-900">
-                {getRoleLabelVi(role)}
+                {getRoleLabelVi(r)}
               </span>
             </label>
           ))}
@@ -181,7 +177,9 @@ function EditUserForm({
 }) {
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState(target.fullName);
-  const [roles, setRoles] = useState<UserRole[]>(target.roles);
+  const [role, setRole] = useState<UserRole>(
+    () => target.roles?.[0] ?? (target as unknown as { role?: UserRole }).role ?? "student",
+  );
   const [status, setStatus] = useState<UserStatus>(target.status);
   const [fieldError, setFieldError] = useState<string | null>(null);
 
@@ -195,17 +193,11 @@ function EditUserForm({
     },
   });
 
-  const toggleRole = (role: UserRole) => {
-    setRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
-    );
-  };
-
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const parsed = UpdateUserFormSchema.safeParse({
       fullName,
-      roles,
+      roles: [role],
       status,
       timezone: target.timezone || DEFAULT_TIMEZONE,
     });
@@ -274,15 +266,17 @@ function EditUserForm({
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-900">Vai trò truy cập</legend>
         <div className="flex flex-wrap gap-3">
-          {ALL_ROLES.map((role) => (
-            <label key={role} className="lms-choice-label">
+          {ALL_ROLES.map((r) => (
+            <label key={r} className="lms-choice-label">
               <input
-                type="checkbox"
-                checked={roles.includes(role)}
-                onChange={() => toggleRole(role)}
+                type="radio"
+                name={`edit-user-role-${target.id}`}
+                value={r}
+                checked={role === r}
+                onChange={() => setRole(r)}
               />
               <span className="text-sm font-medium text-slate-900">
-                {getRoleLabelVi(role)}
+                {getRoleLabelVi(r)}
               </span>
             </label>
           ))}
@@ -390,7 +384,7 @@ export default function AdminUsersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Quản lý tài khoản & Phân quyền"
-        subtitle="Cấp phát tài khoản mới, điều chỉnh nhiều vai trò (RBAC) và trạng thái truy cập."
+        subtitle="Cấp phát tài khoản mới, phân quyền vai trò (RBAC) và trạng thái truy cập."
         actions={
           <button
             type="button"

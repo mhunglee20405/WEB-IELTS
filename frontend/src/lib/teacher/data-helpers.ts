@@ -181,6 +181,7 @@ export async function fetchTeacherTranslationQueue(): Promise<TranslationQueueIt
     submitted: 0,
     needs_revision: 1,
     draft: 2,
+    reviewed: 3,
     approved: 3,
     not_started: 4,
   };

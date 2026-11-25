@@ -36,10 +36,9 @@ import {
   StudentProfile,
   StudentProfileSchema,
 } from 'src/database/schemas/student-profile.schema';
-import {
-  TeacherProfile,
-  TeacherProfileSchema,
-} from 'src/database/schemas/teacher-profile.schema';
+import { TeacherProfile, TeacherProfileSchema } from 'src/database/schemas/teacher-profile.schema';
+import { Exercise, ExerciseSchema } from 'src/database/schemas/exercise.schema';
+import { ExamTest, ExamTestSchema } from 'src/database/schemas/exam-test.schema';
 
 @Module({
   imports: [
@@ -55,6 +54,8 @@ import {
       { name: TranslationSubmission.name, schema: TranslationSubmissionSchema },
       { name: StudentProfile.name, schema: StudentProfileSchema },
       { name: TeacherProfile.name, schema: TeacherProfileSchema },
+      { name: Exercise.name, schema: ExerciseSchema },
+      { name: ExamTest.name, schema: ExamTestSchema },
     ]),
   ],
   controllers: [DashboardController],

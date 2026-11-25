@@ -46,11 +46,12 @@ export const examAttemptsApi = {
   },
 
   async start(payload: StartExamAttemptRequest): Promise<ExamAttemptDetail> {
-    const raw = await apiRequest<ExamAttemptDetail, StartExamAttemptRequest>({
+    const idempotencyKey = createIdempotencyKey();
+    const raw = await apiRequest<ExamAttemptDetail, StartExamAttemptRequest & { idempotencyKey: string }>({
       method: "POST",
       path: "/exam-attempts",
-      body: payload,
-      idempotencyKey: createIdempotencyKey(),
+      body: { ...payload, idempotencyKey },
+      idempotencyKey,
     });
     return ExamAttemptDetailSchema.parse(raw);
   },
