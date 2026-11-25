@@ -115,6 +115,28 @@ export class MailService {
         return { subject, html, text };
       }
 
+      case 'password-reset': {
+        const fullName = payload.fullName || 'bạn';
+        const resetToken = payload.resetToken || '';
+        const resetUrl = payload.resetUrl || '';
+        const expiresInMinutes = payload.expiresInMinutes ?? 15;
+        const subject = '[IELTS LMS] Yêu cầu đặt lại mật khẩu';
+        const resetLinkHtml = resetUrl
+          ? `<p>Bạn có thể đặt lại mật khẩu qua liên kết sau: <a href="${resetUrl}">${resetUrl}</a></p>`
+          : '';
+        const resetLinkText = resetUrl ? ` Liên kết đặt lại mật khẩu: ${resetUrl}.` : '';
+        const html = `
+          <h2>Yêu cầu đặt lại mật khẩu</h2>
+          <p>Chào <strong>${fullName}</strong>,</p>
+          <p>Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản IELTS LMS của bạn.</p>
+          ${resetLinkHtml}
+          <p>Mã đặt lại mật khẩu của bạn: <strong>${resetToken}</strong></p>
+          <p>Mã có hiệu lực trong <strong>${expiresInMinutes} phút</strong>. Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.</p>
+        `;
+        const text = `Chào ${fullName}, mã đặt lại mật khẩu IELTS LMS của bạn là: ${resetToken}.${resetLinkText} Mã có hiệu lực trong ${expiresInMinutes} phút.`;
+        return { subject, html, text };
+      }
+
       default: {
         const subject = payload.subject || `[IELTS LMS] Thông báo hệ thống`;
         const html = payload.body ? `<p>${payload.body}</p>` : `<p>Thông báo từ IELTS LMS</p>`;
