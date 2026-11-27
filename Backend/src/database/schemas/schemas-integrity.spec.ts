@@ -47,23 +47,16 @@ describe('MongoDB Schema & Index Integrity', () => {
         unique: true,
         partialFilterExpression: {
           studentAssignmentId: { $type: 'objectId' },
-          passageId: { $type: 'string' },
         },
       });
       expect(assignmentPassageIdx![1].sparse).toBeUndefined();
 
-      const legacyAssignmentIdx = findIndex(TranslationSubmissionSchema, {
-        studentAssignmentId: 1,
-      });
-      expect(legacyAssignmentIdx).toBeDefined();
-      expect(legacyAssignmentIdx![1]).toMatchObject({
-        unique: true,
-        partialFilterExpression: {
-          studentAssignmentId: { $type: 'objectId' },
-          passageId: { $exists: false },
-        },
-      });
-      expect(legacyAssignmentIdx![1].sparse).toBeUndefined();
+      // MongoDB partialFilterExpression does NOT support { $exists: false } (error code 67)
+      for (const [, opts] of indexes) {
+        if (opts.partialFilterExpression) {
+          expect(JSON.stringify(opts.partialFilterExpression)).not.toContain('"$exists":false');
+        }
+      }
 
       const standalonePassageIdx = findIndex(TranslationSubmissionSchema, {
         studentId: 1,

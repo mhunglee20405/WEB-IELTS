@@ -57,23 +57,15 @@ export class TranslationSubmission {
 }
 
 export const TranslationSubmissionSchema = SchemaFactory.createForClass(TranslationSubmission);
+// Covers both legacy single-passage assignment translations (passageId omitted -> (saId, null))
+// and multi-passage assignment translations ((saId, passageId)), while excluding standalone
+// reading translations where studentAssignmentId is omitted.
 TranslationSubmissionSchema.index(
   { studentAssignmentId: 1, passageId: 1 },
   {
     unique: true,
     partialFilterExpression: {
       studentAssignmentId: { $type: 'objectId' },
-      passageId: { $type: 'string' },
-    },
-  },
-);
-TranslationSubmissionSchema.index(
-  { studentAssignmentId: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      studentAssignmentId: { $type: 'objectId' },
-      passageId: { $exists: false },
     },
   },
 );
