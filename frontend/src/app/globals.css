@@ -1037,6 +1037,19 @@ html.dark .tox .tox-mbtn:hover {
   color: var(--text-primary) !important;
 }
 
+html.dark .tox .tox-tbtn--enabled,
+html.dark .tox .tox-tbtn--enabled:hover,
+html.dark .tox .tox-tbtn--active {
+  background-color: #1d4ed8 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .tox .tox-tbtn--enabled svg,
+html.dark .tox .tox-tbtn--enabled:hover svg,
+html.dark .tox .tox-tbtn--active svg {
+  fill: #f8fafc !important;
+}
+
 html.dark .tox .tox-edit-area__iframe {
   background-color: #ffffff !important;
 }
@@ -1226,6 +1239,21 @@ html.dark .tox .tox-edit-area__iframe {
   :where(html.dark) .text-teal-900:not([class*="dark:text-"]),
   :where(html.dark) .text-teal-950:not([class*="dark:text-"]) {
     color: #5eead4;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Cyan */
+  :where(html.dark) .bg-cyan-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-cyan-50\/40:not([class*="dark:bg-"]) {
+    background-color: rgb(22 78 99 / 0.38);
+  }
+  :where(html.dark) .border-cyan-200:not([class*="dark:border-"]),
+  :where(html.dark) .border-cyan-300:not([class*="dark:border-"]) {
+    border-color: rgb(34 211 238 / 0.42);
+  }
+  :where(html.dark) .text-cyan-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-cyan-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-cyan-950:not([class*="dark:text-"]) {
+    color: #a5f3fc;
   }
 
   /* Semantic Tinted Surfaces & Text: Amber */
