@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
 import { Header } from "./header";
 import { SidebarNav, type NavItem } from "./sidebar";
@@ -11,6 +11,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("LMS Layout Architecture & Responsive App Shell", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const sampleNavItems: NavItem[] = [
     { href: "/teacher/dashboard", label: "Tổng quan" },
     { href: "/teacher/courses", label: "Khóa học" },
@@ -53,7 +57,7 @@ describe("LMS Layout Architecture & Responsive App Shell", () => {
     expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
   });
 
-  it("renders Header with hamburger button that triggers onOpenDrawer", () => {
+  it("renders Header with live VN clock (without static GMT+7), theme toggle, and hamburger trigger", () => {
     const onOpenDrawer = vi.fn();
     render(
       <Header
@@ -63,10 +67,32 @@ describe("LMS Layout Architecture & Responsive App Shell", () => {
       />,
     );
 
+    expect(screen.queryByText(/GMT\+7/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/\d{2}:\d{2} • (Thứ [2-7]|Chủ nhật) • Tuần \d{2} • \d{2}\/\d{2}\/\d{4}/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /chế độ|giao diện/i }),
+    ).toBeInTheDocument();
+
     const hamburger = screen.getByRole("button", { name: "Mở menu điều hướng" });
     expect(hamburger).toBeInTheDocument();
     fireEvent.click(hamburger);
     expect(onOpenDrawer).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates live VN clock automatically on 15s timer tick", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-27T06:45:00.000Z")); // 13:45 VN
+
+    render(<Header brandLabel="IELTS Academic LMS" roleLabel="Học tập" />);
+    expect(screen.getByText("13:45 • Thứ 6 • Tuần 48 • 27/11/2026")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(screen.getByText("13:46 • Thứ 6 • Tuần 48 • 27/11/2026")).toBeInTheDocument();
   });
 
   it("renders SidebarNav where active and inactive items share identical font-weight and dimensions", () => {

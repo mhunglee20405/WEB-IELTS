@@ -27,6 +27,8 @@ import { ReadingTranslationsModule } from 'src/modules/reading-translations/read
 import { MediaModule } from 'src/modules/media/media.module';
 import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 import { SystemModule } from 'src/modules/system/system.module';
+import { FeedbacksModule } from 'src/modules/feedbacks/feedbacks.module';
+import { StudySessionsModule } from 'src/modules/study-sessions/study-sessions.module';
 
 @Module({
   imports: [
@@ -106,6 +108,8 @@ import { SystemModule } from 'src/modules/system/system.module';
     MediaModule,
     DashboardModule,
     SystemModule,
+    FeedbacksModule,
+    StudySessionsModule,
   ],
 })
 export class AppModule { }

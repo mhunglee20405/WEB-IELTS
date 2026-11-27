@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   color-scheme: light;
@@ -18,6 +19,22 @@
   --in-oklch: ;
 }
 
+html.dark {
+  color-scheme: dark;
+  --surface-page: #0b1120;
+  --surface-card: #111827;
+  --surface-muted: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-subtle: #334155;
+  --border-strong: #475569;
+  --brand-primary: #3b82f6;
+  --accent-primary: var(--brand-primary);
+  --brand-primary-hover: #2563eb;
+  --focus-ring: #60a5fa;
+}
+
 @supports (linear-gradient(in oklab, white, black)) {
   :root {
     --in-oklab: in oklab;
@@ -31,6 +48,13 @@
     --text-muted: #1e293b;
     --border-subtle: #475569;
     --border-strong: #0f172a;
+  }
+
+  html.dark {
+    --text-secondary: #f1f5f9;
+    --text-muted: #cbd5e1;
+    --border-subtle: #64748b;
+    --border-strong: #94a3b8;
   }
 }
 
@@ -883,6 +907,480 @@ progress.lms-progress:indeterminate::-moz-progress-bar {
 .reading-preview-prose th {
   border: 1px solid #cbd5e1;
   padding: 8px 12px;
+}
+
+/* ============================================================================
+   Full-System Dark Mode (html.dark) — Component & Utility Contrast Overrides
+   ============================================================================ */
+
+html.dark dialog.lms-dialog {
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+}
+
+html.dark dialog.lms-dialog::backdrop {
+  background-color: rgb(2 6 23 / 0.72);
+}
+
+html.dark dialog.lms-drawer {
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.65);
+}
+
+html.dark dialog.lms-drawer[open]::backdrop {
+  background-color: rgb(2 6 23 / 0.68);
+}
+
+html.dark .lms-table tbody th,
+html.dark .lms-table tbody td {
+  border-block-end-color: var(--border-subtle);
+}
+
+html.dark .lms-input:is(:user-invalid, [aria-invalid="true"]) {
+  border-color: #f87171;
+  background-color: rgb(127 29 29 / 0.35);
+  color: #fecaca;
+}
+
+html.dark .lms-input:user-valid {
+  border-color: #4ade80;
+}
+
+html.dark .lms-sidebar-link[aria-current="page"] {
+  background-color: rgb(30 58 138 / 0.38);
+  color: #bfdbfe;
+  box-shadow: inset 3px 0 0 0 #60a5fa;
+}
+
+html.dark .lms-sidebar-link[aria-current="page"]:focus-visible {
+  outline-color: var(--focus-ring);
+}
+
+html.dark .lms-toolbar .lms-tab[aria-selected="true"] {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+}
+
+html.dark .lms-card-interactive:hover,
+html.dark .lms-card[data-interactive="true"]:hover {
+  box-shadow: 0 6px 14px -2px rgb(0 0 0 / 0.45), 0 2px 6px -2px rgb(0 0 0 / 0.35);
+}
+
+html.dark .lms-choice-label:has(> input:checked) {
+  border-color: var(--accent-primary);
+  background-color: rgb(30 58 138 / 0.38);
+}
+
+html.dark .lms-auth-canvas {
+  background-color: var(--surface-page);
+  background-image: radial-gradient(
+    ellipse 80% 70% at 50% 45% var(--in-oklab),
+    #1e293b,
+    var(--surface-page) 78%
+  );
+}
+
+html.dark .lms-auth-pattern {
+  --dot-color: rgb(148 163 184 / 0.14);
+}
+
+html.dark .lms-auth-card {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.35),
+    0 10px 24px -6px rgb(0 0 0 / 0.45),
+    0 24px 48px -12px rgb(37 99 235 / 0.18);
+}
+
+html.dark .reading-preview-container,
+html.dark .reading-preview-prose {
+  color: var(--text-primary);
+}
+
+html.dark .reading-preview-container strong,
+html.dark .reading-preview-prose strong {
+  color: #f8fafc;
+}
+
+html.dark .reading-preview-container td,
+html.dark .reading-preview-container th,
+html.dark .reading-preview-prose td,
+html.dark .reading-preview-prose th {
+  border-color: var(--border-subtle);
+}
+
+html.dark .tox.tox-tinymce {
+  border-color: var(--border-subtle) !important;
+}
+
+html.dark .tox .tox-editor-header,
+html.dark .tox .tox-menubar,
+html.dark .tox .tox-toolbar-overlord,
+html.dark .tox .tox-toolbar__primary,
+html.dark .tox .tox-statusbar {
+  background-color: var(--surface-muted) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark .tox .tox-tbtn,
+html.dark .tox .tox-mbtn,
+html.dark .tox .tox-statusbar a,
+html.dark .tox .tox-statusbar__wordcount,
+html.dark .tox .tox-statusbar__path-item {
+  color: var(--text-secondary) !important;
+}
+
+html.dark .tox .tox-tbtn svg {
+  fill: var(--text-secondary) !important;
+}
+
+html.dark .tox .tox-tbtn:hover,
+html.dark .tox .tox-mbtn:hover {
+  background-color: #334155 !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark .tox .tox-tbtn--enabled,
+html.dark .tox .tox-tbtn--enabled:hover,
+html.dark .tox .tox-tbtn--active {
+  background-color: #1d4ed8 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .tox .tox-tbtn--enabled svg,
+html.dark .tox .tox-tbtn--enabled:hover svg,
+html.dark .tox .tox-tbtn--active svg {
+  fill: #f8fafc !important;
+}
+
+html.dark .tox .tox-edit-area__iframe {
+  background-color: #ffffff !important;
+}
+
+@layer utilities {
+  :where(html.dark) :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+    background-color: var(--surface-card);
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  /* Neutral Surfaces */
+  :where(html.dark) .bg-white:not([class*="dark:bg-"]) {
+    background-color: var(--surface-card);
+  }
+  :where(html.dark) .bg-white\/80:not([class*="dark:bg-"]) {
+    background-color: rgb(17 24 39 / 0.85);
+  }
+  :where(html.dark) .bg-white\/95:not([class*="dark:bg-"]) {
+    background-color: rgb(17 24 39 / 0.95);
+  }
+  :where(html.dark) .bg-slate-50:not([class*="dark:bg-"]) {
+    background-color: #0f172a;
+  }
+  :where(html.dark) .bg-slate-50\/50:not([class*="dark:bg-"]) {
+    background-color: rgb(15 23 42 / 0.5);
+  }
+  :where(html.dark) .bg-slate-50\/60:not([class*="dark:bg-"]) {
+    background-color: rgb(15 23 42 / 0.6);
+  }
+  :where(html.dark) .bg-slate-50\/70:not([class*="dark:bg-"]) {
+    background-color: rgb(15 23 42 / 0.7);
+  }
+  :where(html.dark) .bg-slate-50\/80:not([class*="dark:bg-"]) {
+    background-color: rgb(15 23 42 / 0.8);
+  }
+  :where(html.dark) .bg-slate-50\/90:not([class*="dark:bg-"]) {
+    background-color: rgb(15 23 42 / 0.9);
+  }
+  :where(html.dark) .bg-slate-100:not([class*="dark:bg-"]) {
+    background-color: #1e293b;
+  }
+  :where(html.dark) .bg-slate-200:not([class*="dark:bg-"]) {
+    background-color: #334155;
+  }
+
+  /* Neutral Text (WCAG AA >= 4.5:1 on #0b1120 / #111827 / #1e293b) */
+  :where(html.dark) .text-slate-950:not([class*="dark:text-"]) {
+    color: #f8fafc;
+  }
+  :where(html.dark) .text-slate-900:not([class*="dark:text-"]) {
+    color: #f1f5f9;
+  }
+  :where(html.dark) .text-slate-800:not([class*="dark:text-"]) {
+    color: #e2e8f0;
+  }
+  :where(html.dark) .text-slate-700:not([class*="dark:text-"]) {
+    color: #cbd5e1;
+  }
+  :where(html.dark) .text-slate-600:not([class*="dark:text-"]) {
+    color: #cbd5e1;
+  }
+  :where(html.dark) .text-slate-500:not([class*="dark:text-"]) {
+    color: #94a3b8;
+  }
+  :where(html.dark) .text-slate-400:not([class*="dark:text-"]) {
+    color: #94a3b8;
+  }
+  :where(html.dark) .placeholder\:text-slate-400::placeholder,
+  :where(html.dark) .placeholder\:text-slate-600::placeholder {
+    color: #94a3b8;
+  }
+
+  /* Neutral Borders, Dividers & Rings */
+  :where(html.dark) .border-slate-100:not([class*="dark:border-"]) {
+    border-color: #1e293b;
+  }
+  :where(html.dark) .border-slate-200:not([class*="dark:border-"]),
+  :where(html.dark) .border-slate-200\/70:not([class*="dark:border-"]),
+  :where(html.dark) .border-slate-200\/80:not([class*="dark:border-"]),
+  :where(html.dark) .border-slate-200\/90:not([class*="dark:border-"]) {
+    border-color: var(--border-subtle);
+  }
+  :where(html.dark) .border-slate-300:not([class*="dark:border-"]),
+  :where(html.dark) .border-slate-400:not([class*="dark:border-"]) {
+    border-color: var(--border-strong);
+  }
+  :where(html.dark) .divide-slate-100 > :not(:last-child) {
+    border-color: #1e293b;
+  }
+  :where(html.dark) .ring-slate-200 {
+    --tw-ring-color: #334155;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Blue */
+  :where(html.dark) .bg-blue-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-blue-50\/30:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-blue-50\/40:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-blue-50\/50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-blue-50\/60:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-blue-50\/70:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-blue-50\/75:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-blue-50\/80:not([class*="dark:bg-"]) {
+    background-color: rgb(30 58 138 / 0.35);
+  }
+  :where(html.dark) .bg-blue-100:not([class*="dark:bg-"]) {
+    background-color: rgb(30 64 175 / 0.45);
+  }
+  :where(html.dark) .border-blue-100,
+  :where(html.dark) .border-blue-200,
+  :where(html.dark) .border-blue-300 {
+    border-color: rgb(59 130 246 / 0.45);
+  }
+  :where(html.dark) .ring-blue-200,
+  :where(html.dark) .ring-blue-300 {
+    --tw-ring-color: rgb(59 130 246 / 0.45);
+  }
+  :where(html.dark) .text-blue-600:not([class*="dark:text-"]),
+  :where(html.dark) .text-blue-700:not([class*="dark:text-"]),
+  :where(html.dark) .text-blue-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-blue-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-blue-950:not([class*="dark:text-"]) {
+    color: #93c5fd;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Indigo */
+  :where(html.dark) .bg-indigo-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-indigo-50\/30:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-indigo-50\/50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-indigo-50\/75:not([class*="dark:bg-"]) {
+    background-color: rgb(49 46 129 / 0.38);
+  }
+  :where(html.dark) .bg-indigo-100:not([class*="dark:bg-"]) {
+    background-color: rgb(55 48 163 / 0.48);
+  }
+  :where(html.dark) .border-indigo-200,
+  :where(html.dark) .border-indigo-200\/60,
+  :where(html.dark) .border-indigo-300,
+  :where(html.dark) .border-indigo-400 {
+    border-color: rgb(129 140 248 / 0.45);
+  }
+  :where(html.dark) .ring-indigo-200 {
+    --tw-ring-color: rgb(129 140 248 / 0.45);
+  }
+  :where(html.dark) .text-indigo-700:not([class*="dark:text-"]),
+  :where(html.dark) .text-indigo-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-indigo-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-indigo-950:not([class*="dark:text-"]) {
+    color: #c7d2fe;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Emerald */
+  :where(html.dark) .bg-emerald-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-emerald-50\/30:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-emerald-50\/40:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-emerald-50\/70:not([class*="dark:bg-"]) {
+    background-color: rgb(6 78 59 / 0.38);
+  }
+  :where(html.dark) .bg-emerald-100:not([class*="dark:bg-"]) {
+    background-color: rgb(6 95 70 / 0.48);
+  }
+  :where(html.dark) .border-emerald-200,
+  :where(html.dark) .border-emerald-300,
+  :where(html.dark) .border-emerald-400 {
+    border-color: rgb(16 185 129 / 0.45);
+  }
+  :where(html.dark) .ring-emerald-200 {
+    --tw-ring-color: rgb(16 185 129 / 0.45);
+  }
+  :where(html.dark) .text-emerald-600:not([class*="dark:text-"]),
+  :where(html.dark) .text-emerald-700:not([class*="dark:text-"]),
+  :where(html.dark) .text-emerald-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-emerald-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-emerald-950:not([class*="dark:text-"]) {
+    color: #6ee7b7;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Teal */
+  :where(html.dark) .bg-teal-50:not([class*="dark:bg-"]) {
+    background-color: rgb(19 78 74 / 0.38);
+  }
+  :where(html.dark) .border-teal-200,
+  :where(html.dark) .border-teal-300 {
+    border-color: rgb(45 212 191 / 0.42);
+  }
+  :where(html.dark) .text-teal-700:not([class*="dark:text-"]),
+  :where(html.dark) .text-teal-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-teal-950:not([class*="dark:text-"]) {
+    color: #5eead4;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Cyan */
+  :where(html.dark) .bg-cyan-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-cyan-50\/40:not([class*="dark:bg-"]) {
+    background-color: rgb(22 78 99 / 0.38);
+  }
+  :where(html.dark) .border-cyan-200:not([class*="dark:border-"]),
+  :where(html.dark) .border-cyan-300:not([class*="dark:border-"]) {
+    border-color: rgb(34 211 238 / 0.42);
+  }
+  :where(html.dark) .text-cyan-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-cyan-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-cyan-950:not([class*="dark:text-"]) {
+    color: #a5f3fc;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Amber */
+  :where(html.dark) .bg-amber-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-amber-50\/40:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-amber-50\/50:not([class*="dark:bg-"]) {
+    background-color: rgb(120 53 15 / 0.38);
+  }
+  :where(html.dark) .bg-amber-100:not([class*="dark:bg-"]) {
+    background-color: rgb(146 64 14 / 0.45);
+  }
+  :where(html.dark) .border-amber-200,
+  :where(html.dark) .border-amber-300,
+  :where(html.dark) .border-amber-400 {
+    border-color: rgb(245 158 11 / 0.45);
+  }
+  :where(html.dark) .ring-amber-200 {
+    --tw-ring-color: rgb(245 158 11 / 0.45);
+  }
+  :where(html.dark) .text-amber-600:not([class*="dark:text-"]),
+  :where(html.dark) .text-amber-700:not([class*="dark:text-"]),
+  :where(html.dark) .text-amber-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-amber-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-amber-950:not([class*="dark:text-"]) {
+    color: #fcd34d;
+  }
+
+  /* Semantic Tinted Surfaces & Text: Red & Rose */
+  :where(html.dark) .bg-red-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-red-50\/40:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-rose-50:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-rose-50\/30:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-rose-50\/40:not([class*="dark:bg-"]) {
+    background-color: rgb(127 29 29 / 0.38);
+  }
+  :where(html.dark) .bg-red-100:not([class*="dark:bg-"]),
+  :where(html.dark) .bg-rose-100:not([class*="dark:bg-"]) {
+    background-color: rgb(153 27 27 / 0.48);
+  }
+  :where(html.dark) .border-red-200,
+  :where(html.dark) .border-red-300,
+  :where(html.dark) .border-red-400,
+  :where(html.dark) .border-rose-200,
+  :where(html.dark) .border-rose-300 {
+    border-color: rgb(248 113 113 / 0.45);
+  }
+  :where(html.dark) .text-red-500:not([class*="dark:text-"]),
+  :where(html.dark) .text-red-600:not([class*="dark:text-"]),
+  :where(html.dark) .text-red-700:not([class*="dark:text-"]),
+  :where(html.dark) .text-red-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-red-900:not([class*="dark:text-"]),
+  :where(html.dark) .text-red-950:not([class*="dark:text-"]),
+  :where(html.dark) .text-rose-600:not([class*="dark:text-"]),
+  :where(html.dark) .text-rose-700:not([class*="dark:text-"]),
+  :where(html.dark) .text-rose-800:not([class*="dark:text-"]),
+  :where(html.dark) .text-rose-900:not([class*="dark:text-"]) {
+    color: #fca5a5;
+  }
+
+  /* Interactive Hover / Group-Hover / Focus Overrides */
+  :where(html.dark) .hover\:bg-slate-50:hover:not([class*="dark:hover:bg-"]),
+  :where(html.dark) .hover\:bg-slate-50\/60:hover:not([class*="dark:hover:bg-"]) {
+    background-color: #1e293b;
+  }
+  :where(html.dark) .hover\:bg-slate-100:hover:not([class*="dark:hover:bg-"]) {
+    background-color: #1e293b;
+  }
+  :where(html.dark) .hover\:bg-slate-200:hover:not([class*="dark:hover:bg-"]) {
+    background-color: #334155;
+  }
+  :where(html.dark) .hover\:bg-blue-50:hover:not([class*="dark:hover:bg-"]),
+  :where(html.dark) .hover\:bg-blue-50\/80:hover:not([class*="dark:hover:bg-"]),
+  :where(html.dark) .hover\:bg-blue-100:hover:not([class*="dark:hover:bg-"]) {
+    background-color: rgb(30 64 175 / 0.45);
+  }
+  :where(html.dark) .hover\:bg-amber-100:hover:not([class*="dark:hover:bg-"]) {
+    background-color: rgb(146 64 14 / 0.5);
+  }
+  :where(html.dark) .hover\:bg-emerald-100:hover:not([class*="dark:hover:bg-"]) {
+    background-color: rgb(6 95 70 / 0.52);
+  }
+  :where(html.dark) .hover\:bg-red-50:hover:not([class*="dark:hover:bg-"]),
+  :where(html.dark) .hover\:bg-red-100:hover:not([class*="dark:hover:bg-"]),
+  :where(html.dark) .hover\:bg-rose-50:hover:not([class*="dark:hover:bg-"]),
+  :where(html.dark) .hover\:bg-rose-100:hover:not([class*="dark:hover:bg-"]) {
+    background-color: rgb(153 27 27 / 0.5);
+  }
+  :where(html.dark) .hover\:bg-cyan-50:hover:not([class*="dark:hover:bg-"]) {
+    background-color: rgb(21 94 117 / 0.45);
+  }
+  :where(html.dark) .hover\:text-slate-950:hover:not([class*="dark:hover:text-"]),
+  :where(html.dark) .hover\:text-slate-900:hover:not([class*="dark:hover:text-"]) {
+    color: #f8fafc;
+  }
+  :where(html.dark) .hover\:text-slate-600:hover:not([class*="dark:hover:text-"]) {
+    color: #e2e8f0;
+  }
+  :where(html.dark) .hover\:text-blue-900:hover:not([class*="dark:hover:text-"]) {
+    color: #bfdbfe;
+  }
+  :where(html.dark) .hover\:text-rose-700:hover:not([class*="dark:hover:text-"]) {
+    color: #fecaca;
+  }
+  :where(html.dark) .group:hover .group-hover\:text-slate-700:not([class*="dark:group-hover:text-"]) {
+    color: #e2e8f0;
+  }
+  :where(html.dark) .hover\:border-slate-300:hover,
+  :where(html.dark) .hover\:border-slate-400:hover {
+    border-color: #64748b;
+  }
+  :where(html.dark) .hover\:border-blue-300:hover,
+  :where(html.dark) .hover\:border-blue-400:hover {
+    border-color: #60a5fa;
+  }
+  :where(html.dark) .hover\:border-indigo-400:hover {
+    border-color: #818cf8;
+  }
+  :where(html.dark) .hover\:border-amber-400:hover {
+    border-color: #fbbf24;
+  }
+  :where(html.dark) .hover\:border-red-400:hover {
+    border-color: #f87171;
+  }
+  :where(html.dark) .focus\:border-blue-700:focus,
+  :where(html.dark) .focus-visible\:border-blue-700:focus-visible {
+    border-color: #60a5fa;
+  }
 }
 
 

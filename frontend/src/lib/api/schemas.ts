@@ -12,6 +12,7 @@ export const AuthUserSchema = z.object({
   roles: z.array(UserRoleSchema).min(1),
   status: UserStatusSchema,
   timezone: z.string().default("Asia/Ho_Chi_Minh"),
+  mustChangePassword: z.boolean().optional(),
   phone: z.string().optional(),
   avatarUrl: z.string().optional(),
   createdAt: z.union([z.string(), z.date()]).optional().transform((v) => (v instanceof Date ? v.toISOString() : v)),
@@ -521,6 +522,7 @@ export const NotificationTypeSchema = z.enum([
   "assignment_new",
   "course_added",
   "extension_decided",
+  "assignment_schedule_reminder",
 ]);
 
 export const NotificationItemSchema = z.object({
@@ -1065,6 +1067,131 @@ export const TeacherExamTestFormSchema = z.object({
     .array(ExamModeSchema)
     .min(1, "Chọn ít nhất 1 chế độ thi (PART hoặc FULL)."),
   instructions: z.string().trim().max(2000).optional(),
+});
+
+// ---------------------------------------------------------------------------
+// Phase 12 Schemas (Anonymous Feedback, Study Sessions & Admin Reset Password)
+// ---------------------------------------------------------------------------
+
+export const FeedbackCategorySchema = z.enum([
+  "CONTENT",
+  "SYSTEM_BUG",
+  "TEACHING",
+  "FEATURE_REQUEST",
+  "OTHER",
+]);
+
+export const FeedbackStatusSchema = z.enum(["NEW", "REVIEWED", "RESOLVED"]);
+
+const isoDateStringTransform = z
+  .union([z.string(), z.date()])
+  .transform((v) => (v instanceof Date ? v.toISOString() : v));
+
+const nullableIsoDateStringTransform = z
+  .union([z.string(), z.date()])
+  .nullable()
+  .optional()
+  .transform((v) => (v instanceof Date ? v.toISOString() : (v ?? null)));
+
+export const FeedbackItemSchema = z
+  .object({
+    id: z.string(),
+    category: FeedbackCategorySchema,
+    rating: z.number().int().min(1).max(5).nullable().optional(),
+    content: z.string(),
+    status: FeedbackStatusSchema,
+    adminNote: z.string().nullable().optional(),
+    reviewedAt: nullableIsoDateStringTransform,
+    createdAt: isoDateStringTransform,
+  })
+  .strip();
+
+export const FeedbackCreateResponseSchema = z
+  .object({
+    id: z.string(),
+    category: FeedbackCategorySchema,
+    rating: z.number().int().min(1).max(5).nullable().optional(),
+    status: FeedbackStatusSchema,
+    createdAt: isoDateStringTransform,
+  })
+  .strip();
+
+export const FeedbackListResponseSchema = createPaginatedSchema(FeedbackItemSchema).extend({
+  unreadCount: z.number().int().min(0),
+});
+
+export const CreateFeedbackFormSchema = z.object({
+  category: FeedbackCategorySchema,
+  rating: z.number().int().min(1).max(5).optional(),
+  content: z
+    .string()
+    .trim()
+    .min(10, "Nội dung góp ý phải có tối thiểu 10 ký tự.")
+    .max(2000, "Nội dung góp ý không vượt quá 2000 ký tự."),
+});
+
+export const UpdateFeedbackStatusFormSchema = z.object({
+  status: FeedbackStatusSchema,
+  adminNote: z
+    .string()
+    .trim()
+    .max(1000, "Ghi chú quản trị không vượt quá 1000 ký tự.")
+    .optional(),
+});
+
+export const StudyHeartbeatResponseSchema = z.object({
+  accepted: z.boolean(),
+  creditedSeconds: z.number().int().min(0),
+  todayStudySeconds: z.number().int().min(0),
+  totalStudySeconds: z.number().int().min(0),
+});
+
+export const DailyStudyPointSchema = z.object({
+  dateVn: z.string(),
+  studySeconds: z.number().int().min(0),
+});
+
+export const StudySummarySchema = z.object({
+  totalStudySeconds: z.number().int().min(0),
+  todayStudySeconds: z.number().int().min(0),
+  last7DaysStudySeconds: z.number().int().min(0),
+  lastActiveAt: nullableIsoDateStringTransform,
+  dailyBreakdown: z.array(DailyStudyPointSchema),
+});
+
+export const TeacherStudySummaryItemSchema = z.object({
+  studentId: z.string(),
+  totalStudySeconds: z.number().int().min(0),
+  last7DaysStudySeconds: z.number().int().min(0),
+  lastActiveAt: nullableIsoDateStringTransform,
+});
+
+export const TeacherStudySummaryResponseSchema = z.object({
+  items: z.array(TeacherStudySummaryItemSchema),
+});
+
+export const AdminResetPasswordResponseSchema = z.object({
+  userId: z.string(),
+  email: z.string().email(),
+  temporaryPassword: z.string().min(1),
+  mustChangePassword: z.boolean(),
+  revokedAllSessions: z.boolean(),
+});
+
+export const AdminResetPasswordFormSchema = z.object({
+  newPassword: z
+    .string()
+    .trim()
+    .refine(
+      (val) => val.length === 0 || (val.length >= 8 && val.length <= 128),
+      "Mật khẩu tùy chọn phải từ 8 đến 128 ký tự (hoặc để trống để tự sinh).",
+    ),
+  requirePasswordChange: z.boolean().default(true),
+  reason: z
+    .string()
+    .trim()
+    .max(300, "Lý do không vượt quá 300 ký tự.")
+    .optional(),
 });
 
 

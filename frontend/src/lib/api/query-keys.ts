@@ -21,6 +21,7 @@ export const studentKeys = {
   audioPlayback: (assetId: string) => ["student", "audio-playback", assetId] as const,
   extensionsMine: (page = 1) => ["student", "extensions", page] as const,
   penaltiesMine: ["student", "penalties"] as const,
+  studySummary: ["student", "study-summary"] as const,
 };
 
 export const teacherKeys = {
@@ -35,6 +36,10 @@ export const teacherKeys = {
     ["teacher", "course", courseId, "students", page] as const,
   studentsDirectory: ["teacher", "students-directory"] as const,
   studentDetail: (studentId: string) => ["teacher", "student", studentId] as const,
+  studentsStudySummary: (courseId?: string) =>
+    ["teacher", "students-study-summary", courseId ?? "all"] as const,
+  studentStudyDetail: (studentId: string, days = 14) =>
+    ["teacher", "student-study-detail", studentId, days] as const,
   exercisesRoot: ["teacher", "exercises"] as const,
   exercises: (type?: string, status?: string, search?: string, page = 1) =>
     ["teacher", "exercises", type ?? "all", status ?? "all", search ?? "", page] as const,
@@ -58,6 +63,9 @@ export const adminKeys = {
   courses: (status?: string, search?: string, page = 1) =>
     ["admin", "courses", status ?? "all", search ?? "", page] as const,
   auditPenalties: ["admin", "audit", "penalties"] as const,
+  feedbacksRoot: ["admin", "feedbacks"] as const,
+  feedbacks: (status?: string, category?: string, search?: string, page = 1) =>
+    ["admin", "feedbacks", status ?? "all", category ?? "all", search ?? "", page] as const,
   health: ["admin", "health"] as const,
 };
 

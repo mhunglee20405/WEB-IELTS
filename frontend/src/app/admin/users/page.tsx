@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Pencil, UserPlus } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, Copy, KeyRound, Pencil, UserPlus } from "lucide-react";
 import {
   buttonVariants,
   DataTable,
@@ -19,8 +19,18 @@ import {
 import { usersApi } from "@/lib/api/endpoints";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
 import { adminKeys } from "@/lib/api/query-keys";
-import { CreateUserFormSchema, UpdateUserFormSchema } from "@/lib/api/schemas";
-import type { AuthUser, CreateUserRequest, UserRole, UserStatus } from "@/lib/api/types";
+import {
+  AdminResetPasswordFormSchema,
+  CreateUserFormSchema,
+  UpdateUserFormSchema,
+} from "@/lib/api/schemas";
+import type {
+  AdminResetPasswordResponse,
+  AuthUser,
+  CreateUserRequest,
+  UserRole,
+  UserStatus,
+} from "@/lib/api/types";
 import { getRoleLabelVi } from "@/lib/auth/roles";
 import { DEFAULT_TIMEZONE } from "@/lib/time/vn-time";
 
@@ -303,6 +313,214 @@ function EditUserForm({
   );
 }
 
+function ResetStudentPasswordForm({
+  target,
+  onClose,
+  onSuccess,
+}: {
+  target: AuthUser;
+  onClose: () => void;
+  onSuccess: (message: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [newPassword, setNewPassword] = useState("");
+  const [requirePasswordChange, setRequirePasswordChange] = useState(true);
+  const [reason, setReason] = useState("");
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [result, setResult] = useState<AdminResetPasswordResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: (payload: {
+      newPassword?: string;
+      requirePasswordChange?: boolean;
+      reason?: string;
+    }) => usersApi.resetStudentPassword(target.id, payload),
+    onSuccess: async (data) => {
+      setResult(data);
+      await queryClient.invalidateQueries({ queryKey: adminKeys.usersRoot });
+      onSuccess(`Đã cấp mật khẩu mới cho học viên "${target.fullName}" (${target.email}).`);
+    },
+  });
+
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const parsed = AdminResetPasswordFormSchema.safeParse({
+      newPassword,
+      requirePasswordChange,
+      reason,
+    });
+    if (!parsed.success) {
+      setFieldError(parsed.error.issues[0]?.message ?? "Thông tin cấp lại mật khẩu chưa hợp lệ.");
+      return;
+    }
+    setFieldError(null);
+    const trimmedPw = parsed.data.newPassword.trim();
+    const trimmedReason = parsed.data.reason?.trim();
+    mutation.mutate({
+      ...(trimmedPw ? { newPassword: trimmedPw } : {}),
+      requirePasswordChange: parsed.data.requirePasswordChange,
+      ...(trimmedReason ? { reason: trimmedReason } : {}),
+    });
+  };
+
+  const handleCopy = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard?.writeText(result.temporaryPassword);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  if (result) {
+    return (
+      <div className="space-y-4">
+        <div
+          role="status"
+          className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-950"
+        >
+          Chỉ hiển thị 1 lần — hãy sao chép và gửi cho học viên. Toàn bộ phiên đăng nhập cũ đã bị
+          thu hồi.
+        </div>
+
+        <div>
+          <label htmlFor="temp-password-box" className="block text-sm font-medium text-slate-900">
+            Mật khẩu tạm thời
+          </label>
+          <div className="mt-1.5 flex items-center gap-2">
+            <input
+              id="temp-password-box"
+              type="text"
+              readOnly
+              value={result.temporaryPassword}
+              className="lms-input font-mono font-semibold"
+            />
+            <button
+              type="button"
+              onClick={() => void handleCopy()}
+              className={buttonVariants({ variant: "secondary" })}
+            >
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4 text-emerald-700" aria-hidden={true} />
+                  Đã sao chép
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" aria-hidden={true} />
+                  Sao chép
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-slate-200 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className={buttonVariants({ variant: "primary" })}
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      {fieldError ? (
+        <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+          {fieldError}
+        </div>
+      ) : null}
+
+      {mutation.isError ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden={true} />
+          <span>{getFriendlyErrorMessage(mutation.error)}</span>
+        </div>
+      ) : null}
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
+        <p>
+          Học viên: <strong className="text-slate-950">{target.fullName}</strong> ({target.email})
+        </p>
+        <p>
+          Thao tác này sẽ thu hồi toàn bộ phiên đăng nhập hiện tại của học viên và ghi nhật ký kiểm
+          toán (không lưu mật khẩu).
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="reset-student-pw" className="block text-sm font-medium text-slate-900">
+          Mật khẩu mới tùy chọn (để trống để tự sinh)
+        </label>
+        <input
+          id="reset-student-pw"
+          type="text"
+          autoComplete="new-password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          placeholder="Để trống để hệ thống tự sinh mật khẩu an toàn..."
+          className="lms-input mt-1.5"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="reset-student-reason" className="block text-sm font-medium text-slate-900">
+          Lý do cấp lại mật khẩu (tùy chọn)
+        </label>
+        <input
+          id="reset-student-reason"
+          type="text"
+          maxLength={300}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Ví dụ: Học viên báo quên mật khẩu..."
+          className="lms-input mt-1.5"
+        />
+      </div>
+
+      <label className="lms-choice-label">
+        <input
+          type="checkbox"
+          checked={requirePasswordChange}
+          onChange={(e) => setRequirePasswordChange(e.target.checked)}
+        />
+        <span className="text-sm font-medium text-slate-900">
+          Yêu cầu học viên đổi mật khẩu ở lần đăng nhập kế tiếp
+        </span>
+      </label>
+
+      <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className={buttonVariants({ variant: "secondary" })}
+        >
+          Hủy
+        </button>
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className={buttonVariants({ variant: "primary" })}
+        >
+          <KeyRound className="h-4 w-4" aria-hidden={true} />
+          {mutation.isPending ? "Đang cấp lại..." : "Xác nhận cấp lại mật khẩu"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -312,6 +530,7 @@ export default function AdminUsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createNonce, setCreateNonce] = useState(0);
   const [editingUser, setEditingUser] = useState<AuthUser | null>(null);
+  const [resettingUser, setResettingUser] = useState<AuthUser | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const query = useQuery({
@@ -367,16 +586,36 @@ export default function AdminUsersPage() {
       key: "actions",
       header: "Thao tác",
       align: "end",
-      renderCell: (row) => (
-        <button
-          type="button"
-          onClick={() => setEditingUser(row)}
-          className={buttonVariants({ variant: "secondary", size: "sm" })}
-        >
-          <Pencil className="h-3.5 w-3.5" aria-hidden={true} />
-          Sửa quyền / Trạng thái
-        </button>
-      ),
+      renderCell: (row) => {
+        const rowRoles =
+          row.roles ?? ((row as { role?: UserRole }).role ? [(row as { role?: UserRole }).role!] : []);
+        const isStudentRow =
+          rowRoles.includes("student") &&
+          !rowRoles.includes("admin") &&
+          !rowRoles.includes("teacher");
+        return (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {isStudentRow ? (
+              <button
+                type="button"
+                onClick={() => setResettingUser(row)}
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+              >
+                <KeyRound className="h-3.5 w-3.5" aria-hidden={true} />
+                Cấp mật khẩu mới
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setEditingUser(row)}
+              className={buttonVariants({ variant: "secondary", size: "sm" })}
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden={true} />
+              Sửa quyền / Trạng thái
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -503,6 +742,21 @@ export default function AdminUsersPage() {
             key={editingUser.id}
             target={editingUser}
             onClose={() => setEditingUser(null)}
+            onSuccess={setFeedback}
+          />
+        ) : null}
+      </ModalDialog>
+
+      <ModalDialog
+        open={Boolean(resettingUser)}
+        onClose={() => setResettingUser(null)}
+        title="Cấp mật khẩu mới cho học viên"
+      >
+        {resettingUser ? (
+          <ResetStudentPasswordForm
+            key={resettingUser.id}
+            target={resettingUser}
+            onClose={() => setResettingUser(null)}
             onSuccess={setFeedback}
           />
         ) : null}

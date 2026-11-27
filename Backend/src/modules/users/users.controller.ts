@@ -10,6 +10,9 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
   ForbiddenException,
+  HttpCode,
+  HttpStatus,
+  Header,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -17,10 +20,12 @@ import {
   ApiOperation,
   ApiBearerAuth,
   ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto, UpdateUserStatusDto, UpdateOwnProfileDto } from './dto/update-user.dto';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
@@ -106,6 +111,22 @@ export class UsersController {
   @ApiOperation({ summary: 'Update user status (Admin only)' })
   async updateStatus(@Param('id') id: string, @Body() dto: UpdateUserStatusDto) {
     return this.usersService.updateStatus(id, dto);
+  }
+
+  @Post(':id/reset-password')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary: 'Reset a student password and return one-time temporary password (Admin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Student user ObjectId' })
+  async resetStudentPassword(
+    @Param('id') id: string,
+    @Body() dto: AdminResetPasswordDto,
+    @CurrentUser() actor: UserDocument,
+  ) {
+    return this.usersService.adminResetStudentPassword(id, dto, actor);
   }
 }
 

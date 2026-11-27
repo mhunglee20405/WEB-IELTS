@@ -31,6 +31,7 @@ import { applyDnsServersOverride } from './dns-resolver';
 
         return {
           uri,
+          autoIndex: false,
         };
       },
     }),
@@ -54,7 +55,7 @@ export class DatabaseModule implements OnApplicationBootstrap {
     }
 
     const models = Object.values(this.connection.models);
-    await Promise.all(models.map((model) => model.createIndexes()));
-    this.logger.log(`Verified indexes for ${models.length} Mongoose models`);
+    await Promise.all(models.map((model) => model.syncIndexes()));
+    this.logger.log(`Synchronized indexes for ${models.length} Mongoose models`);
   }
 }

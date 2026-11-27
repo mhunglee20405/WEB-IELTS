@@ -1,5 +1,8 @@
 import { apiRequest, buildQueryString } from "../client";
+import { AdminResetPasswordResponseSchema } from "../schemas";
 import type {
+  AdminResetPasswordRequest,
+  AdminResetPasswordResponse,
   AuthUser,
   CreateUserRequest,
   PaginatedResponse,
@@ -74,6 +77,30 @@ export const usersApi = {
       path: "/users/me",
       body: payload,
     });
+  },
+
+  async resetStudentPassword(
+    id: string,
+    payload: AdminResetPasswordRequest = {},
+  ): Promise<AdminResetPasswordResponse> {
+    const body: AdminResetPasswordRequest = {};
+    const trimmedPassword = payload.newPassword?.trim();
+    if (trimmedPassword) {
+      body.newPassword = trimmedPassword;
+    }
+    if (payload.requirePasswordChange !== undefined) {
+      body.requirePasswordChange = payload.requirePasswordChange;
+    }
+    const trimmedReason = payload.reason?.trim();
+    if (trimmedReason) {
+      body.reason = trimmedReason;
+    }
+    const raw = await apiRequest<unknown, AdminResetPasswordRequest>({
+      method: "POST",
+      path: `/users/${encodeURIComponent(id)}/reset-password`,
+      body,
+    });
+    return AdminResetPasswordResponseSchema.parse(raw);
   },
 };
 
