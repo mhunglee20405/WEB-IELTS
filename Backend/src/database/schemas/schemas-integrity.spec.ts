@@ -2,11 +2,16 @@ import { Schema } from 'mongoose';
 import { AssignmentSchema } from './assignment.schema';
 import { AuditLogSchema } from './audit-log.schema';
 import { EmailDeliverySchema } from './email-delivery.schema';
+import { FeedbackCategory, FeedbackStatus, NotificationType } from './enums';
 import { ExamAttemptSchema } from './exam-attempt.schema';
 import { ExtensionRequestSchema } from './extension-request.schema';
+import { FeedbackSchema } from './feedback.schema';
 import { NotificationSchema } from './notification.schema';
 import { PenaltyTransactionSchema } from './penalty-transaction.schema';
+import { StudentProfileSchema } from './student-profile.schema';
+import { StudentStudyDailySchema } from './student-study-daily.schema';
 import { TranslationSubmissionSchema } from './translation-submission.schema';
+import { UserSchema } from './user.schema';
 
 type IndexEntry = [Record<string, unknown>, Record<string, unknown>];
 
@@ -190,6 +195,156 @@ describe('MongoDB Schema & Index Integrity', () => {
       const idempotencyIdx = findIndex(EmailDeliverySchema, { idempotencyKey: 1 });
       expect(idempotencyIdx).toBeDefined();
       expect(idempotencyIdx![1]).toMatchObject({ unique: true });
+    });
+  });
+
+  describe('Phase 12 Enums', () => {
+    it('defines FeedbackCategory, FeedbackStatus, and NotificationType.ASSIGNMENT_SCHEDULE_REMINDER', () => {
+      expect(FeedbackCategory).toEqual({
+        CONTENT: 'CONTENT',
+        SYSTEM_BUG: 'SYSTEM_BUG',
+        TEACHING: 'TEACHING',
+        FEATURE_REQUEST: 'FEATURE_REQUEST',
+        OTHER: 'OTHER',
+      });
+
+      expect(FeedbackStatus).toEqual({
+        NEW: 'NEW',
+        REVIEWED: 'REVIEWED',
+        RESOLVED: 'RESOLVED',
+      });
+
+      expect(NotificationType.ASSIGNMENT_SCHEDULE_REMINDER).toBe(
+        'assignment_schedule_reminder',
+      );
+    });
+  });
+
+  describe('FeedbackSchema', () => {
+    it('defines feedback fields, indexes, and enforces absolute DB-layer anonymity', () => {
+      expect(FeedbackSchema.get('collection')).toBe('feedbacks');
+      expect(FeedbackSchema.get('timestamps')).toBe(true);
+
+      const categoryPath = FeedbackSchema.path('category');
+      expect(categoryPath).toBeDefined();
+      expect(categoryPath.instance).toBe('String');
+      expect(categoryPath.isRequired).toBe(true);
+      expect(categoryPath.options.enum).toEqual(Object.values(FeedbackCategory));
+
+      const ratingPath = FeedbackSchema.path('rating');
+      expect(ratingPath).toBeDefined();
+      expect(ratingPath.instance).toBe('Number');
+      expect(ratingPath.options.min).toBe(1);
+      expect(ratingPath.options.max).toBe(5);
+
+      const contentPath = FeedbackSchema.path('content');
+      expect(contentPath).toBeDefined();
+      expect(contentPath.instance).toBe('String');
+      expect(contentPath.isRequired).toBe(true);
+      expect(contentPath.options.trim).toBe(true);
+
+      const statusPath = FeedbackSchema.path('status');
+      expect(statusPath).toBeDefined();
+      expect(statusPath.instance).toBe('String');
+      expect(statusPath.options.enum).toEqual(Object.values(FeedbackStatus));
+      expect(statusPath.options.default).toBe(FeedbackStatus.NEW);
+
+      const adminNotePath = FeedbackSchema.path('adminNote');
+      expect(adminNotePath).toBeDefined();
+      expect(adminNotePath.instance).toBe('String');
+      expect(adminNotePath.options.trim).toBe(true);
+
+      const reviewedByPath = FeedbackSchema.path('reviewedBy');
+      expect(reviewedByPath).toBeDefined();
+      expect(reviewedByPath.options.ref).toBe('User');
+      expect(reviewedByPath.isRequired).toBeFalsy();
+
+      const reviewedAtPath = FeedbackSchema.path('reviewedAt');
+      expect(reviewedAtPath).toBeDefined();
+      expect(reviewedAtPath.instance).toBe('Date');
+
+      expect(findIndex(FeedbackSchema, { status: 1, createdAt: -1 })).toBeDefined();
+      expect(findIndex(FeedbackSchema, { category: 1, createdAt: -1 })).toBeDefined();
+
+      // Absolute anonymity: PII / identity paths must NOT exist on FeedbackSchema
+      for (const forbiddenField of [
+        'studentId',
+        'email',
+        'fullName',
+        'ipAddress',
+        'userAgent',
+      ]) {
+        expect(FeedbackSchema.path(forbiddenField)).toBeUndefined();
+      }
+    });
+  });
+
+  describe('StudentStudyDailySchema', () => {
+    it('defines daily study fields and unique/lookup indexes', () => {
+      expect(StudentStudyDailySchema.get('collection')).toBe('student_study_daily');
+      expect(StudentStudyDailySchema.get('timestamps')).toBe(true);
+
+      const studentIdPath = StudentStudyDailySchema.path('studentId');
+      expect(studentIdPath).toBeDefined();
+      expect(studentIdPath.options.ref).toBe('User');
+      expect(studentIdPath.isRequired).toBe(true);
+
+      const dateVnPath = StudentStudyDailySchema.path('dateVn');
+      expect(dateVnPath).toBeDefined();
+      expect(dateVnPath.instance).toBe('String');
+      expect(dateVnPath.isRequired).toBe(true);
+
+      const studySecondsPath = StudentStudyDailySchema.path('studySeconds');
+      expect(studySecondsPath).toBeDefined();
+      expect(studySecondsPath.instance).toBe('Number');
+      expect(studySecondsPath.isRequired).toBe(true);
+      expect(studySecondsPath.options.default).toBe(0);
+      expect(studySecondsPath.options.min).toBe(0);
+
+      const heartbeatCountPath = StudentStudyDailySchema.path('heartbeatCount');
+      expect(heartbeatCountPath).toBeDefined();
+      expect(heartbeatCountPath.instance).toBe('Number');
+      expect(heartbeatCountPath.options.default).toBe(0);
+      expect(heartbeatCountPath.options.min).toBe(0);
+
+      const lastHeartbeatAtPath = StudentStudyDailySchema.path('lastHeartbeatAt');
+      expect(lastHeartbeatAtPath).toBeDefined();
+      expect(lastHeartbeatAtPath.instance).toBe('Date');
+      expect(lastHeartbeatAtPath.isRequired).toBe(true);
+
+      const studentDateIdx = findIndex(StudentStudyDailySchema, {
+        studentId: 1,
+        dateVn: 1,
+      });
+      expect(studentDateIdx).toBeDefined();
+      expect(studentDateIdx![1]).toMatchObject({ unique: true });
+
+      expect(findIndex(StudentStudyDailySchema, { dateVn: 1 })).toBeDefined();
+    });
+  });
+
+  describe('StudentProfileSchema', () => {
+    it('defines totalStudySeconds (Number, default 0) and lastStudyHeartbeatAt (Date)', () => {
+      const totalStudySecondsPath = StudentProfileSchema.path('totalStudySeconds');
+      expect(totalStudySecondsPath).toBeDefined();
+      expect(totalStudySecondsPath.instance).toBe('Number');
+      expect(totalStudySecondsPath.options.default).toBe(0);
+      expect(totalStudySecondsPath.options.min).toBe(0);
+
+      const lastStudyHeartbeatAtPath = StudentProfileSchema.path(
+        'lastStudyHeartbeatAt',
+      );
+      expect(lastStudyHeartbeatAtPath).toBeDefined();
+      expect(lastStudyHeartbeatAtPath.instance).toBe('Date');
+    });
+  });
+
+  describe('UserSchema', () => {
+    it('defines mustChangePassword (Boolean, default false)', () => {
+      const mustChangePasswordPath = UserSchema.path('mustChangePassword');
+      expect(mustChangePasswordPath).toBeDefined();
+      expect(mustChangePasswordPath.instance).toBe('Boolean');
+      expect(mustChangePasswordPath.options.default).toBe(false);
     });
   });
 });

@@ -18,6 +18,12 @@ export class StudentProfile {
   @Prop({ default: 0 })
   penaltyPointsCache: number;
 
+  @Prop({ type: Number, default: 0, min: 0 })
+  totalStudySeconds: number;
+
+  @Prop({ type: Date })
+  lastStudyHeartbeatAt?: Date;
+
   @Prop({ type: Object })
   metadata?: Record<string, unknown>;
 
