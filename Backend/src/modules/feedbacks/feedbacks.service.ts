@@ -249,7 +249,8 @@ export class FeedbacksService implements OnModuleInit, OnModuleDestroy {
 
     feedback.status = dto.status;
     if (dto.adminNote !== undefined) {
-      const trimmedNote = dto.adminNote.trim();
+      const trimmedNote =
+        typeof dto.adminNote === 'string' ? dto.adminNote.trim() : '';
       feedback.adminNote = trimmedNote || undefined;
     }
     feedback.reviewedBy = reviewedBy;

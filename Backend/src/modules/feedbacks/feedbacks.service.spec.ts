@@ -528,6 +528,60 @@ describe('FeedbacksService', () => {
         createdAt,
       });
     });
+
+    it('clears adminNote cleanly when passed null or whitespace without throwing TypeError', async () => {
+      const docId = new Types.ObjectId();
+      const admin = makeAdmin('507f1f77bcf86cd799439099');
+      const createdAt = new Date('2026-11-27T06:00:00.000Z');
+      const existingDoc: any = {
+        _id: docId,
+        category: FeedbackCategory.CONTENT,
+        rating: 4,
+        content: 'Cần bổ sung giải thích đáp án chi tiết hơn.',
+        status: FeedbackStatus.REVIEWED,
+        adminNote: 'Ghi chú cũ',
+        createdAt,
+        save: jest.fn().mockImplementation(async () => existingDoc),
+        toObject: () => ({
+          _id: existingDoc._id,
+          category: existingDoc.category,
+          rating: existingDoc.rating,
+          content: existingDoc.content,
+          status: existingDoc.status,
+          adminNote: existingDoc.adminNote,
+          reviewedBy: existingDoc.reviewedBy,
+          reviewedAt: existingDoc.reviewedAt,
+          createdAt: existingDoc.createdAt,
+        }),
+      };
+
+      feedbackModelMock.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(existingDoc),
+      });
+
+      const nullResult = await service.updateStatus(
+        docId.toHexString(),
+        {
+          status: FeedbackStatus.REVIEWED,
+          adminNote: null as any,
+        },
+        admin,
+      );
+      expect(existingDoc.adminNote).toBeUndefined();
+      expect(nullResult.adminNote).toBeNull();
+
+      existingDoc.adminNote = 'Ghi chú tạm thời';
+      const whitespaceResult = await service.updateStatus(
+        docId.toHexString(),
+        {
+          status: FeedbackStatus.REVIEWED,
+          adminNote: '   ',
+        },
+        admin,
+      );
+      expect(existingDoc.adminNote).toBeUndefined();
+      expect(whitespaceResult.adminNote).toBeNull();
+    });
   });
 
   describe('DTO validation', () => {
