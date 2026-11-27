@@ -47,15 +47,17 @@ export function SidebarNav({
               className={cn(
                 "group flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ease-out select-none active:scale-[0.98] motion-reduce:transform-none",
                 isActive
-                  ? "bg-blue-50 text-blue-900 shadow-[inset_3px_0_0_0_#1d4ed8]"
-                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                  ? "bg-blue-50 text-blue-900 shadow-[inset_3px_0_0_0_#1d4ed8] dark:bg-blue-950/60 dark:text-blue-200 dark:shadow-[inset_3px_0_0_0_#60a5fa]"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100",
               )}
             >
               {item.icon ? (
                 <span
                   className={cn(
                     "shrink-0 transition-transform duration-150 motion-reduce:transform-none group-hover:translate-x-0.5",
-                    isActive ? "text-blue-700" : "text-slate-500 group-hover:text-slate-700",
+                    isActive
+                      ? "text-blue-700 dark:text-blue-300"
+                      : "text-slate-500 group-hover:text-slate-700 dark:text-slate-400 dark:group-hover:text-slate-200",
                   )}
                   aria-hidden="true"
                 >
@@ -85,7 +87,7 @@ export function Sidebar({ navItems, pathname, className }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "hidden h-full w-64 min-w-[16rem] max-w-[16rem] shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-slate-200 bg-white lg:flex",
+        "hidden h-full w-64 min-w-[16rem] max-w-[16rem] shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-slate-200 bg-white lg:flex dark:border-slate-800 dark:bg-slate-900",
         className,
       )}
     >

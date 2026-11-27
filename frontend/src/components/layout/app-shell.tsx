@@ -77,7 +77,7 @@ export function AppShell({
   };
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-50 text-slate-900">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       {/* Accessible skip link */}
       <a href="#main-content" className="skip-link">
         Bỏ qua đến nội dung chính
@@ -127,15 +127,15 @@ export function AppShell({
         onClick={handleBackdropClick}
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4">
-            <h2 id={drawerTitleId} className="text-base font-bold text-slate-950">
+          <div className="flex h-16 items-center justify-between border-b border-slate-200 px-4 dark:border-slate-800">
+            <h2 id={drawerTitleId} className="text-base font-bold text-slate-950 dark:text-slate-100">
               {brandLabel}
             </h2>
             <button
               type="button"
               onClick={() => setDrawerOpen(false)}
               aria-label="Đóng menu điều hướng"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition-colors hover:bg-slate-100"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <X className="h-5 w-5" aria-hidden={true} />
             </button>
