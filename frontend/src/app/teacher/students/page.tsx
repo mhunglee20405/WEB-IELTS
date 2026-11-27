@@ -15,6 +15,7 @@ import {
   type DataTableColumn,
 } from "@/components/ui";
 import { teacherKeys } from "@/lib/api/query-keys";
+import { formatStudyDuration } from "@/hooks/use-study-time-heartbeat";
 import {
   fetchTeacherStudentDirectory,
   type TeacherStudentEntry,
@@ -72,6 +73,20 @@ export default function TeacherStudentsPage() {
               <MetaTag variant="code">{course.code}</MetaTag>
             </Link>
           ))}
+        </div>
+      ),
+    },
+    {
+      key: "studyTime",
+      header: "Thời gian học",
+      renderCell: (row) => (
+        <div>
+          <p className="font-semibold text-slate-950 tabular-nums">
+            {formatStudyDuration(row.totalStudySeconds)}
+          </p>
+          <p className="text-xs text-slate-600 tabular-nums">
+            7 ngày: {formatStudyDuration(row.last7DaysStudySeconds)}
+          </p>
         </div>
       ),
     },

@@ -4,6 +4,7 @@ import type { BootstrapAdminPayload } from "../endpoints/system";
 import {
   MAX_EXTENSIONS_PER_MONTH,
   PASS_SCORE_THRESHOLD,
+  type AdminResetPasswordRequest,
   type CreateAssignmentRequest,
   type CreateCourseRequest,
   type CreateExerciseRequest,
@@ -11,16 +12,22 @@ import {
   type CreateLessonRequest,
   type CreateUserRequest,
   type ExtensionDecisionRequest,
+  type FeedbackCategory,
+  type FeedbackCreateRequest,
+  type FeedbackItem,
+  type FeedbackStatus,
   type LoginRequest,
   type PaginatedResponse,
   type ReversePenaltyRequest,
   type ReviewTranslationRequest,
+  type StudyHeartbeatRequest,
   type SubmissionResult,
   type SubmitAnswersRequest,
   type SubmitTranslationRequest,
   type UpdateAssignmentRequest,
   type UpdateCourseRequest,
   type UpdateExerciseRequest,
+  type UpdateFeedbackStatusRequest,
   type UpdateLessonRequest,
   type UpdateProfileRequest,
   type UpdateUserRequest,
@@ -334,6 +341,42 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
       user.updatedAt = new Date().toISOString();
       return user as T;
     }
+  }
+  const resetPasswordMatch = /^\/users\/([^/]+)\/reset-password$/.exec(pathname);
+  if (resetPasswordMatch && method === "POST") {
+    const id = resetPasswordMatch[1]!;
+    const user = mockState.users.find((u) => u.id === id);
+    if (!user) notFound("Không tìm thấy người dùng.");
+    if (!user.roles.includes("student")) {
+      throw new ApiError({
+        statusCode: 403,
+        code: "ADMIN_RESET_STUDENT_ONLY",
+        message: "Chỉ được cấp lại mật khẩu trực tiếp cho tài khoản học viên.",
+        requestId: `mock-reset-pwd-403-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    const body = (options.body ?? {}) as AdminResetPasswordRequest;
+    const customPassword = body.newPassword?.trim();
+    if (customPassword && (customPassword.length < 8 || customPassword.length > 128)) {
+      throw new ApiError({
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        message: "Mật khẩu mới phải có từ 8 đến 128 ký tự.",
+        requestId: `mock-reset-pwd-400-${Date.now()}`,
+      });
+    }
+    const temporaryPassword = customPassword || "IELTS-7K4M9P";
+    const mustChangePassword = body.requirePasswordChange ?? true;
+    user.mustChangePassword = mustChangePassword;
+    user.updatedAt = new Date().toISOString();
+    return {
+      userId: user.id,
+      email: user.email,
+      temporaryPassword,
+      mustChangePassword,
+      revokedAllSessions: true,
+    } as T;
   }
   if (pathname.startsWith("/users/")) {
     const id = pathname.split("/")[2]!;
@@ -1209,6 +1252,216 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
   });
   if (v2Result.handled) {
     return v2Result.data as T;
+  }
+
+  // Feedbacks (anonymous student feedback + admin inbox)
+  if (method === "POST" && pathname === "/feedbacks") {
+    const user = getCurrentUser();
+    if (!user.roles.includes("student")) {
+      throw new ApiError({
+        statusCode: 403,
+        code: "FORBIDDEN",
+        message: "Chỉ học viên mới có thể gửi góp ý ẩn danh.",
+        requestId: `mock-fb-403-${Date.now()}`,
+      });
+    }
+    const body = options.body as FeedbackCreateRequest;
+    const trimmedContent = typeof body?.content === "string" ? body.content.trim() : "";
+    if (trimmedContent.length < 10 || trimmedContent.length > 2000) {
+      throw new ApiError({
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        message: "Nội dung góp ý phải từ 10 đến 2000 ký tự.",
+        requestId: `mock-fb-400-${Date.now()}`,
+      });
+    }
+    const dateKey = getZonedDateParts(new Date()).dateKey;
+    const rateKey = `${user.id}:${dateKey}`;
+    const count = (mockState.feedbackDailyCounts[rateKey] ?? 0) + 1;
+    if (count > 5) {
+      throw new ApiError({
+        statusCode: 429,
+        code: "FEEDBACK_DAILY_LIMIT_EXCEEDED",
+        message: "Bạn đã đạt giới hạn gửi góp ý trong ngày hôm nay (tối đa 5 lần).",
+        requestId: `mock-fb-429-${Date.now()}`,
+      });
+    }
+    mockState.feedbackDailyCounts[rateKey] = count;
+    const nowIso = new Date().toISOString();
+    const created: FeedbackItem = {
+      id: `fb-${Date.now()}-${mockState.feedbacks.length + 1}`,
+      category: body.category,
+      rating: body.rating ?? null,
+      content: trimmedContent,
+      status: "NEW",
+      adminNote: null,
+      reviewedAt: null,
+      createdAt: nowIso,
+    };
+    mockState.feedbacks.unshift(created);
+    return {
+      id: created.id,
+      category: created.category,
+      rating: created.rating,
+      status: created.status,
+      createdAt: created.createdAt,
+    } as T;
+  }
+
+  if (method === "GET" && pathname === "/feedbacks") {
+    const statusFilter = sp.get("status") as FeedbackStatus | null;
+    const categoryFilter = sp.get("category") as FeedbackCategory | null;
+    const search = sp.get("search")?.trim().toLowerCase();
+    let list = [...mockState.feedbacks].sort(
+      (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+    );
+    if (statusFilter) {
+      list = list.filter((f) => f.status === statusFilter);
+    }
+    if (categoryFilter) {
+      list = list.filter((f) => f.category === categoryFilter);
+    }
+    if (search) {
+      list = list.filter((f) => f.content.toLowerCase().includes(search));
+    }
+    const pageResult = paginate(list, sp);
+    const unreadCount = mockState.feedbacks.filter((f) => f.status === "NEW").length;
+    return {
+      ...pageResult,
+      unreadCount,
+    } as T;
+  }
+
+  const fbStatusMatch = /^\/feedbacks\/([^/]+)\/status$/.exec(pathname);
+  if (fbStatusMatch && method === "PATCH") {
+    const item = mockState.feedbacks.find((f) => f.id === fbStatusMatch[1]);
+    if (!item) notFound("Không tìm thấy góp ý.");
+    const body = options.body as UpdateFeedbackStatusRequest;
+    item.status = body.status;
+    if (body.adminNote !== undefined) {
+      item.adminNote = body.adminNote.trim() || null;
+    }
+    item.reviewedAt = new Date().toISOString();
+    return item as T;
+  }
+
+  // Study Sessions (student heartbeat + teacher/student summaries)
+  if (method === "POST" && pathname === "/study-sessions/heartbeat") {
+    const user = getCurrentUser();
+    if (!user.roles.includes("student")) {
+      throw new ApiError({
+        statusCode: 403,
+        code: "FORBIDDEN",
+        message: "Chỉ học viên mới có thể ghi nhận thời gian học.",
+        requestId: `mock-hb-403-${Date.now()}`,
+      });
+    }
+    const body = options.body as StudyHeartbeatRequest;
+    const delta = Math.round(Number(body?.deltaSeconds ?? 0));
+    if (!Number.isFinite(delta) || delta < 1 || delta > 90) {
+      throw new ApiError({
+        statusCode: 400,
+        code: "VALIDATION_ERROR",
+        message: "deltaSeconds phải nằm trong khoảng 1..90 giây.",
+        requestId: `mock-hb-400-${Date.now()}`,
+      });
+    }
+    const summary = (mockState.studyProfiles[user.id] ??= {
+      totalStudySeconds: 0,
+      todayStudySeconds: 0,
+      last7DaysStudySeconds: 0,
+      lastActiveAt: null,
+      dailyBreakdown: [],
+    });
+    const nowMs = Date.now();
+    const lastMs = mockState.lastHeartbeatAtMs[user.id];
+    if (lastMs !== undefined && nowMs - lastMs < 15_000) {
+      return {
+        accepted: false,
+        creditedSeconds: 0,
+        todayStudySeconds: summary.todayStudySeconds,
+        totalStudySeconds: summary.totalStudySeconds,
+      } as T;
+    }
+    mockState.lastHeartbeatAtMs[user.id] = nowMs;
+    const creditedSeconds = Math.min(delta, 90);
+    const todayKey = getZonedDateParts(new Date(nowMs)).dateKey;
+    summary.todayStudySeconds += creditedSeconds;
+    summary.last7DaysStudySeconds += creditedSeconds;
+    summary.totalStudySeconds += creditedSeconds;
+    summary.lastActiveAt = new Date(nowMs).toISOString();
+    const todayPoint = summary.dailyBreakdown.find((d) => d.dateVn === todayKey);
+    if (todayPoint) {
+      todayPoint.studySeconds += creditedSeconds;
+    } else {
+      summary.dailyBreakdown.push({ dateVn: todayKey, studySeconds: creditedSeconds });
+    }
+    return {
+      accepted: true,
+      creditedSeconds,
+      todayStudySeconds: summary.todayStudySeconds,
+      totalStudySeconds: summary.totalStudySeconds,
+    } as T;
+  }
+
+  if (method === "GET" && pathname === "/study-sessions/me/summary") {
+    const user = getCurrentUser();
+    const summary = mockState.studyProfiles[user.id] ?? {
+      totalStudySeconds: 0,
+      todayStudySeconds: 0,
+      last7DaysStudySeconds: 0,
+      lastActiveAt: null,
+      dailyBreakdown: [],
+    };
+    return summary as T;
+  }
+
+  if (method === "GET" && pathname === "/study-sessions/teacher/summary") {
+    const courseId = sp.get("courseId");
+    const studentIds = new Set<string>();
+    if (courseId) {
+      for (const entry of mockState.courseStudents[courseId] ?? []) {
+        studentIds.add(entry.studentId);
+      }
+    } else {
+      for (const roster of Object.values(mockState.courseStudents)) {
+        for (const entry of roster) {
+          studentIds.add(entry.studentId);
+        }
+      }
+    }
+    const items = Array.from(studentIds).map((studentId) => {
+      const profile = mockState.studyProfiles[studentId];
+      return {
+        studentId,
+        totalStudySeconds: profile?.totalStudySeconds ?? 0,
+        last7DaysStudySeconds: profile?.last7DaysStudySeconds ?? 0,
+        lastActiveAt: profile?.lastActiveAt ?? null,
+      };
+    });
+    return { items } as T;
+  }
+
+  const studentStudyMatch = /^\/study-sessions\/students\/([^/]+)$/.exec(pathname);
+  if (studentStudyMatch && method === "GET") {
+    const studentId = studentStudyMatch[1]!;
+    const days = Math.max(7, Math.min(90, Number(sp.get("days") ?? 14)));
+    const profile = mockState.studyProfiles[studentId];
+    if (!profile) {
+      const user = mockState.users.find((u) => u.id === studentId);
+      if (!user) notFound("Không tìm thấy học viên.");
+      return {
+        totalStudySeconds: 0,
+        todayStudySeconds: 0,
+        last7DaysStudySeconds: 0,
+        lastActiveAt: null,
+        dailyBreakdown: [],
+      } as T;
+    }
+    return {
+      ...profile,
+      dailyBreakdown: profile.dailyBreakdown.slice(-days),
+    } as T;
   }
 
   // Health

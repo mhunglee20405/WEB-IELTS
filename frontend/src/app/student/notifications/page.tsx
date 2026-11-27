@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Bell,
   BookPlus,
+  CalendarClock,
   Check,
   Clock,
   FileText,
@@ -79,6 +80,11 @@ const NOTIFICATION_META: Record<
     label: "Kết quả gia hạn",
     badgeClasses: "bg-amber-50 text-amber-900",
     Icon: Clock,
+  },
+  assignment_schedule_reminder: {
+    label: "Nhắc lịch giao bài",
+    badgeClasses: "bg-amber-50 text-amber-900",
+    Icon: CalendarClock,
   },
   other: {
     label: "Thông báo hệ thống",
