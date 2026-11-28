@@ -1,0 +1,123 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
+import { MailService } from './mail.service';
+
+describe('MailService', () => {
+  let service: MailService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MailService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, def?: any) => {
+              if (key === 'nodeEnv') return 'test';
+              if (key === 'mail.fromName') return 'IELTS LMS';
+              if (key === 'mail.fromAddress') return 'test@ielts.local';
+              if (key === 'mail.host') return 'smtp.example.com';
+              return def;
+            }),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<MailService>(MailService);
+  });
+
+  it('renders assignment-published template correctly', () => {
+    const rendered = service.renderTemplate('assignment-published', {
+      courseTitle: 'IELTS Intensive 7.5',
+      title: 'Reading Test 1',
+      deadlineAtVn: '23:59 20/11/2026',
+    });
+
+    expect(rendered.subject).toContain('Reading Test 1');
+    expect(rendered.html).toContain('IELTS Intensive 7.5');
+    expect(rendered.html).toContain('23:59 20/11/2026');
+  });
+
+  it('renders assignment-overdue template correctly', () => {
+    const rendered = service.renderTemplate('assignment-overdue', {
+      title: 'Listening Test 2',
+    });
+
+    expect(rendered.subject).toContain('Listening Test 2');
+    expect(rendered.html).toContain('1 điểm phạt');
+  });
+
+  it('renders extension-reviewed template correctly', () => {
+    const rendered = service.renderTemplate('extension-reviewed', {
+      title: 'Writing Task 1',
+      status: 'approved',
+      reviewNote: 'Đồng ý hoãn 2 ngày',
+    });
+
+    expect(rendered.subject).toContain('Writing Task 1');
+    expect(rendered.html).toContain('ĐƯỢC CHẤP THUẬN');
+    expect(rendered.html).toContain('Đồng ý hoãn 2 ngày');
+  });
+
+  it('renders password-reset template with resetToken, expiry, and optional resetUrl', () => {
+    const rendered = service.renderTemplate('password-reset', {
+      fullName: 'Minh',
+      resetToken: 'tid.sec',
+      expiresInMinutes: 15,
+    });
+
+    expect(rendered.subject).toMatch(/đặt lại mật khẩu|password reset/i);
+    expect(rendered.html).toContain('Minh');
+    expect(rendered.html).toContain('tid.sec');
+    expect(rendered.html).toContain('15');
+    expect(rendered.text).toContain('Minh');
+    expect(rendered.text).toContain('tid.sec');
+    expect(rendered.text).toContain('15');
+
+    const withUrl = service.renderTemplate('password-reset', {
+      fullName: 'Minh',
+      resetToken: 'tid.sec',
+      resetUrl: 'https://lms.example.com/reset-password?token=tid.sec',
+      expiresInMinutes: 15,
+    });
+    expect(withUrl.html).toContain('https://lms.example.com/reset-password?token=tid.sec');
+    expect(withUrl.text).toContain('https://lms.example.com/reset-password?token=tid.sec');
+  });
+
+  it('renders assignment-schedule-reminder template with course title, course code, and week info', () => {
+    const rendered = service.renderTemplate('assignment-schedule-reminder', {
+      courseTitle: 'IELTS Intensive 7.5',
+      courseCode: 'IELTS-75',
+      isoWeek: '2026-W48',
+      windowStartVn: '2026-11-28',
+      windowEndVn: '2026-12-04',
+    });
+
+    expect(rendered.subject).toContain('IELTS Intensive 7.5');
+    expect(rendered.subject).toContain('IELTS-75');
+    expect(rendered.subject).toContain('2026-W48');
+    expect(rendered.html).toContain('IELTS Intensive 7.5');
+    expect(rendered.html).toContain('IELTS-75');
+    expect(rendered.html).toContain('2026-W48');
+    expect(rendered.html).toContain('2026-11-28');
+    expect(rendered.html).toContain('2026-12-04');
+    expect(rendered.text).toContain('IELTS Intensive 7.5');
+    expect(rendered.text).toContain('IELTS-75');
+    expect(rendered.text).toContain('2026-W48');
+    expect(rendered.text).toContain('2026-11-28');
+    expect(rendered.text).toContain('2026-12-04');
+  });
+
+  it('dispatches email in mock mode in test environment', async () => {
+    const res = await service.sendMail({
+      to: 'student@ielts.local',
+      subject: 'Test Subject',
+      html: '<p>Test Body</p>',
+    });
+
+    expect(res).toBeDefined();
+    expect(res.messageId).toContain('mock-email-');
+  });
+});
+

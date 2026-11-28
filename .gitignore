@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Next.js & build outputs
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+*.tsbuildinfo
+
+# Local env files
+.env*.local
+
+# Testing & coverage
+coverage/
+playwright-report/
+test-results/
+
+# Backups & Security Tokens
+backups/
+Backend/backups/
+*.backup.json
+.bootstrap-token
+Backend/.bootstrap-token
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env*.local
+AGENTS.md
+
+

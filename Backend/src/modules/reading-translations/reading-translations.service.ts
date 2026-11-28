@@ -1,0 +1,821 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  Optional,
+} from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import {
+  TranslationSubmission,
+  TranslationSubmissionDocument,
+} from 'src/database/schemas/translation-submission.schema';
+import {
+  ExamTest,
+  ExamTestDocument,
+} from 'src/database/schemas/exam-test.schema';
+import {
+  ExamAttempt,
+  ExamAttemptDocument,
+} from 'src/database/schemas/exam-attempt.schema';
+import { Course, CourseDocument } from 'src/database/schemas/course.schema';
+import { Assignment, AssignmentDocument } from 'src/database/schemas/assignment.schema';
+import {
+  StudentAssignment,
+  StudentAssignmentDocument,
+} from 'src/database/schemas/student-assignment.schema';
+import { Enrollment, EnrollmentDocument } from 'src/database/schemas/enrollment.schema';
+import { UserDocument } from 'src/database/schemas/user.schema';
+import {
+  ExamSkill,
+  ExamMode,
+  AttemptStatus,
+  EnrollmentStatus,
+  TranslationSubmissionStatus,
+  UserRole,
+} from 'src/database/schemas/enums';
+import {
+  SaveTranslationDraftDto,
+  SubmitReadingTranslationDto,
+  ReviewReadingTranslationDto,
+  TeacherTranslationQueryDto,
+} from './dto/reading-translation.dto';
+import { extractObjectId } from 'src/modules/exam-tests/mappers/exam-test.mapper';
+import { gradeQuestion } from 'src/common/utils/exam-grading.util';
+
+@Injectable()
+export class ReadingTranslationsService {
+  constructor(
+    @InjectModel(TranslationSubmission.name)
+    private translationModel: Model<TranslationSubmissionDocument>,
+    @InjectModel(ExamTest.name)
+    private examTestModel: Model<ExamTestDocument>,
+    @InjectModel(ExamAttempt.name)
+    private examAttemptModel: Model<ExamAttemptDocument>,
+    @Optional()
+    @InjectModel(Course.name)
+    private courseModel?: Model<CourseDocument>,
+    @Optional()
+    @InjectModel(Assignment.name)
+    private assignmentModel?: Model<AssignmentDocument>,
+    @Optional()
+    @InjectModel(Enrollment.name)
+    private enrollmentModel?: Model<EnrollmentDocument>,
+    @Optional()
+    @InjectModel(StudentAssignment.name)
+    private studentAssignmentModel?: Model<StudentAssignmentDocument>,
+  ) {}
+
+  private async execQuery<T>(query: any): Promise<T> {
+    if (!query) return query;
+    return typeof query.exec === 'function' ? await query.exec() : await query;
+  }
+
+  private assertTranslationEditable(sub: TranslationSubmissionDocument): void {
+    const normalizedStatus = String(sub.status || '').toLowerCase();
+    if (
+      normalizedStatus === TranslationSubmissionStatus.SUBMITTED ||
+      normalizedStatus === TranslationSubmissionStatus.REVIEWED
+    ) {
+      throw new BadRequestException('Cannot edit a submitted or reviewed translation');
+    }
+  }
+
+  private async resolvePassThreshold(
+    studentId: Types.ObjectId,
+    test: ExamTestDocument,
+    studentAssignmentId?: string,
+  ): Promise<number> {
+    const fallback = test.passScore ?? 70;
+    if (
+      !studentAssignmentId ||
+      !Types.ObjectId.isValid(studentAssignmentId) ||
+      !this.studentAssignmentModel ||
+      !this.assignmentModel
+    ) {
+      return fallback;
+    }
+
+    const sa = await this.execQuery<any>(
+      this.studentAssignmentModel.findById(studentAssignmentId),
+    );
+    if (!sa) {
+      return fallback;
+    }
+    if (sa.studentId && extractObjectId(sa.studentId) !== extractObjectId(studentId)) {
+      return fallback;
+    }
+    if (!sa.assignmentId) {
+      return fallback;
+    }
+
+    const assignment =
+      typeof sa.assignmentId === 'object' &&
+      !(sa.assignmentId instanceof Types.ObjectId) &&
+      ('targetScorePercent' in sa.assignmentId ||
+        'examTestId' in sa.assignmentId ||
+        'exerciseId' in sa.assignmentId)
+        ? sa.assignmentId
+        : await this.execQuery<AssignmentDocument | null>(
+            this.assignmentModel.findById(sa.assignmentId),
+          );
+
+    if (!assignment) {
+      return fallback;
+    }
+
+    const testIdStr = extractObjectId(test._id);
+    const linkedExamTestId =
+      assignment.examTestId != null ? extractObjectId(assignment.examTestId) : '';
+    const linkedExerciseId =
+      assignment.exerciseId != null ? extractObjectId(assignment.exerciseId) : '';
+    if (
+      (linkedExamTestId || linkedExerciseId) &&
+      linkedExamTestId !== testIdStr &&
+      linkedExerciseId !== testIdStr
+    ) {
+      return fallback;
+    }
+
+    return assignment.targetScorePercent ?? fallback;
+  }
+
+  private async resolveTestAndPassage(
+    passageId: string,
+    testId?: string,
+  ): Promise<{ test: ExamTestDocument; part: any }> {
+    if (!Types.ObjectId.isValid(passageId)) {
+      throw new NotFoundException('Passage not found');
+    }
+
+    let test: ExamTestDocument | null = null;
+    if (testId && Types.ObjectId.isValid(testId)) {
+      test = await this.examTestModel.findById(testId).exec();
+    }
+    if (!test) {
+      test = await this.examTestModel.findOne({ 'parts._id': passageId }).exec();
+    }
+    if (!test) {
+      throw new NotFoundException('Exam test not found');
+    }
+
+    const part = (test.parts || []).find((p: any) => extractObjectId(p._id) === passageId);
+    if (!part) {
+      throw new NotFoundException('Passage not found in this test');
+    }
+
+    return { test, part };
+  }
+
+  private async assertTeacherCanReview(
+    sub: TranslationSubmissionDocument,
+    teacher: UserDocument,
+  ): Promise<void> {
+    if (teacher.role !== UserRole.TEACHER) {
+      return;
+    }
+
+    if (sub.testId) {
+      const test = await this.examTestModel.findById(sub.testId).exec();
+      if (test && extractObjectId(test.createdBy) === extractObjectId(teacher._id)) {
+        return;
+      }
+    }
+
+    const teacherCourses = this.courseModel
+      ? await this.courseModel.find({ teacherId: teacher._id }).exec()
+      : [];
+    const teacherCourseIds = teacherCourses.map((c) => c._id as Types.ObjectId);
+
+    if (teacherCourseIds.length > 0 && this.assignmentModel) {
+      const assignmentOr: Record<string, any>[] = [];
+      if (sub.assignmentId) {
+        assignmentOr.push({ _id: sub.assignmentId });
+      }
+      if (sub.testId) {
+        assignmentOr.push({ examTestId: sub.testId }, { exerciseId: sub.testId });
+      }
+
+      if (assignmentOr.length > 0) {
+        const matchedAssignments = await this.assignmentModel
+          .find({
+            courseId: { $in: teacherCourseIds },
+            $or: assignmentOr,
+          })
+          .exec();
+
+        if (matchedAssignments.length > 0) {
+          if (
+            sub.assignmentId &&
+            matchedAssignments.some(
+              (a) => extractObjectId(a._id) === extractObjectId(sub.assignmentId),
+            )
+          ) {
+            return;
+          }
+
+          if (!this.enrollmentModel) {
+            return;
+          }
+
+          const matchedCourseIds = matchedAssignments.map((a) => a.courseId);
+          const enrollment = await this.enrollmentModel
+            .findOne({
+              courseId: { $in: matchedCourseIds },
+              studentId: sub.studentId,
+              status: EnrollmentStatus.ACTIVE,
+            })
+            .exec();
+
+          if (enrollment) {
+            return;
+          }
+        }
+      }
+    }
+
+    throw new ForbiddenException('You do not have access to review this translation');
+  }
+
+  /**
+   * Evaluates whether a student has passed an attempt covering a given passage.
+   */
+  async checkPassageUnlockStatus(
+    studentId: Types.ObjectId,
+    test: ExamTestDocument,
+    passageId: string,
+    studentAssignmentId?: string,
+    resolvedPassScore?: number,
+  ): Promise<{ unlocked: boolean; sourceAttemptId: string | null }> {
+    const passScore =
+      resolvedPassScore ??
+      (await this.resolvePassThreshold(studentId, test, studentAssignmentId));
+
+    // Find all submitted attempts for this student and test
+    const attempts = await this.examAttemptModel
+      .find({
+        studentId,
+        testId: test._id,
+        status: { $in: [AttemptStatus.SUBMITTED, AttemptStatus.AUTO_SUBMITTED] },
+      })
+      .sort({ submittedAt: -1 })
+      .exec();
+
+    // Map questions in test
+    const questionMap = new Map<string, any>();
+    for (const part of test.parts || []) {
+      for (const group of part.questionGroups || []) {
+        for (const q of group.questions || []) {
+          questionMap.set(q.number.toString(), {
+            type: q.type || group.type,
+            points: q.points ?? 1,
+            grading: q.grading,
+          });
+        }
+      }
+    }
+
+    for (const att of attempts) {
+      // Check if attempt covers this passage
+      const isFull = att.mode === ExamMode.FULL;
+      const isTargetPart = att.mode === ExamMode.PART && att.partId === passageId;
+
+      if (!isFull && !isTargetPart) {
+        continue;
+      }
+
+      // Check if this attempt passed (>= 70%)
+      const studentAnswers = att.savedAnswers instanceof Map
+        ? att.savedAnswers
+        : new Map(Object.entries(att.savedAnswers || {}));
+
+      let earned = 0;
+      let total = 0;
+
+      for (const qNum of att.scopeQuestionIds) {
+        const q = questionMap.get(qNum);
+        const qPoints = q?.points ?? 1;
+        total += qPoints;
+
+        const val = studentAnswers.get(qNum);
+        const res = gradeQuestion(q?.type, val, q?.grading, qPoints);
+        if (res.isCorrect) {
+          earned += res.awardedPoints;
+        }
+      }
+
+      const scorePercent = total > 0 ? (earned / total) * 100 : 0;
+
+      if (scorePercent >= passScore) {
+        return {
+          unlocked: true,
+          sourceAttemptId: extractObjectId(att._id),
+        };
+      }
+    }
+
+    return { unlocked: false, sourceAttemptId: null };
+  }
+
+  async getEligibility(testId: string, studentAssignmentId: string | undefined, student: UserDocument) {
+    if (!Types.ObjectId.isValid(testId)) {
+      throw new NotFoundException('Exam test not found');
+    }
+    const test = await this.examTestModel.findById(testId).exec();
+    if (!test) {
+      throw new NotFoundException('Exam test not found');
+    }
+
+    if (test.skill !== ExamSkill.READING) {
+      throw new BadRequestException('Translation features are only available for Reading tests');
+    }
+
+    const passThresholdPercent = await this.resolvePassThreshold(
+      student._id as Types.ObjectId,
+      test,
+      studentAssignmentId,
+    );
+
+    const passageStatuses: any[] = [];
+
+    for (const part of test.parts || []) {
+      const partId = extractObjectId((part as any)._id);
+      const unlockInfo = await this.checkPassageUnlockStatus(
+        student._id as Types.ObjectId,
+        test,
+        partId,
+        studentAssignmentId,
+        passThresholdPercent,
+      );
+
+      // Check if there is an existing translation submission
+      const existingFilter: Record<string, any> = {
+        studentId: student._id,
+        testId: test._id,
+        passageId: partId,
+      };
+
+      const existingSub = await this.translationModel.findOne(existingFilter).exec();
+
+      let status = 'LOCKED';
+      if (unlockInfo.unlocked) {
+        status = existingSub ? existingSub.status.toUpperCase() : 'DRAFT';
+      }
+
+      passageStatuses.push({
+        passageId: partId,
+        ordinal: part.ordinal,
+        partNumber: part.ordinal,
+        title: part.title,
+        passageTitle: part.title,
+        unlocked: unlockInfo.unlocked,
+        eligible: unlockInfo.unlocked,
+        sourceAttemptId: unlockInfo.sourceAttemptId,
+        unlockedByAttemptId: unlockInfo.sourceAttemptId,
+        status,
+        lockReason: unlockInfo.unlocked
+          ? null
+          : `Cần đạt từ ${passThresholdPercent}% trở lên cho Passage này để mở khóa dịch.`,
+        hasSubmission: Boolean(existingSub),
+        submissionStatus: existingSub?.status || null,
+        updatedAt: existingSub?.updatedAt ? existingSub.updatedAt.toISOString() : null,
+        submittedAt: existingSub?.submittedAt ? existingSub.submittedAt.toISOString() : null,
+        reviewedAt: existingSub?.reviewedAt ? existingSub.reviewedAt.toISOString() : null,
+      });
+    }
+
+    const fullTestPassed = (passageStatuses.length > 0 && passageStatuses.every((p) => p.unlocked)) || false;
+
+    return {
+      testId: extractObjectId(test._id),
+      testTitle: test.title,
+      exerciseVersion: test.version,
+      translationEnabled: test.translationEnabled,
+      passThresholdPercent,
+      fullTestPassed,
+      passages: passageStatuses,
+    };
+  }
+
+  async getPassageTranslation(
+    passageId: string,
+    testId: string | undefined,
+    studentAssignmentId: string | undefined,
+    student: UserDocument,
+  ) {
+    const { test, part } = await this.resolveTestAndPassage(passageId, testId);
+
+    const unlockInfo = await this.checkPassageUnlockStatus(
+      student._id as Types.ObjectId,
+      test,
+      passageId,
+      studentAssignmentId,
+    );
+
+    const existing = await this.translationModel
+      .findOne({
+        studentId: student._id,
+        testId: test._id,
+        passageId,
+      })
+      .exec();
+
+    const id = existing ? extractObjectId(existing._id) : undefined;
+    const status = unlockInfo.unlocked ? (existing ? existing.status.toUpperCase() : 'DRAFT') : 'LOCKED';
+
+    return {
+      id,
+      testId: extractObjectId(test._id),
+      testTitle: test.title,
+      passageId,
+      partNumber: part.ordinal,
+      ordinal: part.ordinal,
+      passageTitle: part.title,
+      title: part.title,
+      passageHtml: part.contentHtml || '',
+      sourceContentHtml: part.contentHtml || '',
+      unlocked: unlockInfo.unlocked,
+      status,
+      revision: (existing as any)?.version || (existing as any)?.__v || 1,
+      textVi: existing?.translatedText || '',
+      translatedText: existing?.translatedText || '',
+      teacherFeedback: existing?.teacherComment || null,
+      teacherComment: existing?.teacherComment || null,
+      reviewedBy: existing?.reviewedBy ? extractObjectId(existing.reviewedBy) : null,
+      reviewedAt: existing?.reviewedAt ? existing.reviewedAt.toISOString() : null,
+      updatedAt: existing?.updatedAt ? existing.updatedAt.toISOString() : null,
+      submittedAt: existing?.submittedAt ? existing.submittedAt.toISOString() : null,
+      studentAssignmentId: studentAssignmentId || null,
+    };
+  }
+
+  async saveDraft(passageId: string, dto: SaveTranslationDraftDto, student: UserDocument) {
+    const { test } = await this.resolveTestAndPassage(passageId, dto.testId);
+
+    // STRICT UNLOCK CHECK: Student must have a passed attempt covering this passage
+    const unlockInfo = await this.checkPassageUnlockStatus(
+      student._id as Types.ObjectId,
+      test,
+      passageId,
+      dto.studentAssignmentId,
+    );
+    if (!unlockInfo.unlocked) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: 'TRANSLATION_LOCKED',
+        message: 'Passage chưa được mở khóa vì chưa có attempt PASS hợp lệ.',
+      });
+    }
+
+    const filter: Record<string, any> = {
+      studentId: student._id,
+      testId: test._id,
+      passageId,
+    };
+
+    let sub = await this.translationModel.findOne(filter).exec();
+
+    if (sub) {
+      this.assertTranslationEditable(sub);
+      sub.translatedText = dto.textVi;
+      sub.status = TranslationSubmissionStatus.DRAFT;
+      await sub.save();
+    } else {
+      sub = new this.translationModel({
+        studentId: student._id,
+        testId: test._id,
+        passageId,
+        exerciseVersion: dto.exerciseVersion || test.version,
+        studentAssignmentId: dto.studentAssignmentId && Types.ObjectId.isValid(dto.studentAssignmentId)
+          ? new Types.ObjectId(dto.studentAssignmentId)
+          : undefined,
+        sourceAttemptId: unlockInfo.sourceAttemptId ? new Types.ObjectId(unlockInfo.sourceAttemptId) : undefined,
+        translatedText: dto.textVi,
+        status: TranslationSubmissionStatus.DRAFT,
+      });
+      await sub.save();
+    }
+
+    const id = extractObjectId(sub._id);
+    return {
+      id,
+      passageId,
+      status: sub.status.toUpperCase(),
+      textVi: sub.translatedText,
+      translatedText: sub.translatedText,
+      updatedAt: sub.updatedAt ? sub.updatedAt.toISOString() : new Date().toISOString(),
+      revision: (sub as any).version || (sub as any).__v || 1,
+    };
+  }
+
+  async submitTranslation(passageId: string, dto: SubmitReadingTranslationDto, student: UserDocument) {
+    const { test } = await this.resolveTestAndPassage(passageId, dto.testId);
+
+    // STRICT UNLOCK CHECK: Student must have a passed attempt covering this passage
+    const unlockInfo = await this.checkPassageUnlockStatus(
+      student._id as Types.ObjectId,
+      test,
+      passageId,
+      dto.studentAssignmentId,
+    );
+    if (!unlockInfo.unlocked) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: 'TRANSLATION_LOCKED',
+        message: 'Passage chưa được mở khóa vì chưa có attempt PASS hợp lệ.',
+      });
+    }
+
+    const filter: Record<string, any> = {
+      studentId: student._id,
+      testId: test._id,
+      passageId,
+    };
+
+    let sub = await this.translationModel.findOne(filter).exec();
+
+    const submittedAt = new Date();
+
+    if (sub) {
+      this.assertTranslationEditable(sub);
+      if (dto.textVi !== undefined) {
+        sub.translatedText = dto.textVi;
+      }
+      sub.status = TranslationSubmissionStatus.SUBMITTED;
+      sub.submittedAt = submittedAt;
+      await sub.save();
+    } else {
+      if (!dto.textVi) {
+        throw new BadRequestException('translatedText is required when submitting a translation');
+      }
+      sub = new this.translationModel({
+        studentId: student._id,
+        testId: test._id,
+        passageId,
+        exerciseVersion: dto.exerciseVersion || test.version,
+        studentAssignmentId: dto.studentAssignmentId && Types.ObjectId.isValid(dto.studentAssignmentId)
+          ? new Types.ObjectId(dto.studentAssignmentId)
+          : undefined,
+        sourceAttemptId: unlockInfo.sourceAttemptId ? new Types.ObjectId(unlockInfo.sourceAttemptId) : undefined,
+        translatedText: dto.textVi,
+        status: TranslationSubmissionStatus.SUBMITTED,
+        submittedAt,
+      });
+      await sub.save();
+    }
+
+    const id = extractObjectId(sub._id);
+    return {
+      id,
+      passageId,
+      status: sub.status.toUpperCase(),
+      textVi: sub.translatedText,
+      translatedText: sub.translatedText,
+      submittedAt: sub.submittedAt ? sub.submittedAt.toISOString() : new Date().toISOString(),
+      revision: (sub as any).version || (sub as any).__v || 1,
+    };
+  }
+
+  private async buildScopedTranslationOrConditions(options: {
+    courseIds: Types.ObjectId[];
+    assignmentIds: Types.ObjectId[];
+    assignedTestIds: Types.ObjectId[];
+    authoredTestIds?: Types.ObjectId[];
+  }): Promise<Record<string, any>[]> {
+    const { courseIds, assignmentIds, assignedTestIds, authoredTestIds = [] } = options;
+    const authoredIdSet = new Set(authoredTestIds.map((id) => extractObjectId(id)));
+    const sharedAssignedTestIds = assignedTestIds.filter(
+      (id) => !authoredIdSet.has(extractObjectId(id)),
+    );
+
+    const scopeOr: Record<string, any>[] = [];
+    if (authoredTestIds.length > 0) {
+      scopeOr.push({ testId: { $in: authoredTestIds } });
+    }
+    if (assignmentIds.length > 0) {
+      scopeOr.push({ assignmentId: { $in: assignmentIds } });
+    }
+    if (sharedAssignedTestIds.length > 0 && courseIds.length > 0) {
+      if (this.enrollmentModel) {
+        const enrollments = await this.enrollmentModel
+          .find({ courseId: { $in: courseIds }, status: EnrollmentStatus.ACTIVE })
+          .exec();
+        const enrolledStudentIds = enrollments.map((e) => e.studentId);
+        if (enrolledStudentIds.length > 0) {
+          scopeOr.push({
+            testId: { $in: sharedAssignedTestIds },
+            studentId: { $in: enrolledStudentIds },
+          });
+        }
+      } else {
+        scopeOr.push({ testId: { $in: sharedAssignedTestIds } });
+      }
+    }
+
+    return scopeOr;
+  }
+
+  async findAllForTeacher(query: TeacherTranslationQueryDto, actor: UserDocument) {
+    if (actor.role === UserRole.STUDENT) {
+      throw new ForbiddenException('Students cannot view translation submissions list');
+    }
+
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.min(100, Math.max(1, query.limit || 20));
+    const emptyResult = {
+      items: [],
+      total: 0,
+      page,
+      limit,
+      totalPages: 1,
+    };
+
+    const filter: Record<string, any> = {};
+    if (query.status) {
+      filter.status = query.status.toLowerCase();
+    }
+    if (query.testId && Types.ObjectId.isValid(query.testId)) {
+      filter.testId = new Types.ObjectId(query.testId);
+    }
+
+    if (query.courseId) {
+      if (!Types.ObjectId.isValid(query.courseId)) {
+        throw new BadRequestException('Invalid courseId');
+      }
+      const course = this.courseModel
+        ? await this.courseModel.findById(query.courseId).exec()
+        : null;
+      if (actor.role === UserRole.TEACHER) {
+        if (!course || extractObjectId(course.teacherId) !== extractObjectId(actor._id)) {
+          throw new ForbiddenException('You do not teach this course');
+        }
+      } else if (!course && this.courseModel) {
+        throw new NotFoundException('Course not found');
+      }
+
+      const courseObjId = new Types.ObjectId(query.courseId);
+      const assignments = this.assignmentModel
+        ? await this.assignmentModel.find({ courseId: courseObjId }).exec()
+        : [];
+      const courseAssignmentIds = assignments.map((a) => a._id as Types.ObjectId);
+      const courseTestIds = assignments
+        .flatMap((a) => [a.examTestId, a.exerciseId])
+        .filter((id): id is Types.ObjectId => Boolean(id));
+
+      if (courseAssignmentIds.length === 0 && courseTestIds.length === 0) {
+        return emptyResult;
+      }
+
+      const courseScopeOr = await this.buildScopedTranslationOrConditions({
+        courseIds: [courseObjId],
+        assignmentIds: courseAssignmentIds,
+        assignedTestIds: courseTestIds,
+      });
+      if (courseScopeOr.length === 0) {
+        return emptyResult;
+      }
+      filter.$or = courseScopeOr;
+    } else if (actor.role === UserRole.TEACHER) {
+      const [ownedTests, teacherCourses] = await Promise.all([
+        this.examTestModel.find({ createdBy: actor._id }).exec(),
+        this.courseModel ? this.courseModel.find({ teacherId: actor._id }).exec() : Promise.resolve([]),
+      ]);
+      const ownedTestIds = ownedTests.map((t) => t._id as Types.ObjectId);
+      const teacherCourseIds = teacherCourses.map((c) => c._id as Types.ObjectId);
+
+      const teacherAssignments =
+        teacherCourseIds.length > 0 && this.assignmentModel
+          ? await this.assignmentModel.find({ courseId: { $in: teacherCourseIds } }).exec()
+          : [];
+      const teacherAssignmentIds = teacherAssignments.map((a) => a._id as Types.ObjectId);
+      const assignedTestIds = teacherAssignments
+        .flatMap((a) => [a.examTestId, a.exerciseId])
+        .filter((id): id is Types.ObjectId => Boolean(id));
+
+      const scopeOr = await this.buildScopedTranslationOrConditions({
+        courseIds: teacherCourseIds,
+        assignmentIds: teacherAssignmentIds,
+        assignedTestIds,
+        authoredTestIds: ownedTestIds,
+      });
+
+      if (scopeOr.length === 0) {
+        return emptyResult;
+      }
+      filter.$or = scopeOr;
+    }
+
+    const [docs, total] = await Promise.all([
+      this.translationModel
+        .find(filter)
+        .populate('studentId', 'fullName name email')
+        .populate('testId', 'title parts')
+        .sort({ submittedAt: -1, createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .exec(),
+      this.translationModel.countDocuments(filter).exec(),
+    ]);
+
+    const items = docs.map((d: any) => {
+      const test = d.testId as any;
+      const part = (test?.parts || []).find(
+        (p: any) =>
+          extractObjectId(p._id) === String(d.passageId) ||
+          String(p.ordinal) === String(d.passageId),
+      );
+      const partNumber =
+        part?.ordinal ??
+        (d.passageId && !isNaN(Number(d.passageId)) ? Number(d.passageId) : 1);
+      const passageTitle = part?.title || `Passage ${partNumber}`;
+      const passageHtml = part?.contentHtml || '';
+
+      const studentName = d.studentId?.fullName || d.studentId?.name || 'Học viên';
+
+      return {
+        id: extractObjectId(d._id),
+        translationId: extractObjectId(d._id),
+        studentId: d.studentId ? extractObjectId(d.studentId._id || d.studentId) : null,
+        studentName,
+        studentEmail: d.studentId?.email || null,
+        testId: d.testId ? extractObjectId(d.testId._id || d.testId) : null,
+        testTitle: d.testId?.title || null,
+        passageId: d.passageId || null,
+        partNumber,
+        passageTitle,
+        passageHtml,
+        paragraphs: [],
+        status: (d.status || '').toUpperCase(),
+        textVi: d.translatedText,
+        translatedText: d.translatedText,
+        submittedAt: d.submittedAt,
+        teacherFeedback: d.teacherComment,
+        teacherComment: d.teacherComment,
+        reviewedAt: d.reviewedAt,
+      };
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  }
+
+  async reviewTranslation(translationId: string, dto: ReviewReadingTranslationDto, teacher: UserDocument) {
+    if (teacher.role === UserRole.STUDENT) {
+      throw new ForbiddenException('Students cannot review translations');
+    }
+
+    if (!Types.ObjectId.isValid(translationId)) {
+      throw new NotFoundException('Translation submission not found');
+    }
+
+    const sub = await this.translationModel.findById(translationId).exec();
+    if (!sub) {
+      throw new NotFoundException('Translation submission not found');
+    }
+
+    await this.assertTeacherCanReview(sub, teacher);
+
+    if (
+      sub.status === TranslationSubmissionStatus.DRAFT ||
+      String(sub.status).toLowerCase() === TranslationSubmissionStatus.DRAFT
+    ) {
+      throw new BadRequestException('Cannot review a draft translation that has not been submitted');
+    }
+
+    const comment = dto.teacherComment || dto.feedback || '';
+    sub.teacherComment = comment;
+    sub.reviewedBy = teacher._id as Types.ObjectId;
+    sub.reviewedAt = new Date();
+
+    const isNeedsRevision =
+      dto.decision === 'NEEDS_REVISION' ||
+      dto.decision === 'needs_revision';
+
+    if (isNeedsRevision) {
+      sub.status = TranslationSubmissionStatus.DRAFT;
+    } else {
+      sub.status = TranslationSubmissionStatus.REVIEWED;
+    }
+
+    await sub.save();
+
+    return {
+      id: extractObjectId(sub._id),
+      translationId: extractObjectId(sub._id),
+      status: sub.status.toUpperCase(),
+      teacherComment: sub.teacherComment,
+      teacherFeedback: sub.teacherComment,
+      reviewedAt: sub.reviewedAt,
+      reviewedBy: extractObjectId(teacher._id),
+    };
+  }
+}
+

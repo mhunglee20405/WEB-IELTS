@@ -1,0 +1,6080 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "summary": "Login with email and password",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "summary": "Refresh access token",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "summary": "Logout and revoke refresh token",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "summary": "Get current authenticated user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/users": {
+      "post": {
+        "operationId": "UsersController_create",
+        "summary": "Create a new user (Admin only)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "UsersController_findAll",
+        "summary": "List all users (Admin only)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "student",
+                "teacher",
+                "admin"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "inactive",
+                "suspended"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/users/me": {
+      "get": {
+        "operationId": "UsersController_getMe",
+        "summary": "Get own profile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UsersController_updateMe",
+        "summary": "Update own profile (whitelisted fields)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "operationId": "UsersController_findOne",
+        "summary": "Get user by ID (Admin/Teacher)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UsersController_update",
+        "summary": "Update user (Admin only)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/users/{id}/status": {
+      "patch": {
+        "operationId": "UsersController_updateStatus",
+        "summary": "Update user status (Admin only)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/courses": {
+      "post": {
+        "operationId": "CoursesController_create",
+        "summary": "Create a new course (Admin only)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCourseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "CoursesController_findAll",
+        "summary": "List all courses (Admin: all; Teacher: assigned only)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "active",
+                "completed",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "one_to_one",
+                "group"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Search by code or title",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/courses/mine": {
+      "get": {
+        "operationId": "CoursesController_findMine",
+        "summary": "List my courses (enrolled for student, assigned for teacher)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "active",
+                "completed",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "one_to_one",
+                "group"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Search by code or title",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/courses/{id}": {
+      "get": {
+        "operationId": "CoursesController_findOne",
+        "summary": "Get course by ID (scoped by role)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "CoursesController_update",
+        "summary": "Update course (Admin: all fields; Teacher: limited fields)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCourseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "CoursesController_remove",
+        "summary": "Archive (or delete unused draft) course (Admin only)",
+        "description": "Rejects if active enrollments exist. Archives instead of hard-deleting when enrollment/assignment/lesson history exists.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/courses/{id}/students": {
+      "get": {
+        "operationId": "CoursesController_getStudents",
+        "summary": "List enrolled students in a course",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "active",
+                "dropped",
+                "completed"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "CoursesController_addStudent",
+        "summary": "Enroll a student into a course",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddStudentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/courses/{id}/students/{studentId}": {
+      "delete": {
+        "operationId": "CoursesController_removeStudent",
+        "summary": "Remove (drop) a student from a course",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Courses"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "NotificationsController_findMyNotifications",
+        "summary": "Get current user notifications (paginated, unread filter)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isRead",
+            "required": false,
+            "in": "query",
+            "description": "Filter by read status (true/false)",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by notification type",
+            "schema": {
+              "enum": [
+                "new_assignment",
+                "overdue",
+                "course_enrolled",
+                "extension_reviewed",
+                "other"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/notifications/mine": {
+      "get": {
+        "operationId": "NotificationsController_findMyNotificationsAlias",
+        "summary": "Get current user notifications (alias for /notifications)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "isRead",
+            "required": false,
+            "in": "query",
+            "description": "Filter by read status (true/false)",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by notification type",
+            "schema": {
+              "enum": [
+                "new_assignment",
+                "overdue",
+                "course_enrolled",
+                "extension_reviewed",
+                "other"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "operationId": "NotificationsController_getUnreadCount",
+        "summary": "Get unread notification count for current user",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/notifications/{id}/read": {
+      "patch": {
+        "operationId": "NotificationsController_markAsRead",
+        "summary": "Mark a single notification as read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/notifications/read-all": {
+      "patch": {
+        "operationId": "NotificationsController_markAllAsRead",
+        "summary": "Mark all unread notifications as read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/audit-logs": {
+      "get": {
+        "operationId": "AuditController_findAll",
+        "summary": "Query audit logs (Admin only)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "Filter by action name (e.g. EXTENSION_REQUEST_REVIEWED)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "description": "Filter by entity type (e.g. ExtensionRequest, PenaltyTransaction)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by actorId (User ObjectId)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by entityId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Audit"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/courses/{courseId}/lessons": {
+      "post": {
+        "operationId": "LessonsController_create",
+        "summary": "Create a lesson in a course (Admin or course Teacher)",
+        "parameters": [
+          {
+            "name": "courseId",
+            "required": true,
+            "in": "path",
+            "description": "Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLessonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lessons"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "LessonsController_findByCourse",
+        "summary": "List lessons for a course (Admin, course Teacher, or enrolled Student)",
+        "parameters": [
+          {
+            "name": "courseId",
+            "required": true,
+            "in": "path",
+            "description": "Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Filter startAt >= from (UTC ISO)",
+            "schema": {
+              "example": "2026-11-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Filter startAt <= to (UTC ISO)",
+            "schema": {
+              "example": "2026-11-30T23:59:59.999Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "scheduled",
+                "cancelled",
+                "completed"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lessons"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/lessons/mine": {
+      "get": {
+        "operationId": "LessonsController_findMine",
+        "summary": "List my calendar lessons (scoped by role, with Asia/Ho_Chi_Minh display times)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by course ID (ObjectId)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Filter startAt >= from (UTC ISO)",
+            "schema": {
+              "example": "2026-11-01T00:00:00.000Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Filter startAt <= to (UTC ISO)",
+            "schema": {
+              "example": "2026-11-30T23:59:59.999Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "scheduled",
+                "cancelled",
+                "completed"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lessons"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/lessons/{id}": {
+      "get": {
+        "operationId": "LessonsController_findOne",
+        "summary": "Get lesson by ID (scoped by role)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Lesson ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lessons"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "LessonsController_update",
+        "summary": "Update lesson details or Meet URL (Admin or course Teacher)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Lesson ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLessonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lessons"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "LessonsController_remove",
+        "summary": "Cancel a lesson via DELETE (soft-cancel, preserves history)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Lesson ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lessons"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/lessons/{id}/cancel": {
+      "patch": {
+        "operationId": "LessonsController_cancel",
+        "summary": "Cancel a lesson (soft-cancel, preserves history)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Lesson ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Lessons"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exercises": {
+      "post": {
+        "operationId": "ExercisesController_create",
+        "summary": "Create exercise in bank (Admin or Teacher)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExerciseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exercises"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "ExercisesController_findAll",
+        "summary": "List exercises with filtering & pagination (Admin/Teacher only)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "reading",
+                "listening"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "published",
+                "archived"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Search in title or passage",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exercises"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exercises/{id}": {
+      "get": {
+        "operationId": "ExercisesController_findOne",
+        "summary": "Get exercise details (Teacher/Admin gets answer key; Student gets sanitized DTO only if assigned)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Exercise ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exercises"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "ExercisesController_update",
+        "summary": "Update exercise (bumps version if already published)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Exercise ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExerciseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exercises"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "ExercisesController_archiveDelete",
+        "summary": "Archive exercise via DELETE",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Exercise ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exercises"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exercises/{id}/publish": {
+      "post": {
+        "operationId": "ExercisesController_publish",
+        "summary": "Publish exercise to make it assignable",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Exercise ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exercises"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exercises/{id}/archive": {
+      "post": {
+        "operationId": "ExercisesController_archivePost",
+        "summary": "Archive exercise",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Exercise ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exercises"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments": {
+      "post": {
+        "operationId": "AssignmentsController_create",
+        "summary": "Create assignment for a course (Admin or course Teacher)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "AssignmentsController_findAll",
+        "summary": "List assignments (Admin or assigned Teacher only)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "scheduled",
+                "published",
+                "available",
+                "expired",
+                "closed",
+                "archived",
+                "completed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Filter openAt >= from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Filter deadlineAt <= to",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/validate": {
+      "post": {
+        "operationId": "AssignmentsController_validate",
+        "summary": "Validate assignment configuration before scheduling",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/preview": {
+      "post": {
+        "operationId": "AssignmentsController_preview",
+        "summary": "Preview assignment structure, questions, and enrolled students",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/preview": {
+      "get": {
+        "operationId": "AssignmentsController_previewById",
+        "summary": "Preview existing assignment structure (Teacher/Admin)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/mine": {
+      "get": {
+        "operationId": "AssignmentsController_findMine",
+        "summary": "Get assigned tasks and progress for authenticated student",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "scheduled",
+                "published",
+                "available",
+                "expired",
+                "closed",
+                "archived",
+                "completed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Filter openAt >= from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Filter deadlineAt <= to",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}": {
+      "get": {
+        "operationId": "AssignmentsController_findOne",
+        "summary": "Get assignment details (Student receives strictly sanitized snapshot without answer keys)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "AssignmentsController_update",
+        "summary": "Update permitted assignment metadata and dates",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/students": {
+      "get": {
+        "operationId": "AssignmentsController_getStudents",
+        "summary": "Get student roster and progress for an assignment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/backfill-students": {
+      "post": {
+        "operationId": "AssignmentsController_backfillStudents",
+        "summary": "Backfill student_assignments for newly enrolled students after assignment was published",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Assignments"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/submissions": {
+      "post": {
+        "operationId": "SubmissionsController_submit",
+        "summary": "Submit answers for an assignment (Server-side auto-graded, unlocks answers only if PASS >= 70%)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubmissionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "SubmissionsController_findAllForAssignment",
+        "summary": "List submissions for an assignment (Admin or course Teacher)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "studentAssignmentId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by StudentAssignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/submissions/mine": {
+      "get": {
+        "operationId": "SubmissionsController_findMine",
+        "summary": "Get submission attempts and feedback for authenticated student",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/answers": {
+      "get": {
+        "operationId": "SubmissionsController_getAnswerKeys",
+        "summary": "Dedicated authorized endpoint to retrieve full answer keys and explanations (Student must have PASS status)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/submissions/{id}": {
+      "get": {
+        "operationId": "SubmissionsController_getSubmissionById",
+        "summary": "Get individual submission details",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Submission ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Submissions"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/translations": {
+      "post": {
+        "operationId": "TranslationsController_submit",
+        "summary": "Submit Vietnamese translation for a Reading passage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitTranslationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Translations"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "TranslationsController_findAllForAssignment",
+        "summary": "List student translation submissions for an assignment (Admin or course Teacher)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "submitted",
+                "reviewed"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Translations"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/assignments/{id}/translations/mine": {
+      "get": {
+        "operationId": "TranslationsController_findMine",
+        "summary": "Get authenticated student translation submission and original English passage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Assignment ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Translations"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/translations/{id}/review": {
+      "patch": {
+        "operationId": "TranslationsController_review",
+        "summary": "Review and leave comments on a student translation submission",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "TranslationSubmission ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewTranslationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Translations"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/deadlines/process-overdue": {
+      "post": {
+        "operationId": "DeadlinesController_processOverdue",
+        "summary": "Controlled execution of overdue deadline processor and penalty generation (Idempotent)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessOverdueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Deadlines"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/deadlines/overdue": {
+      "get": {
+        "operationId": "DeadlinesController_getOverdueAssignments",
+        "summary": "List overdue student assignments by course or system-wide",
+        "parameters": [
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Deadlines"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/extension-requests": {
+      "post": {
+        "operationId": "ExtensionsController_create",
+        "summary": "Submit deadline extension request (Max 3 per calendar month in Asia/Ho_Chi_Minh)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExtensionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extension Requests"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "ExtensionsController_findAll",
+        "summary": "List extension requests with filters (Admin or course Teacher)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Student User ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extension Requests"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/extension-requests/quota": {
+      "get": {
+        "operationId": "ExtensionsController_getQuota",
+        "summary": "Check remaining monthly extension request quota for authenticated student",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extension Requests"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/extension-requests/mine": {
+      "get": {
+        "operationId": "ExtensionsController_findMine",
+        "summary": "List own extension requests and review decisions",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Student User ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extension Requests"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/extension-requests/{id}/cancel": {
+      "post": {
+        "operationId": "ExtensionsController_cancel",
+        "summary": "Cancel a pending extension request",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExtensionRequest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extension Requests"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/extension-requests/{id}": {
+      "get": {
+        "operationId": "ExtensionsController_findOne",
+        "summary": "Get extension request details",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExtensionRequest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extension Requests"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/extension-requests/{id}/review": {
+      "patch": {
+        "operationId": "ExtensionsController_review",
+        "summary": "Approve or reject extension request (Approval atomically extends effective deadline)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExtensionRequest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewExtensionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Extension Requests"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/penalties/mine": {
+      "get": {
+        "operationId": "PenaltiesController_getMine",
+        "summary": "View own penalty points and transaction ledger (Student)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Student User ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Penalties"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/penalties": {
+      "get": {
+        "operationId": "PenaltiesController_findAll",
+        "summary": "List penalty transactions for students in authorized courses (Admin/Teacher)",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Student User ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Penalties"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/penalties/{id}/reverse": {
+      "post": {
+        "operationId": "PenaltiesController_reverse",
+        "summary": "Reverse an incorrectly issued penalty with an auditable compensating transaction (-1 pt)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Original PenaltyTransaction ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReversePenaltyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Penalties"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/jobs/deadlines/trigger": {
+      "post": {
+        "operationId": "JobsController_triggerOverdueCheck",
+        "summary": "Trigger an immediate background overdue processing job",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/jobs/health": {
+      "get": {
+        "operationId": "JobsController_getQueueMetrics",
+        "summary": "Get BullMQ queues health and metrics (Admin only)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Jobs"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "summary": "Liveness probe (verifies process event-loop responsiveness, independent of transient heap)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "summary": "Readiness probe (verifies critical external dependencies: MongoDB & Redis readiness)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/memory": {
+      "get": {
+        "operationId": "HealthController_memory",
+        "summary": "Heap and memory health monitoring (isolated from liveness to prevent cascading pod termination)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/exam-tests": {
+      "get": {
+        "operationId": "ExamTestsController_findAll",
+        "summary": "List published exam tests for practice (Student safe)",
+        "parameters": [
+          {
+            "name": "skill",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "READING",
+                "LISTENING"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "DRAFT",
+                "PUBLISHED",
+                "ARCHIVED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Tests (Student & Public)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-tests/{testId}": {
+      "get": {
+        "operationId": "ExamTestsController_findOne",
+        "summary": "Get published exam test metadata and parts (Student safe)",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Tests (Student & Public)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-tests/{testId}/parts/{partId}": {
+      "get": {
+        "operationId": "ExamTestsController_findPart",
+        "summary": "Get part questions (Student safe - answers stripped)",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Tests (Student & Public)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests": {
+      "get": {
+        "operationId": "TeacherExamTestsController_findAll",
+        "summary": "List tests managed by teacher/admin",
+        "parameters": [
+          {
+            "name": "skill",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "READING",
+                "LISTENING"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "DRAFT",
+                "PUBLISHED",
+                "ARCHIVED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "TeacherExamTestsController_create",
+        "summary": "Create new exam test in DRAFT status",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExamTestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}": {
+      "get": {
+        "operationId": "TeacherExamTestsController_findOne",
+        "summary": "Get full exam test details including answer keys for authoring",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "TeacherExamTestsController_update",
+        "summary": "Update exam test metadata (DRAFT only)",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExamTestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/parts": {
+      "post": {
+        "operationId": "TeacherExamTestsController_addPart",
+        "summary": "Add a Reading Passage or Listening Section to DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExamPartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/parts/{partId}": {
+      "patch": {
+        "operationId": "TeacherExamTestsController_updatePart",
+        "summary": "Update passage/section in DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExamPartDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "TeacherExamTestsController_deletePart",
+        "summary": "Delete passage/section from DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/parts/{partId}/question-groups": {
+      "post": {
+        "operationId": "TeacherExamTestsController_addQuestionGroup",
+        "summary": "Add a question group with questions to a part in DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": true,
+            "in": "path",
+            "description": "ExamPart ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuestionGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/question-groups/{groupId}": {
+      "patch": {
+        "operationId": "TeacherExamTestsController_updateQuestionGroup",
+        "summary": "Update question group and questions in DRAFT test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "required": true,
+            "in": "path",
+            "description": "QuestionGroup ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateQuestionGroupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/validate": {
+      "post": {
+        "operationId": "TeacherExamTestsController_validateTest",
+        "summary": "Validate completeness and question numbers before publishing",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/preview": {
+      "get": {
+        "operationId": "TeacherExamTestsController_preview",
+        "summary": "Preview test exactly as students will see it",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mode",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "PART",
+                "FULL"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "partId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/publish": {
+      "post": {
+        "operationId": "TeacherExamTestsController_publish",
+        "summary": "Publish exam test and make its current version immutable",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/exam-tests/{testId}/new-version": {
+      "post": {
+        "operationId": "TeacherExamTestsController_newVersion",
+        "summary": "Fork a published test into a new editable DRAFT version",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "path",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Exam Tests (Question Bank)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts": {
+      "post": {
+        "operationId": "ExamAttemptsController_createAttempt",
+        "summary": "Start a new exam attempt (PART or FULL mode)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExamAttemptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}": {
+      "get": {
+        "operationId": "ExamAttemptsController_getAttempt",
+        "summary": "Get current attempt state, timer, and saved answers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/answers": {
+      "put": {
+        "operationId": "ExamAttemptsController_saveAnswers",
+        "summary": "Autosave answers with optimistic revision concurrency",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAnswersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/submit": {
+      "post": {
+        "operationId": "ExamAttemptsController_submitAttempt",
+        "summary": "Submit attempt for server-side auto-grading",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitAttemptDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/result": {
+      "get": {
+        "operationId": "ExamAttemptsController_getResult",
+        "summary": "Get graded attempt result breakdown",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/exam-attempts/{id}/review": {
+      "get": {
+        "operationId": "ExamAttemptsController_getReview",
+        "summary": "Review answers and explanations (Unlocked ONLY when PASSED >= 70%)",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ExamAttempt ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam Attempts (Session Engine)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/eligibility": {
+      "get": {
+        "operationId": "ReadingTranslationsController_getEligibility",
+        "summary": "Check per-passage translation unlock status for a Reading test",
+        "parameters": [
+          {
+            "name": "testId",
+            "required": true,
+            "in": "query",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentAssignmentId",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/{passageId}": {
+      "get": {
+        "operationId": "ReadingTranslationsController_getPassageTranslation",
+        "summary": "Get Reading passage text and existing draft/review status",
+        "parameters": [
+          {
+            "name": "passageId",
+            "required": true,
+            "in": "path",
+            "description": "Passage (ExamPart) ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "testId",
+            "required": true,
+            "in": "query",
+            "description": "ExamTest ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentAssignmentId",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/{passageId}/draft": {
+      "put": {
+        "operationId": "ReadingTranslationsController_saveDraft",
+        "summary": "Save Vietnamese translation draft (Requires passed attempt for this passage)",
+        "parameters": [
+          {
+            "name": "passageId",
+            "required": true,
+            "in": "path",
+            "description": "Passage (ExamPart) ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTranslationDraftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/reading-translations/{passageId}/submit": {
+      "post": {
+        "operationId": "ReadingTranslationsController_submitTranslation",
+        "summary": "Submit Vietnamese translation for teacher review",
+        "parameters": [
+          {
+            "name": "passageId",
+            "required": true,
+            "in": "path",
+            "description": "Passage (ExamPart) ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitReadingTranslationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reading Translations (Student)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/reading-translations": {
+      "get": {
+        "operationId": "TeacherReadingTranslationsController_findAllForTeacher",
+        "summary": "List submitted translations needing teacher review",
+        "parameters": [
+          {
+            "name": "courseId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by Course ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "draft",
+                "submitted",
+                "reviewed"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Reading Translations (Review)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/teacher/reading-translations/{translationId}/review": {
+      "post": {
+        "operationId": "TeacherReadingTranslationsController_review",
+        "summary": "Provide teacher feedback and mark translation as REVIEWED",
+        "parameters": [
+          {
+            "name": "translationId",
+            "required": true,
+            "in": "path",
+            "description": "TranslationSubmission ObjectId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewReadingTranslationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Teacher Reading Translations (Review)"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/media/audio/{assetId}/playback": {
+      "get": {
+        "operationId": "MediaController_getPlayback",
+        "summary": "Get signed playback stream URL for listening section audio",
+        "parameters": [
+          {
+            "name": "assetId",
+            "required": true,
+            "in": "path",
+            "description": "Audio Asset ObjectId / key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Media & Audio Storage"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/media/audio/upload-intent": {
+      "post": {
+        "operationId": "MediaController_createUploadIntent",
+        "summary": "Obtain signed upload URL for teacher audio file (Max 50MB)",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudioUploadIntentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Media & Audio Storage"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "IELTS LMS API",
+    "description": "IELTS Learning Management System — Backend REST API Specification",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "student@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "password123"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "example": "Nguyen Van A"
+          },
+          "email": {
+            "type": "string",
+            "example": "student@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "SecurePass@123",
+            "minLength": 8
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "student",
+              "teacher",
+              "admin"
+            ]
+          },
+          "phone": {
+            "type": "string",
+            "example": "+84901234567"
+          }
+        },
+        "required": [
+          "fullName",
+          "email",
+          "password",
+          "role"
+        ]
+      },
+      "UpdateUserDto": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateUserStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "suspended"
+            ]
+          }
+        }
+      },
+      "CreateCourseDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "IELTS-B1-2026-01"
+          },
+          "title": {
+            "type": "string",
+            "example": "IELTS Foundation — Band 5→6"
+          },
+          "description": {
+            "type": "string"
+          },
+          "startBand": {
+            "type": "number",
+            "example": 5,
+            "description": "Starting IELTS band (0–9, 0.5 step)"
+          },
+          "targetBand": {
+            "type": "number",
+            "example": 6.5,
+            "description": "Target IELTS band (0–9, 0.5 step)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "one_to_one",
+              "group"
+            ]
+          },
+          "teacherId": {
+            "type": "string",
+            "description": "Teacher user ID (ObjectId)"
+          },
+          "startAt": {
+            "type": "string",
+            "example": "2026-01-15T00:00:00.000Z"
+          },
+          "endAt": {
+            "type": "string",
+            "example": "2026-06-30T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "code",
+          "title",
+          "startBand",
+          "targetBand",
+          "type",
+          "teacherId"
+        ]
+      },
+      "UpdateCourseDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "startBand": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "targetBand": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 9
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "one_to_one",
+              "group"
+            ]
+          },
+          "teacherId": {
+            "type": "string"
+          },
+          "startAt": {
+            "type": "string"
+          },
+          "endAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "completed",
+              "archived"
+            ]
+          }
+        }
+      },
+      "AddStudentDto": {
+        "type": "object",
+        "properties": {
+          "studentId": {
+            "type": "string",
+            "description": "Student user ID (ObjectId)"
+          }
+        },
+        "required": [
+          "studentId"
+        ]
+      },
+      "CreateLessonDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Reading Passage 1 — Skimming & Scanning"
+          },
+          "startAt": {
+            "type": "string",
+            "example": "2026-11-15T12:00:00.000Z",
+            "description": "UTC ISO timestamp"
+          },
+          "endAt": {
+            "type": "string",
+            "example": "2026-11-15T13:30:00.000Z",
+            "description": "UTC ISO timestamp"
+          },
+          "meetUrl": {
+            "type": "string",
+            "example": "https://meet.google.com/abc-defg-hij",
+            "description": "Google Meet or HTTPS video meeting URL"
+          },
+          "content": {
+            "type": "string",
+            "example": "Bring Cambridge IELTS 18 Reading Test 1."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "cancelled",
+              "completed"
+            ],
+            "default": "scheduled"
+          }
+        },
+        "required": [
+          "title",
+          "startAt",
+          "endAt"
+        ]
+      },
+      "UpdateLessonDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Reading Passage 1 — Updated"
+          },
+          "startAt": {
+            "type": "string",
+            "example": "2026-11-15T12:00:00.000Z"
+          },
+          "endAt": {
+            "type": "string",
+            "example": "2026-11-15T13:30:00.000Z"
+          },
+          "meetUrl": {
+            "type": "string",
+            "example": "https://meet.google.com/abc-defg-hij"
+          },
+          "content": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "cancelled",
+              "completed"
+            ]
+          }
+        }
+      },
+      "AudioAssetDto": {
+        "type": "object",
+        "properties": {
+          "objectKey": {
+            "type": "string",
+            "example": "audio/listening-test-1-part-1.mp3"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://cdn.example.com/audio/listening-test-1-part-1.mp3"
+          },
+          "durationSeconds": {
+            "type": "number",
+            "example": 360
+          }
+        },
+        "required": [
+          "objectKey"
+        ]
+      },
+      "AnswerOptionDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "A"
+          },
+          "text": {
+            "type": "string",
+            "example": "True / First option"
+          }
+        },
+        "required": [
+          "key",
+          "text"
+        ]
+      },
+      "AnswerSpecificationDto": {
+        "type": "object",
+        "properties": {
+          "correctKey": {
+            "type": "string",
+            "example": "A",
+            "description": "For multiple_choice, true_false_not_given, yes_no_not_given, matching"
+          },
+          "acceptedAnswers": {
+            "example": [
+              "greenhouse gases",
+              "greenhouse gas"
+            ],
+            "description": "For fill_blank, short_answer",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether short_answer matching is case-sensitive"
+          }
+        }
+      },
+      "QuestionDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "description": "Stable unique ID (auto-generated if omitted)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "multiple_choice",
+              "true_false_not_given",
+              "yes_no_not_given",
+              "matching",
+              "matching_headings",
+              "matching_information",
+              "sentence_completion",
+              "summary_completion",
+              "fill_blank",
+              "short_answer"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "example": "What is the main cause of global warming?"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnswerOptionDto"
+            }
+          },
+          "answerSpecification": {
+            "$ref": "#/components/schemas/AnswerSpecificationDto"
+          },
+          "points": {
+            "type": "number",
+            "example": 1,
+            "minimum": 0
+          },
+          "explanation": {
+            "type": "string",
+            "example": "Refer to paragraph 3 for explanation."
+          }
+        },
+        "required": [
+          "type",
+          "prompt",
+          "answerSpecification",
+          "points"
+        ]
+      },
+      "CreateExerciseDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Academic Reading — The History of Glass"
+          },
+          "description": {
+            "type": "string",
+            "example": "Practice test for Band 6.5+ students"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "listening"
+            ]
+          },
+          "passage": {
+            "type": "string",
+            "description": "Reading passage text or formatted blocks"
+          },
+          "audioAssets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioAssetDto"
+            }
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionDto"
+            }
+          },
+          "passScore": {
+            "type": "number",
+            "default": 70,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "archived"
+            ],
+            "default": "draft"
+          }
+        },
+        "required": [
+          "title",
+          "type",
+          "questions"
+        ]
+      },
+      "UpdateExerciseDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "listening"
+            ]
+          },
+          "passage": {
+            "type": "string"
+          },
+          "audioAssets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AudioAssetDto"
+            }
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionDto"
+            }
+          },
+          "passScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "archived"
+            ]
+          }
+        }
+      },
+      "ExamOptionDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "A"
+          },
+          "text": {
+            "type": "string",
+            "example": "Option A description"
+          }
+        },
+        "required": [
+          "key",
+          "text"
+        ]
+      },
+      "ExamGradingDto": {
+        "type": "object",
+        "properties": {
+          "acceptedKeys": {
+            "example": [
+              "A",
+              "TRUE"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "default": false
+          },
+          "maxWords": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "acceptedKeys"
+        ]
+      },
+      "ExamQuestionDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "number",
+            "example": 1
+          },
+          "prompt": {
+            "type": "string",
+            "example": "The study concluded that..."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ],
+            "example": "MULTIPLE_CHOICE_SINGLE"
+          },
+          "points": {
+            "type": "number",
+            "example": 1
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "grading": {
+            "$ref": "#/components/schemas/ExamGradingDto"
+          }
+        },
+        "required": [
+          "number",
+          "prompt",
+          "type",
+          "points"
+        ]
+      },
+      "CreateQuestionGroupDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Questions 1–5"
+          },
+          "instruction": {
+            "type": "string",
+            "example": "Choose TRUE, FALSE or NOT GIVEN"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ],
+            "example": "TRUE_FALSE_NOT_GIVEN"
+          },
+          "order": {
+            "type": "number",
+            "example": 1
+          },
+          "sharedOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "maxWords": {
+            "type": "number",
+            "example": 3
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamQuestionDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "order",
+          "questions"
+        ]
+      },
+      "CreateAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "courseId": {
+            "type": "string",
+            "description": "Target Course ObjectId"
+          },
+          "exerciseId": {
+            "type": "string",
+            "description": "Published Exercise or ExamTest ObjectId"
+          },
+          "title": {
+            "type": "string",
+            "example": "Reading Day 1: Glass History"
+          },
+          "targetDate": {
+            "type": "string",
+            "example": "2026-11-20",
+            "description": "Target VN date (YYYY-MM-DD). If provided, openAt=06:00:00 and deadlineAt=06:00:00 following day in local VN time"
+          },
+          "assignedDate": {
+            "type": "string",
+            "example": "2026-11-20",
+            "description": "Assigned local VN date (YYYY-MM-DD). Computes availableAt 06:00 to dueAt 06:00 following day"
+          },
+          "openAt": {
+            "type": "string",
+            "example": "2026-11-20T06:00:00.000Z",
+            "description": "Explicit UTC open timestamp"
+          },
+          "deadlineAt": {
+            "type": "string",
+            "example": "2026-11-21T06:00:00.000Z",
+            "description": "Explicit UTC deadline timestamp"
+          },
+          "allowRetake": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow retaking exercise"
+          },
+          "maxAttempts": {
+            "type": "number",
+            "example": 3,
+            "minimum": 1,
+            "description": "Maximum allowed attempts if allowRetake is true"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "scheduled",
+              "published",
+              "available",
+              "expired",
+              "closed",
+              "archived",
+              "completed"
+            ],
+            "default": "published"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "schedule",
+              "publish"
+            ],
+            "description": "Teacher action intent"
+          },
+          "requiredScope": {
+            "type": "string",
+            "enum": [
+              "PART",
+              "FULL"
+            ],
+            "default": "FULL"
+          },
+          "requiredPartId": {
+            "type": "string",
+            "description": "ExamPart ObjectId if assigning a specific PART"
+          },
+          "allowedModes": {
+            "example": [
+              "PART",
+              "FULL"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "durationSecondsOverride": {
+            "type": "number",
+            "example": 1200,
+            "description": "Duration in seconds override"
+          },
+          "selectedQuestionGroupIds": {
+            "description": "Optional list of specific QuestionGroup IDs to include",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "targetScorePercent": {
+            "type": "number",
+            "example": 70,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Teacher-configured target score percent for assignment"
+          },
+          "customQuestionGroups": {
+            "description": "Optional custom IELTS question groups authored directly for this assignment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateQuestionGroupDto"
+            }
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Client idempotency key for preventing duplicate assignment creation"
+          }
+        },
+        "required": [
+          "courseId",
+          "exerciseId"
+        ]
+      },
+      "UpdateAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "assignedDate": {
+            "type": "string",
+            "example": "2026-11-20"
+          },
+          "openAt": {
+            "type": "string",
+            "example": "2026-11-20T06:00:00.000Z"
+          },
+          "deadlineAt": {
+            "type": "string",
+            "example": "2026-11-21T06:00:00.000Z"
+          },
+          "allowRetake": {
+            "type": "boolean"
+          },
+          "maxAttempts": {
+            "type": "number",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "scheduled",
+              "published",
+              "available",
+              "expired",
+              "closed",
+              "archived",
+              "completed"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "schedule",
+              "publish"
+            ]
+          },
+          "requiredScope": {
+            "type": "string",
+            "enum": [
+              "PART",
+              "FULL"
+            ]
+          },
+          "requiredPartId": {
+            "type": "string"
+          },
+          "durationSecondsOverride": {
+            "type": "number"
+          },
+          "selectedQuestionGroupIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "targetScorePercent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        }
+      },
+      "SubmissionAnswerDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "example": "q-mcq-1",
+            "description": "Question ID"
+          },
+          "value": {
+            "type": "string",
+            "example": "B",
+            "description": "Student answer (e.g. option key A/B/C/D, text, or T/F/NG)"
+          }
+        },
+        "required": [
+          "questionId",
+          "value"
+        ]
+      },
+      "CreateSubmissionDto": {
+        "type": "object",
+        "properties": {
+          "answers": {
+            "description": "List of student answers",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAnswerDto"
+            }
+          }
+        },
+        "required": [
+          "answers"
+        ]
+      },
+      "SubmitTranslationDto": {
+        "type": "object",
+        "properties": {
+          "translatedText": {
+            "type": "string",
+            "example": "Kính được sản xuất lần đầu tiên tại Lưỡng Hà cổ đại vào khoảng 3500 TCN...",
+            "description": "Vietnamese translation text of the Reading passage"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "submitted"
+            ],
+            "default": "submitted"
+          }
+        },
+        "required": [
+          "translatedText"
+        ]
+      },
+      "ReviewTranslationDto": {
+        "type": "object",
+        "properties": {
+          "teacherComment": {
+            "type": "string",
+            "example": "Dịch rất lưu loát và sát nghĩa, đặc biệt là đoạn giải thích kỹ thuật nấu cát.",
+            "description": "Teacher feedback and comments on the student translation"
+          }
+        },
+        "required": [
+          "teacherComment"
+        ]
+      },
+      "ProcessOverdueDto": {
+        "type": "object",
+        "properties": {
+          "courseId": {
+            "type": "string",
+            "description": "Filter by Course ObjectId"
+          },
+          "limit": {
+            "type": "number",
+            "default": 100,
+            "minimum": 1,
+            "maximum": 500
+          }
+        }
+      },
+      "CreateExtensionRequestDto": {
+        "type": "object",
+        "properties": {
+          "studentAssignmentId": {
+            "type": "string",
+            "description": "StudentAssignment ObjectId"
+          },
+          "requestedDeadlineAt": {
+            "type": "string",
+            "example": "2026-12-05T23:59:59.999Z",
+            "description": "Requested new deadline (must be later than current effective deadline)"
+          },
+          "reason": {
+            "type": "string",
+            "example": "Bị ốm đột xuất phải đi khám tại bệnh viện, xin phép lùi hạn nộp 2 ngày.",
+            "description": "Reason for requesting extension"
+          }
+        },
+        "required": [
+          "studentAssignmentId",
+          "requestedDeadlineAt",
+          "reason"
+        ]
+      },
+      "ReviewExtensionRequestDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "rejected"
+            ],
+            "description": "Decision status"
+          },
+          "reviewNote": {
+            "type": "string",
+            "example": "Đồng ý gia hạn thêm 2 ngày, chú ý hoàn thành đúng hạn mới.",
+            "description": "Teacher/Admin comment on the review decision"
+          },
+          "approvedDeadlineAt": {
+            "type": "string",
+            "example": "2026-12-05T23:59:59.999Z",
+            "description": "Optional custom approved deadline override. Defaults to student requested deadline."
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "ReversePenaltyDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "Học viên có giấy xác nhận nhập viện được duyệt muộn, hủy trừ điểm phạt.",
+            "description": "Mandatory audit reason for reversing the penalty point"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "CreateExamTestDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "IELTS Reading Practice Test 01"
+          },
+          "skill": {
+            "type": "string",
+            "enum": [
+              "READING",
+              "LISTENING"
+            ],
+            "example": "READING"
+          },
+          "description": {
+            "type": "string",
+            "example": "Luyện tập Reading 3 passages"
+          },
+          "examPreset": {
+            "type": "string",
+            "enum": [
+              "IELTS_ACADEMIC",
+              "CUSTOM"
+            ],
+            "default": "IELTS_ACADEMIC"
+          },
+          "allowedModes": {
+            "type": "array",
+            "default": [
+              "PART",
+              "FULL"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "PART",
+                "FULL"
+              ]
+            }
+          },
+          "passScore": {
+            "type": "number",
+            "default": 70,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "fullDurationSeconds": {
+            "type": "number",
+            "example": 3600,
+            "description": "Duration in seconds for full test"
+          },
+          "translationEnabled": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "title",
+          "skill"
+        ]
+      },
+      "UpdateExamTestDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Updated title"
+          },
+          "description": {
+            "type": "string"
+          },
+          "examPreset": {
+            "type": "string",
+            "enum": [
+              "IELTS_ACADEMIC",
+              "CUSTOM"
+            ]
+          },
+          "allowedModes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "PART",
+                "FULL"
+              ]
+            }
+          },
+          "passScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "fullDurationSeconds": {
+            "type": "number"
+          },
+          "translationEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateExamPartDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "PASSAGE",
+              "SECTION"
+            ],
+            "example": "PASSAGE"
+          },
+          "ordinal": {
+            "type": "number",
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "example": "Passage 1 — The History of Glass"
+          },
+          "contentHtml": {
+            "type": "string",
+            "example": "<p>Glass was first produced in...</p>"
+          },
+          "audioAssetId": {
+            "type": "string",
+            "description": "Asset ObjectId for audio"
+          },
+          "durationSeconds": {
+            "type": "number",
+            "example": 1200
+          }
+        },
+        "required": [
+          "type",
+          "ordinal",
+          "title"
+        ]
+      },
+      "UpdateExamPartDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "number"
+          },
+          "contentHtml": {
+            "type": "string"
+          },
+          "audioAssetId": {
+            "type": "string"
+          },
+          "durationSeconds": {
+            "type": "number"
+          }
+        }
+      },
+      "UpdateQuestionGroupDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "instruction": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "MULTIPLE_CHOICE_SINGLE",
+              "MULTIPLE_CHOICE_MULTIPLE",
+              "TRUE_FALSE_NOT_GIVEN",
+              "YES_NO_NOT_GIVEN",
+              "MATCHING_HEADINGS",
+              "MATCHING_INFORMATION",
+              "MATCHING_FEATURES",
+              "MATCHING_SENTENCE_ENDINGS",
+              "SENTENCE_COMPLETION",
+              "SUMMARY_COMPLETION",
+              "NOTE_COMPLETION",
+              "TABLE_COMPLETION",
+              "FLOW_CHART_COMPLETION",
+              "DIAGRAM_LABEL_COMPLETION",
+              "SHORT_ANSWER"
+            ]
+          },
+          "order": {
+            "type": "number"
+          },
+          "sharedOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamOptionDto"
+            }
+          },
+          "maxWords": {
+            "type": "number"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExamQuestionDto"
+            }
+          }
+        }
+      },
+      "CreateExamAttemptDto": {
+        "type": "object",
+        "properties": {
+          "testId": {
+            "type": "string",
+            "description": "ExamTest ObjectId"
+          },
+          "assignmentId": {
+            "type": "string",
+            "description": "Assignment ObjectId if attempt is linked to homework"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "PART",
+              "FULL"
+            ],
+            "example": "PART"
+          },
+          "partId": {
+            "type": "object",
+            "description": "ExamPart ObjectId (required when mode is PART, must be omitted or null when FULL)",
+            "example": "65f01234567890abcdef1234"
+          },
+          "studentAssignmentId": {
+            "type": "object",
+            "description": "Optional StudentAssignment ObjectId if attempt is linked to homework"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Client idempotency UUID to prevent duplicate attempt creation",
+            "example": "start-unique-client-uuid-1234"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "AnswerItemDto": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "example": "1"
+          },
+          "value": {
+            "type": "object",
+            "example": "TRUE",
+            "description": "Answer value: string for single/TFNG/completion, or array of strings for multiple choice"
+          }
+        },
+        "required": [
+          "questionId",
+          "value"
+        ]
+      },
+      "SaveAnswersDto": {
+        "type": "object",
+        "properties": {
+          "baseRevision": {
+            "type": "number",
+            "example": 0,
+            "description": "Current revision known by client (for optimistic concurrency check)"
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnswerItemDto"
+            }
+          }
+        },
+        "required": [
+          "baseRevision",
+          "answers"
+        ]
+      },
+      "SubmitAttemptDto": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "example": "submit-unique-client-uuid-1234",
+            "description": "Client idempotency UUID for submit call"
+          },
+          "expectedRevision": {
+            "type": "number",
+            "example": 4
+          }
+        }
+      },
+      "SaveTranslationDraftDto": {
+        "type": "object",
+        "properties": {
+          "testId": {
+            "type": "string",
+            "description": "ExamTest ObjectId"
+          },
+          "studentAssignmentId": {
+            "type": "string",
+            "description": "Optional StudentAssignment ObjectId"
+          },
+          "exerciseVersion": {
+            "type": "number",
+            "example": 1
+          },
+          "textVi": {
+            "type": "string",
+            "example": "Bản dịch tiếng Việt của bài đọc..."
+          },
+          "revision": {
+            "type": "number",
+            "example": 1
+          }
+        },
+        "required": [
+          "testId",
+          "textVi"
+        ]
+      },
+      "SubmitReadingTranslationDto": {
+        "type": "object",
+        "properties": {
+          "testId": {
+            "type": "string",
+            "description": "ExamTest ObjectId"
+          },
+          "studentAssignmentId": {
+            "type": "string",
+            "description": "Optional StudentAssignment ObjectId"
+          },
+          "exerciseVersion": {
+            "type": "number",
+            "example": 1
+          },
+          "textVi": {
+            "type": "string",
+            "example": "Bản dịch tiếng Việt hoàn chỉnh..."
+          }
+        },
+        "required": [
+          "testId"
+        ]
+      },
+      "ReviewReadingTranslationDto": {
+        "type": "object",
+        "properties": {
+          "teacherComment": {
+            "type": "string",
+            "example": "Bản dịch rất tốt, văn phong tự nhiên và chính xác thuật ngữ."
+          }
+        },
+        "required": [
+          "teacherComment"
+        ]
+      },
+      "AudioUploadIntentDto": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "example": "section1_recording.mp3"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "audio/mpeg"
+          },
+          "fileSize": {
+            "type": "number",
+            "example": 10485760,
+            "description": "File size in bytes (max 50MB)"
+          }
+        },
+        "required": [
+          "filename",
+          "mimeType",
+          "fileSize"
+        ]
+      }
+    }
+  }
+}

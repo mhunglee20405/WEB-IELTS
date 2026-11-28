@@ -1,0 +1,68 @@
+# IELTS Academic LMS — Frontend
+
+Next.js (App Router) + React + TypeScript frontend client integrating with the NestJS `/api/v1` contract across Student, Teacher, and Admin portals (33 routes).
+
+> **Scope & Mock Notice:** This repository implements **frontend only** (no backend database, Redis, or BullMQ workers). Setting `NEXT_PUBLIC_API_MODE=mock` enables an explicit dev-only in-memory mock adapter ([src/lib/api/mocks](src/lib/api/mocks/router.ts)) so all routes can be exercised interactively without a running backend; default mode is `live`.
+
+---
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router) · React 19 · TypeScript (`strict: true`)
+- **Styling & UI:** Tailwind CSS v4 · Lucide icons · accessible native HTML primitives (`<dialog>.showModal()`, `<progress>`, `<search>`)
+- **State & Validation:** `@tanstack/react-query` · `react-hook-form` · `zod`
+- **Security & Utilities:** Native Sanitizer API (`Element.prototype.setHTML`) with `dompurify` fallback · `temporal-polyfill` + `Intl` locked to `Asia/Ho_Chi_Minh`
+- **Testing:** Vitest + React Testing Library · Playwright + `@axe-core/playwright`
+
+---
+
+## Environment Configuration
+
+Copy `.env.example` to `.env.local` and adjust as needed:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api/v1
+NEXT_PUBLIC_API_MODE=live
+NEXT_PUBLIC_DEFAULT_TIMEZONE=Asia/Ho_Chi_Minh
+```
+
+| Variable | Values | Default | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_API_BASE_URL` | Base URL incl. `/api/v1` | `http://localhost:4000/api/v1` | NestJS backend REST endpoint |
+| `NEXT_PUBLIC_API_MODE` | `live` \| `mock` | `live` | Set `mock` for dev/demo in-memory transport |
+| `NEXT_PUBLIC_DEFAULT_TIMEZONE` | IANA timezone | `Asia/Ho_Chi_Minh` | Used for `00:00–23:59` daily slots & calendars |
+
+---
+
+## Scripts
+
+```bash
+npm install          # Install dependencies
+npm run dev          # Start development server
+npm run build        # Build production bundle
+npm run start        # Start production Next.js server
+npm run typecheck    # Run tsc --noEmit
+npm run lint         # Run ESLint across project
+npm run test         # Run Vitest unit & component suites
+npm run test:e2e     # Run Playwright + Axe E2E verification (requires built app)
+```
+
+---
+
+## Dev Mock Accounts (`NEXT_PUBLIC_API_MODE=mock`)
+
+When testing locally in mock mode (`password` accepts any string of ≥ 6 characters):
+
+- **Student:** `student@ielts.vn`
+- **Teacher:** `teacher@ielts.vn`
+- **Multi-role (Admin + Teacher):** `admin@ielts.vn`
+
+---
+
+## Architecture & Security Guarantees
+
+1. **Zero Pre-PASS Answer Key Exposure:** Student views consume `StudentAssignmentDetailSchema` (which explicitly excludes `correctAnswer`, `explanation`, and grading rubrics). Answer review (`/student/assignments/[studentAssignmentId]/review`) relies on server authorization (`GET /student-assignments/:id/review`) and handles `403 ANSWER_LOCKED` below 70%.
+2. **Submission Idempotency:** Graded submissions (`POST /student-assignments/:id/submissions`) attach a per-attempt `Idempotency-Key` header and disable unsafe automatic retries for `POST` mutations in [src/lib/api/client.ts](src/lib/api/client.ts).
+3. **XSS & Link Hardening:** Reading passages pass through [src/lib/sanitize/html.ts](src/lib/sanitize/html.ts) (`setHTML()` / DOMPurify fallback). Google Meet links enforce strict `https:` validation (`isHttpsUrl`) and `rel="noopener noreferrer"`.
+4. **Timezone Discipline:** Wire payloads exchange UTC ISO-8601 timestamps; calendar grids, Google Meet schedules, daily assignment windows (`00:00–23:59`, exclusive next-day `00:00`), and monthly extension counts resolve in `Asia/Ho_Chi_Minh` via [src/lib/time/vn-time.ts](src/lib/time/vn-time.ts).
+5. **Security Headers ([next.config.ts](next.config.ts)):** Sends `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, and base `Content-Security-Policy` (`object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `form-action 'self'`). If deploying SSR dynamic nonces & Trusted Types at the reverse proxy/edge layer, add per-request `script-src 'nonce-...' 'strict-dynamic'` and `require-trusted-types-for 'script'`.
