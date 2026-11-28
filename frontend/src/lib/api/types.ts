@@ -1305,6 +1305,8 @@ export interface BulkSaveUserVocabResponse {
   savedCount: number;
   skippedCount: number;
   items: UserVocabNotebookEntry[];
+}
+
 // ---------------------------------------------------------------------------
 // Phase 12 Types (Anonymous Feedback, Study Sessions & Admin Reset Password)
 // ---------------------------------------------------------------------------
