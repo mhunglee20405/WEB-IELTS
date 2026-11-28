@@ -9,6 +9,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -30,6 +31,8 @@ import {
 } from 'src/database/schemas/student-assignment.schema';
 import { Assignment, AssignmentDocument } from 'src/database/schemas/assignment.schema';
 import { Course, CourseDocument } from 'src/database/schemas/course.schema';
+import { ExamTest, ExamTestDocument } from 'src/database/schemas/exam-test.schema';
+import { PassageVocab, PassageVocabDocument } from 'src/database/schemas/passage-vocab.schema';
 import { Submission, SubmissionDocument } from 'src/database/schemas/submission.schema';
 import {
   TranslationSubmission,
@@ -67,6 +70,12 @@ export class StudentAssignmentsController {
     private readonly submissionsService: SubmissionsService,
     private readonly translationsService: TranslationsService,
     private readonly extensionsService: ExtensionsService,
+    @Optional()
+    @InjectModel(ExamTest.name)
+    private readonly examTestModel?: Model<ExamTestDocument>,
+    @Optional()
+    @InjectModel(PassageVocab.name)
+    private readonly passageVocabModel?: Model<PassageVocabDocument>,
   ) {}
 
   private async assertAssignmentAccess(
@@ -127,6 +136,183 @@ export class StudentAssignmentsController {
     );
   }
 
+  private mapPassageVocabItem(doc: any, fallbackTestId?: string) {
+    return {
+      id: extractObjectId(doc._id),
+      passageId: doc.passageId,
+      testId: doc.testId ? extractObjectId(doc.testId) : fallbackTestId,
+      partNumber: doc.partNumber,
+      word: doc.word,
+      partOfSpeech: doc.partOfSpeech ?? 'n',
+      ipa: doc.ipa || undefined,
+      meaningVi: doc.meaningVi,
+      paraphraseNote: doc.paraphraseNote || undefined,
+      contextSentence: doc.contextSentence || undefined,
+      order: doc.order ?? 0,
+    };
+  }
+
+  private async resolveReadingExamContext(
+    assignment: any,
+    includeContent = true,
+  ): Promise<{
+    examTestId?: string;
+    testId?: string;
+    exerciseType: string;
+    strictExamMode: boolean;
+    requiredScope: string;
+    requiredPartId: string | null;
+    allowedModes: string[];
+    durationSecondsOverride: number | null;
+    maxAttempts?: number;
+    allowRetake: boolean;
+    passageId?: string;
+    passageTitle?: string;
+    passageHtml: string;
+    passages: Array<{
+      passageId: string;
+      partNumber: number;
+      title: string;
+      passageTitle: string;
+      passageHtml: string;
+      passageVocabs: any[];
+    }>;
+    passageVocabs: any[];
+  }> {
+    const snapshot = assignment?.exerciseSnapshot;
+    const populatedExercise =
+      assignment?.exerciseId && typeof assignment.exerciseId === 'object' && assignment.exerciseId.title
+        ? assignment.exerciseId
+        : null;
+    const rawExerciseId = assignment?.exerciseId ? extractObjectId(assignment.exerciseId) : '';
+    const explicitExamTestId = assignment?.examTestId ? extractObjectId(assignment.examTestId) : '';
+
+    let examTest: any = null;
+    if (this.examTestModel && typeof this.examTestModel.findById === 'function') {
+      const candidateId = explicitExamTestId || (!populatedExercise ? rawExerciseId : '');
+      if (candidateId && Types.ObjectId.isValid(candidateId)) {
+        const q = this.examTestModel.findById(candidateId);
+        examTest = q
+          ? await (typeof q.lean === 'function' ? q.lean().exec() : q.exec())
+          : null;
+      }
+    }
+
+    const examTestId = explicitExamTestId || (examTest ? extractObjectId(examTest._id) : undefined);
+    const exerciseType = String(
+      snapshot?.type ||
+        populatedExercise?.type ||
+        (examTest?.skill ? String(examTest.skill).toLowerCase() : '') ||
+        'reading',
+    ).toLowerCase();
+
+    const scopedParts = (examTest?.parts || []).filter((p: any) => {
+      if (assignment?.requiredScope === 'PART' && assignment?.requiredPartId) {
+        return extractObjectId(p._id) === String(assignment.requiredPartId);
+      }
+      return true;
+    });
+
+    const fallbackPassageHtml =
+      snapshot?.passage || populatedExercise?.passage || '';
+    const fallbackTitle =
+      snapshot?.title || populatedExercise?.title || assignment?.title || 'Reading Passage';
+    const fallbackPassageId =
+      assignment?.requiredPartId ||
+      (populatedExercise?._id ? extractObjectId(populatedExercise._id) : '') ||
+      rawExerciseId ||
+      extractObjectId(assignment?._id);
+
+    const rawPassages: Array<{
+      passageId: string;
+      partNumber: number;
+      title: string;
+      passageTitle: string;
+      passageHtml: string;
+    }> =
+      scopedParts.length > 0
+        ? scopedParts.map((part: any, idx: number) => {
+            const pId = extractObjectId(part._id);
+            const htmlFromParagraphs = Array.isArray(part.paragraphs)
+              ? part.paragraphs
+                  .map((pr: any) => `<p><strong>${pr.label}.</strong> ${pr.text}</p>`)
+                  .join('')
+              : '';
+            return {
+              passageId: pId,
+              partNumber: part.ordinal || idx + 1,
+              title: part.title || `Passage ${part.ordinal || idx + 1}`,
+              passageTitle: part.title || `Passage ${part.ordinal || idx + 1}`,
+              passageHtml: part.contentHtml || htmlFromParagraphs || fallbackPassageHtml,
+            };
+          })
+        : exerciseType === 'reading' && (fallbackPassageHtml || fallbackPassageId)
+          ? [
+              {
+                passageId: fallbackPassageId,
+                partNumber: 1,
+                title: fallbackTitle,
+                passageTitle: fallbackTitle,
+                passageHtml: fallbackPassageHtml,
+              },
+            ]
+          : [];
+
+    const vocabsByPassage = new Map<string, any[]>();
+    if (
+      includeContent &&
+      this.passageVocabModel &&
+      typeof this.passageVocabModel.find === 'function' &&
+      rawPassages.length > 0
+    ) {
+      const passageIds = rawPassages.map((p) => p.passageId).filter(Boolean);
+      if (passageIds.length > 0) {
+        const q = this.passageVocabModel.find({ passageId: { $in: passageIds } });
+        const sorted = typeof q?.sort === 'function' ? q.sort({ order: 1, createdAt: 1 }) : q;
+        const leanOrExec = typeof sorted?.lean === 'function' ? sorted.lean() : sorted;
+        const vocabDocs = await (typeof leanOrExec?.exec === 'function' ? leanOrExec.exec() : leanOrExec);
+        for (const v of vocabDocs || []) {
+          const pId = String(v.passageId || '');
+          const list = vocabsByPassage.get(pId) ?? [];
+          list.push(this.mapPassageVocabItem(v, examTestId));
+          vocabsByPassage.set(pId, list);
+        }
+      }
+    }
+
+    const passages = includeContent
+      ? rawPassages.map((p) => ({
+          ...p,
+          passageVocabs: vocabsByPassage.get(p.passageId) ?? [],
+        }))
+      : [];
+
+    const primaryPassage = passages[0] ?? rawPassages[0];
+    const combinedPassageHtml = includeContent
+      ? rawPassages.map((p) => p.passageHtml).filter(Boolean).join('\n\n') || fallbackPassageHtml
+      : '';
+
+    return {
+      examTestId,
+      testId: examTestId,
+      exerciseType,
+      strictExamMode: Boolean(assignment?.strictExamMode),
+      requiredScope: assignment?.requiredScope || 'FULL',
+      requiredPartId: assignment?.requiredPartId || null,
+      allowedModes: assignment?.allowedModes || ['PART', 'FULL'],
+      durationSecondsOverride: assignment?.durationSecondsOverride ?? null,
+      maxAttempts: assignment?.maxAttempts,
+      allowRetake: Boolean(assignment?.allowRetake),
+      passageId: primaryPassage?.passageId || fallbackPassageId || undefined,
+      passageTitle: primaryPassage?.passageTitle || fallbackTitle,
+      passageHtml: combinedPassageHtml,
+      passages,
+      passageVocabs: includeContent && primaryPassage
+        ? (vocabsByPassage.get(primaryPassage.passageId) ?? [])
+        : [],
+    };
+  }
+
   @Get(':id')
   @Roles(UserRole.STUDENT, UserRole.TEACHER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get student assignment detail with sanitized exercise questions' })
@@ -169,6 +355,7 @@ export class StudentAssignmentsController {
     const effectiveDueAt = sa.effectiveDeadlineAt || dueAt;
 
     const isLocked = isStudent && new Date().getTime() < new Date(openAt).getTime();
+    const readingCtx = await this.resolveReadingExamContext(assignment, !isLocked);
     const rawQuestions = snapshot?.questions || exercise?.questions || [];
     const sanitizedQuestions = isLocked
       ? []
@@ -192,13 +379,14 @@ export class StudentAssignmentsController {
         });
 
     const exercisePublic = {
-      id: extractObjectId(exercise?._id || assignment._id),
+      id: extractObjectId(exercise?._id || readingCtx.examTestId || assignment._id),
       title: snapshot?.title || exercise?.title || title,
-      type: exerciseType,
+      type: readingCtx.exerciseType || exerciseType,
       status: 'published',
       version: assignment.exerciseVersion || exercise?.version || 1,
       instructions: isLocked ? '' : (snapshot?.instructions || exercise?.instructions || ''),
-      passageHtml: isLocked ? '' : (snapshot?.passage || exercise?.passage || ''),
+      passageId: isLocked ? undefined : readingCtx.passageId,
+      passageHtml: isLocked ? '' : (readingCtx.passageHtml || snapshot?.passage || exercise?.passage || ''),
       audioAssetId: isLocked ? undefined : (snapshot?.audioAssets?.[0]?.objectKey || exercise?.audioAssetId || undefined),
       audioUrl: isLocked ? undefined : (snapshot?.audioAssets?.[0]?.url || undefined),
       durationMinutes: exercise?.durationMinutes || undefined,
@@ -213,17 +401,28 @@ export class StudentAssignmentsController {
       .exec();
 
     const passed = this.isStudentAssignmentPassed(sa, assignment);
+    const resolvedType = readingCtx.exerciseType || exerciseType;
 
     return {
       id: extractObjectId(sa._id),
       studentAssignmentId: extractObjectId(sa._id),
       assignmentId: extractObjectId(assignment._id),
+      ...(readingCtx.examTestId ? { examTestId: readingCtx.examTestId, testId: readingCtx.examTestId } : {}),
+      requiredScope: readingCtx.requiredScope,
+      requiredPartId: readingCtx.requiredPartId,
+      allowedModes: readingCtx.allowedModes,
+      durationSecondsOverride: readingCtx.durationSecondsOverride,
+      maxAttempts: readingCtx.maxAttempts ?? null,
+      allowRetake: readingCtx.allowRetake,
+      strictExamMode: readingCtx.strictExamMode,
+      ...(readingCtx.passageId ? { passageId: readingCtx.passageId } : {}),
+      ...(isLocked ? {} : { passages: readingCtx.passages, passageVocabs: readingCtx.passageVocabs }),
       courseId: extractObjectId(assignment.courseId?._id || assignment.courseId),
       courseTitle: assignment.courseId?.title || '',
       studentId: extractObjectId(sa.studentId?._id || sa.studentId),
       studentName: (sa.studentId as any)?.fullName || '',
       title,
-      exerciseType,
+      exerciseType: resolvedType,
       assignedDate: assignment.assignedDate || formatVnDateTime(openAt).slice(0, 10),
       openAt: new Date(openAt).toISOString(),
       dueAt: new Date(dueAt).toISOString(),
@@ -234,7 +433,7 @@ export class StudentAssignmentsController {
       bestScore: sa.bestScore ?? null,
       passed,
       answerReviewUnlocked: passed,
-      translationAvailable: Boolean(passed && (exerciseType === 'reading' || !exerciseType)),
+      translationAvailable: Boolean(passed && (resolvedType === 'reading' || !resolvedType)),
       translationStatus: (sa as any).translationStatus || 'not_started',
       penaltyApplied: Boolean(sa.penaltyAppliedAt),
       exercise: exercisePublic,
@@ -424,10 +623,21 @@ export class StudentAssignmentsController {
       };
     });
 
+    const readingCtx = await this.resolveReadingExamContext(assignment, true);
+
     return {
       studentAssignmentId: extractObjectId(sa._id),
       passed,
       score: sa.bestScore ?? (submission?.scorePercent || 0),
+      title: assignment.title || assignment.exerciseSnapshot?.title || 'Assignment',
+      exerciseType: readingCtx.exerciseType,
+      ...(readingCtx.examTestId ? { examTestId: readingCtx.examTestId, testId: readingCtx.examTestId } : {}),
+      ...(readingCtx.passageId ? { passageId: readingCtx.passageId } : {}),
+      passageTitle: readingCtx.passageTitle,
+      passageHtml: readingCtx.passageHtml,
+      passages: readingCtx.passages,
+      passageVocabs: readingCtx.passageVocabs,
+      strictExamMode: readingCtx.strictExamMode,
       items,
     };
   }
@@ -463,7 +673,8 @@ export class StudentAssignmentsController {
     this.assertAssignmentOpenForStudent(assignment, user);
 
     const snapshot = (assignment.exerciseSnapshot || {}) as any;
-    const targetTestId = (assignment as any)?.examTestId || (assignment as any)?.exerciseId;
+    const readingCtx = await this.resolveReadingExamContext(assignment, true);
+    const targetTestId = readingCtx.examTestId || (assignment as any)?.exerciseId;
 
     const existing = await this.translationModel
       .findOne({
@@ -477,10 +688,16 @@ export class StudentAssignmentsController {
       .sort({ updatedAt: -1 })
       .exec();
 
-    let passageHtml = snapshot.passage || '';
-    let passageTitle = snapshot.title || assignment.title || 'Reading Passage';
+    const matchedPassage = existing?.passageId
+      ? readingCtx.passages.find((p) => p.passageId === String(existing.passageId))
+      : readingCtx.passages[0];
 
-    if (snapshot.parts && snapshot.parts.length > 0) {
+    let passageId = matchedPassage?.passageId || readingCtx.passageId;
+    let passageHtml = matchedPassage?.passageHtml || readingCtx.passageHtml || snapshot.passage || '';
+    let passageTitle = matchedPassage?.passageTitle || readingCtx.passageTitle || snapshot.title || assignment.title || 'Reading Passage';
+    const passageVocabs = matchedPassage?.passageVocabs ?? readingCtx.passageVocabs;
+
+    if (!matchedPassage && snapshot.parts && snapshot.parts.length > 0) {
       const part = existing?.passageId
         ? snapshot.parts.find(
             (p: any) =>
@@ -489,6 +706,7 @@ export class StudentAssignmentsController {
           )
         : snapshot.parts[0];
       if (part) {
+        passageId = extractObjectId(part._id) || passageId;
         passageHtml = part.contentHtml || passageHtml;
         passageTitle = part.title || (part.ordinal ? `Passage ${part.ordinal}` : passageTitle);
       }
@@ -499,8 +717,12 @@ export class StudentAssignmentsController {
     return {
       translationId: existing ? extractObjectId(existing._id) : extractObjectId(sa._id),
       studentAssignmentId: extractObjectId(sa._id),
+      ...(readingCtx.examTestId ? { examTestId: readingCtx.examTestId, testId: readingCtx.examTestId } : {}),
+      ...(passageId ? { passageId } : {}),
       passageTitle,
       passageHtml,
+      passages: readingCtx.passages,
+      passageVocabs,
       draftText: existing?.translatedText || '',
       status: trStatus,
       teacherFeedback: existing?.teacherComment || undefined,
@@ -539,6 +761,7 @@ export class StudentAssignmentsController {
     await this.assertAssignmentAccess(sa, assignment, student);
     this.assertAssignmentOpenForStudent(assignment, student);
 
+    const readingCtx = await this.resolveReadingExamContext(assignment, true);
     const translatedText = body.translatedText ?? body.textVi ?? '';
     let existing = await this.translationModel
       .findOne({ studentAssignmentId: sa._id })
@@ -559,6 +782,10 @@ export class StudentAssignmentsController {
         studentAssignmentId: sa._id,
         assignmentId: sa.assignmentId,
         studentId: student._id,
+        ...(readingCtx.examTestId && Types.ObjectId.isValid(readingCtx.examTestId)
+          ? { testId: new Types.ObjectId(readingCtx.examTestId) }
+          : {}),
+        ...(readingCtx.passageId ? { passageId: readingCtx.passageId } : {}),
         translatedText,
         status: TranslationSubmissionStatus.DRAFT,
       });
@@ -568,8 +795,12 @@ export class StudentAssignmentsController {
     return {
       translationId: extractObjectId(existing._id),
       studentAssignmentId: extractObjectId(sa._id),
-      passageTitle: assignment.exerciseSnapshot?.title || assignment.title || 'Reading Passage',
-      passageHtml: assignment.exerciseSnapshot?.passage || '',
+      ...(readingCtx.examTestId ? { examTestId: readingCtx.examTestId, testId: readingCtx.examTestId } : {}),
+      ...(readingCtx.passageId ? { passageId: readingCtx.passageId } : {}),
+      passageTitle: readingCtx.passageTitle || assignment.exerciseSnapshot?.title || assignment.title || 'Reading Passage',
+      passageHtml: readingCtx.passageHtml || assignment.exerciseSnapshot?.passage || '',
+      passages: readingCtx.passages,
+      passageVocabs: readingCtx.passageVocabs,
       draftText: existing.translatedText,
       status: existing.status,
       teacherFeedback: existing.teacherComment || undefined,
@@ -608,6 +839,7 @@ export class StudentAssignmentsController {
     await this.assertAssignmentAccess(sa, assignment, student);
     this.assertAssignmentOpenForStudent(assignment, student);
 
+    const readingCtx = await this.resolveReadingExamContext(assignment, true);
     const translatedText = body.translatedText ?? body.textVi ?? '';
     const result = await this.translationsService.submit(
       extractObjectId(sa.assignmentId),
@@ -621,8 +853,12 @@ export class StudentAssignmentsController {
     return {
       translationId: extractObjectId(result.id || (result as any)._id),
       studentAssignmentId: extractObjectId(sa._id),
-      passageTitle: assignment.exerciseSnapshot?.title || assignment.title || 'Reading Passage',
-      passageHtml: assignment.exerciseSnapshot?.passage || '',
+      ...(readingCtx.examTestId ? { examTestId: readingCtx.examTestId, testId: readingCtx.examTestId } : {}),
+      ...(readingCtx.passageId ? { passageId: readingCtx.passageId } : {}),
+      passageTitle: readingCtx.passageTitle || assignment.exerciseSnapshot?.title || assignment.title || 'Reading Passage',
+      passageHtml: readingCtx.passageHtml || assignment.exerciseSnapshot?.passage || '',
+      passages: readingCtx.passages,
+      passageVocabs: readingCtx.passageVocabs,
       draftText: translatedText,
       status: result.status,
       teacherFeedback: (result as any).teacherComment || undefined,

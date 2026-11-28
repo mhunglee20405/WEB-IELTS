@@ -80,6 +80,11 @@ export class ExamQuestionDto {
   @ValidateNested()
   @Type(() => ExamGradingDto)
   grading?: ExamGradingDto;
+
+  @ApiPropertyOptional({ example: 'Từ "mitigate" mang nghĩa làm dịu/giảm nhẹ tác động.' })
+  @IsOptional()
+  @IsString()
+  explanation?: string;
 }
 
 export class CreateExamTestDto {
@@ -200,6 +205,11 @@ export class UpdateExamTestDto {
 }
 
 export class CreateExamPartDto {
+  @ApiPropertyOptional({ description: 'Optional existing ExamPart ObjectId to preserve across re-sync' })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @ApiProperty({ enum: PartType, example: PartType.PASSAGE })
   @IsEnum(PartType)
   type: PartType;
@@ -222,6 +232,31 @@ export class CreateExamPartDto {
   @IsOptional()
   @IsString()
   audioAssetId?: string;
+
+  @ApiPropertyOptional({ description: 'Direct audio playback stream URL' })
+  @IsOptional()
+  @IsString()
+  audioPlaybackUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Audio transcript for teacher and review' })
+  @IsOptional()
+  @IsString()
+  transcript?: string;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  audioAllowPause?: boolean;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  audioAllowSeek?: boolean;
+
+  @ApiPropertyOptional({ default: null })
+  @IsOptional()
+  @IsNumber()
+  audioMaxPlayCount?: number;
 
   @ApiPropertyOptional({ example: 1200 })
   @IsOptional()
@@ -251,6 +286,31 @@ export class UpdateExamPartDto {
   @IsOptional()
   @IsString()
   audioAssetId?: string;
+
+  @ApiPropertyOptional({ description: 'Direct audio playback stream URL' })
+  @IsOptional()
+  @IsString()
+  audioPlaybackUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Audio transcript for teacher and review' })
+  @IsOptional()
+  @IsString()
+  transcript?: string;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  audioAllowPause?: boolean;
+
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  audioAllowSeek?: boolean;
+
+  @ApiPropertyOptional({ default: null })
+  @IsOptional()
+  @IsNumber()
+  audioMaxPlayCount?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -291,6 +351,11 @@ export class CreateQuestionGroupDto {
   @IsNumber()
   @Min(1)
   maxWords?: number;
+
+  @ApiPropertyOptional({ description: 'Rich formatted HTML stimulus with numbered blanks' })
+  @IsOptional()
+  @IsString()
+  summaryTemplateHtml?: string;
 
   @ApiProperty({ type: [ExamQuestionDto] })
   @IsArray()
@@ -333,6 +398,11 @@ export class UpdateQuestionGroupDto {
   @IsNumber()
   @Min(1)
   maxWords?: number;
+
+  @ApiPropertyOptional({ description: 'Rich formatted HTML stimulus with numbered blanks' })
+  @IsOptional()
+  @IsString()
+  summaryTemplateHtml?: string;
 
   @ApiPropertyOptional({ type: [ExamQuestionDto] })
   @IsOptional()

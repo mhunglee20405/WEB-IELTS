@@ -39,6 +39,7 @@ export default function TeacherNewAssignmentPage() {
   const [durationMinutesOverride, setDurationMinutesOverride] = useState("");
   const [maxAttempts, setMaxAttempts] = useState("");
   const [allowRetake, setAllowRetake] = useState(true);
+  const [strictExamMode, setStrictExamMode] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const coursesQuery = useQuery({
@@ -158,6 +159,7 @@ export default function TeacherNewAssignmentPage() {
       durationSecondsOverride: durationSecs ?? null,
       maxAttempts: maxAttemptsNum ?? null,
       allowRetake,
+      strictExamMode,
     });
 
     if (!parsed.success) {
@@ -190,6 +192,7 @@ export default function TeacherNewAssignmentPage() {
       durationSecondsOverride: parsed.data.durationSecondsOverride ?? undefined,
       maxAttempts: parsed.data.maxAttempts ?? undefined,
       allowRetake: parsed.data.allowRetake ?? allowRetake,
+      strictExamMode: parsed.data.strictExamMode ?? strictExamMode,
     });
   };
 
@@ -488,6 +491,23 @@ export default function TeacherNewAssignmentPage() {
                       Khi bật, học viên có thể làm lại bài nhiều lần (hoặc theo số lượt tối đa) để cải thiện điểm số &ge; 70%.
                     </p>
                   </div>
+
+                  {selectedV2Test.skill === "READING" && (
+                    <div className="sm:col-span-2">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={strictExamMode}
+                          onChange={(e) => setStrictExamMode(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>Chế độ thi kiểm tra tính giờ nghiêm ngặt</span>
+                      </label>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Khi bật, Sổ tay từ vựng theo ngữ cảnh sẽ được ẩn trong lúc học viên đang làm bài và chỉ mở lại sau khi nộp bài.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 

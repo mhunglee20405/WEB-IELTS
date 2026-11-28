@@ -10,6 +10,8 @@ export interface ReadingSplitWorkspaceProps {
   leftLabel: string;
   rightLabel: string;
   leftTitle: string;
+  leftHeaderActions?: ReactNode;
+  leftSubheader?: ReactNode;
   leftContent: ReactNode;
   rightContent: ReactNode;
 }
@@ -22,6 +24,8 @@ export function ReadingSplitWorkspace({
   leftLabel,
   rightLabel,
   leftTitle,
+  leftHeaderActions,
+  leftSubheader,
   leftContent,
   rightContent,
 }: ReadingSplitWorkspaceProps) {
@@ -54,9 +58,11 @@ export function ReadingSplitWorkspace({
             mobilePane !== "left" && "lms-split-hidden-mobile",
           )}
         >
-          <h2 className="border-b border-slate-200 pb-2 text-lg font-bold text-slate-900">
-            {leftTitle}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+            <h2 className="text-lg font-bold text-slate-900">{leftTitle}</h2>
+            {leftHeaderActions}
+          </div>
+          {leftSubheader}
           {leftContent}
         </section>
 

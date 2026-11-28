@@ -23,6 +23,20 @@ describe("normalizeReadingHtml", () => {
     expect(output).not.toContain('width="100%"');
   });
 
+  it("preserves <img> width/height attributes and inline width styling for diagram resizing while stripping width from non-img elements", () => {
+    const input =
+      '<div style="width: 720px; max-width: 800px;" width="720"><p><img src="/api/v1/media/images/stream/map.png" width="420" height="300" style="width: 420px; float: right; max-width: 900px;" alt="Map" /></p></div>';
+    const output = normalizeReadingHtml(input);
+
+    expect(output).not.toContain('width="720"');
+    expect(output).not.toContain("width: 720px");
+    expect(output).toContain('width="420"');
+    expect(output).toContain('height="300"');
+    expect(output).toContain("width: 420px");
+    expect(output).toContain("float: right");
+    expect(output).not.toContain("max-width: 900px");
+  });
+
   it("replaces hard <br> line breaks inside <p> with a space so sentences flow full-width", () => {
     const input =
       "<p>Modern cities absorb solar radiation far more<br>intensely than surrounding rural landscapes, generating urban<br />heat islands that drive up summer cooling demand.</p>";

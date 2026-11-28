@@ -47,6 +47,11 @@ export class UpdateAssignmentDto {
   @IsBoolean()
   allowRetake?: boolean;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  strictExamMode?: boolean;
+
   @ApiPropertyOptional({ minimum: 1 })
   @IsOptional()
   @IsNumber()

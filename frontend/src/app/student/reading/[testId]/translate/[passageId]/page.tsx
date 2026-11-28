@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Lock, MessageSquare, Save, Send } from "lucide-react";
+import {
+  ReadingVocabToolbarButton,
+  ReadingVocabWorkspace,
+  usePassageSelectionCapture,
+} from "@/components/exam/reading-vocab-workspace";
 import { Badge, Button, Card, PageHeader, QueryState, SafeHtml } from "@/components/ui";
 import { readingTranslationsApi } from "@/lib/api/endpoints";
 import { ApiError, getFriendlyErrorMessage } from "@/lib/api/error";
@@ -21,6 +26,13 @@ export default function StudentReadingTranslationWorkspacePage() {
   const [draftOverride, setDraftOverride] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [vocabDrawerOpen, setVocabDrawerOpen] = useState(false);
+  const passageRef = useRef<HTMLDivElement>(null);
+  const {
+    candidate: selectionCandidate,
+    captureSelection,
+    clearCandidate,
+  } = usePassageSelectionCapture(passageRef, true);
 
   const eligibilityQuery = useQuery({
     queryKey: examKeys.translationEligibility(testId),
@@ -196,28 +208,53 @@ export default function StudentReadingTranslationWorkspacePage() {
                       {detail.passageTitle}
                     </h2>
                   </div>
-                  <Badge variant="neutral">Bản dịch #{detail.revision}</Badge>
+                  <div className="flex items-center gap-2">
+                    <ReadingVocabToolbarButton
+                      passageId={passageId}
+                      enabled
+                      onClick={() => setVocabDrawerOpen(true)}
+                    />
+                    <Badge variant="neutral">Bản dịch #{detail.revision}</Badge>
+                  </div>
                 </div>
 
-                {detail.paragraphs && detail.paragraphs.length > 0 ? (
-                  <div className="space-y-4 text-[15px] leading-7 text-slate-800">
-                    {detail.paragraphs.map((p) => (
-                      <div key={p.label} className="flex items-start gap-2.5">
-                        <span className="mt-1 inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded bg-slate-100 px-1.5 text-xs font-bold text-slate-700">
-                          {p.label}
-                        </span>
-                        <p className="flex-1">{p.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <SafeHtml
-                    html={detail.passageHtml}
-                    preset="richText"
-                    className="text-[15px] leading-7 text-slate-800"
-                  />
-                )}
+                <div
+                  ref={passageRef}
+                  onMouseUp={captureSelection}
+                  className="select-text"
+                >
+                  {detail.paragraphs && detail.paragraphs.length > 0 ? (
+                    <div className="space-y-4 text-[15px] leading-7 text-slate-800">
+                      {detail.paragraphs.map((p) => (
+                        <div key={p.label} className="flex items-start gap-2.5">
+                          <span className="mt-1 inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded bg-slate-100 px-1.5 text-xs font-bold text-slate-700">
+                            {p.label}
+                          </span>
+                          <p className="flex-1">{p.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <SafeHtml
+                      html={detail.passageHtml}
+                      preset="richText"
+                      className="text-[15px] leading-7 text-slate-800"
+                    />
+                  )}
+                </div>
               </Card>
+
+              <ReadingVocabWorkspace
+                passageId={passageId}
+                testId={testId}
+                testTitle={detail.testTitle}
+                passageTitle={detail.passageTitle}
+                enabled
+                drawerOpen={vocabDrawerOpen}
+                onOpenDrawerChange={setVocabDrawerOpen}
+                selectionCandidate={selectionCandidate}
+                onClearSelection={clearCandidate}
+              />
 
               {/* Right: Vietnamese Editor & Teacher Feedback */}
               <div className="space-y-4">

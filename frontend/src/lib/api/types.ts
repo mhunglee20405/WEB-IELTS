@@ -244,6 +244,7 @@ export interface ExercisePublic {
   status: ExerciseStatus;
   version: number;
   instructions?: string;
+  passageId?: string;
   passageHtml?: string;
   audioAssetId?: string;
   durationMinutes?: number;
@@ -321,6 +322,7 @@ export interface Assignment {
   durationSecondsOverride?: number | null;
   maxAttempts?: number | null;
   allowRetake?: boolean;
+  strictExamMode?: boolean;
 }
 
 export interface CreateAssignmentRequest {
@@ -338,6 +340,7 @@ export interface CreateAssignmentRequest {
   durationSecondsOverride?: number | null;
   maxAttempts?: number | null;
   allowRetake?: boolean;
+  strictExamMode?: boolean;
 }
 
 export interface UpdateAssignmentRequest {
@@ -355,6 +358,15 @@ export type StudentAssignmentStatus =
   | "overdue"
   | "excused"
   | "extended";
+
+export interface AssignmentReadingPassageContext {
+  passageId: string;
+  partNumber: number;
+  title: string;
+  passageTitle?: string;
+  passageHtml: string;
+  passageVocabs?: PassageVocabItem[];
+}
 
 export interface StudentAssignmentSummary {
   studentAssignmentId: string;
@@ -380,11 +392,17 @@ export interface StudentAssignmentSummary {
   translationStatus: TranslationStatus;
   penaltyApplied: boolean;
   examTestId?: string;
+  testId?: string;
   requiredScope?: "PART" | "FULL";
   requiredPartId?: string | null;
   allowedModes?: ("PART" | "FULL")[];
   durationSecondsOverride?: number | null;
   maxAttempts?: number | null;
+  allowRetake?: boolean;
+  strictExamMode?: boolean;
+  passageId?: string;
+  passages?: AssignmentReadingPassageContext[];
+  passageVocabs?: PassageVocabItem[];
   activeExamAttemptId?: string | null;
   latestExamAttemptId?: string | null;
 }
@@ -435,6 +453,16 @@ export interface AnswerReviewResponse {
   studentAssignmentId: string;
   passed: boolean;
   score: number;
+  title?: string;
+  exerciseType?: ExerciseType;
+  examTestId?: string;
+  testId?: string;
+  passageId?: string;
+  passageTitle?: string;
+  passageHtml?: string;
+  passages?: AssignmentReadingPassageContext[];
+  passageVocabs?: PassageVocabItem[];
+  strictExamMode?: boolean;
   items: AnswerReviewItem[];
 }
 
@@ -449,8 +477,13 @@ export type TranslationStatus =
 export interface TranslationWorkspace {
   translationId: string;
   studentAssignmentId: string;
+  examTestId?: string;
+  testId?: string;
+  passageId?: string;
   passageTitle: string;
   passageHtml: string;
+  passages?: AssignmentReadingPassageContext[];
+  passageVocabs?: PassageVocabItem[];
   draftText: string;
   status: TranslationStatus;
   teacherFeedback?: string;
@@ -610,6 +643,29 @@ export interface AudioPlaybackResponse {
   expiresAt: string;
 }
 
+export interface ImageUploadInitRequest {
+  filename: string;
+  mimeType: string;
+  fileSize: number;
+}
+
+export interface ImageUploadInitResponse {
+  assetId: string;
+  objectKey: string;
+  uploadUrl: string;
+  streamUrl: string;
+  expiresAt: string;
+}
+
+export interface ImageUploadBinaryResponse {
+  ok: boolean;
+  assetId: string;
+  objectKey: string;
+  sizeBytes: number;
+  url: string;
+  streamUrl: string;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   page: number;
@@ -628,10 +684,10 @@ export interface HealthStatus {
 // Phase 9 Exam Modes V2 Types (Reading & Listening Exam Engine + Translation)
 // ---------------------------------------------------------------------------
 
-export type ExamSkill = "READING" | "LISTENING";
+export type ExamSkill = "READING" | "LISTENING" | "VOCABULARY" | "GRAMMAR";
 export type ExamMode = "PART" | "FULL";
 export type ExamTestStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
-export type ExamPartType = "PASSAGE" | "SECTION";
+export type ExamPartType = "PASSAGE" | "SECTION" | "QUIZ";
 export type ExamAttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "AUTO_SUBMITTED" | "EXPIRED" | "ABANDONED";
 export type ExamDifficulty = "FOUNDATION" | "INTERMEDIATE" | "TARGET_65" | "TARGET_75_PLUS";
 
@@ -810,6 +866,7 @@ export interface ExamAttemptDetail {
   status: ExamAttemptStatus;
   partId?: string | null;
   studentAssignmentId?: string | null;
+  strictExamMode?: boolean;
   revision: number;
   startedAt: string;
   expiresAt: string;
@@ -869,6 +926,7 @@ export interface ExamResultResponse {
   mode: ExamMode;
   partId?: string | null;
   studentAssignmentId?: string | null;
+  strictExamMode?: boolean;
   status: "SUBMITTED" | "EXPIRED";
   totalQuestions: number;
   correctCount: number;
@@ -893,12 +951,23 @@ export interface ExamQuestionReviewItem {
   questionNumber: number;
   questionType: ExamQuestionType;
   prompt: string;
+  options?: ExamQuestionOption[];
   studentAnswer: ExamAnswerValue | null;
   correctAnswer?: ExamAnswerValue;
   acceptedAnswers?: string[];
   isCorrect: boolean;
   explanation?: string;
   referenceParagraph?: string;
+}
+
+export interface ExamReviewPart {
+  id: string;
+  partNumber: number;
+  title: string;
+  passageTitle?: string;
+  passageHtml?: string;
+  transcript?: string;
+  audioAsset?: ExamAudioAssetPublic;
 }
 
 export interface ExamReviewResponse {
@@ -908,6 +977,7 @@ export interface ExamReviewResponse {
   skill: ExamSkill;
   answerReviewAvailable: boolean;
   items: ExamQuestionReviewItem[];
+  parts?: ExamReviewPart[];
 }
 
 export interface ExamAttemptSummaryItem {
@@ -1097,6 +1167,7 @@ export interface UpsertExamQuestionGroupInput {
 }
 
 export interface UpsertExamPartInput {
+  id?: string;
   partNumber: number;
   partType: ExamPartType;
   title: string;
@@ -1111,6 +1182,129 @@ export interface UpsertExamPartInput {
   questionGroups?: UpsertExamQuestionGroupInput[];
 }
 
+// ─── Contextual Vocabulary Notebook ──────────────────────────────────────────
+
+export type VocabPartOfSpeech = "n" | "v" | "adj" | "adv" | "phrase";
+export type VocabReviewStatus = "learning" | "mastered";
+
+export interface PassageVocabItem {
+  id: string;
+  passageId: string;
+  testId?: string;
+  partNumber?: number;
+  word: string;
+  partOfSpeech: VocabPartOfSpeech;
+  ipa?: string;
+  meaningVi: string;
+  paraphraseNote?: string;
+  contextSentence?: string;
+  order?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpsertPassageVocabInput {
+  id?: string;
+  testId?: string;
+  partNumber?: number;
+  word: string;
+  partOfSpeech: VocabPartOfSpeech;
+  ipa?: string;
+  meaningVi: string;
+  paraphraseNote?: string;
+  contextSentence?: string;
+}
+
+export interface StudentPassageVocabsResponse {
+  passageId: string;
+  testId?: string;
+  testTitle?: string;
+  passageTitle?: string;
+  partNumber?: number;
+  items: PassageVocabItem[];
+}
+
+export interface UserVocabNotebookEntry {
+  id: string;
+  userId: string;
+  passageId?: string;
+  testId?: string;
+  sourcePassageTitle?: string;
+  sourceTestTitle?: string;
+  sourcePassageVocabId?: string;
+  word: string;
+  partOfSpeech: VocabPartOfSpeech;
+  ipa?: string;
+  meaningVi: string;
+  contextSentence?: string;
+  personalNote?: string;
+  paraphraseNote?: string;
+  status: VocabReviewStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserVocabSourceFilter {
+  passageId: string;
+  passageTitle: string;
+  testId?: string;
+  testTitle?: string;
+  count: number;
+}
+
+export interface UserVocabNotebookListResponse {
+  items: UserVocabNotebookEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  stats: {
+    total: number;
+    learningCount: number;
+    masteredCount: number;
+  };
+  sources: UserVocabSourceFilter[];
+}
+
+export interface CreateUserVocabRequest {
+  passageId?: string;
+  testId?: string;
+  sourcePassageTitle?: string;
+  sourceTestTitle?: string;
+  sourcePassageVocabId?: string;
+  word: string;
+  partOfSpeech?: VocabPartOfSpeech;
+  ipa?: string;
+  meaningVi: string;
+  contextSentence?: string;
+  personalNote?: string;
+  paraphraseNote?: string;
+  status?: VocabReviewStatus;
+}
+
+export interface UpdateUserVocabRequest {
+  word?: string;
+  partOfSpeech?: VocabPartOfSpeech;
+  ipa?: string;
+  meaningVi?: string;
+  contextSentence?: string;
+  personalNote?: string;
+  paraphraseNote?: string;
+  status?: VocabReviewStatus;
+}
+
+export interface BulkSaveUserVocabRequest {
+  passageId: string;
+  testId?: string;
+  sourcePassageTitle?: string;
+  sourceTestTitle?: string;
+  items?: UpsertPassageVocabInput[];
+}
+
+export interface BulkSaveUserVocabResponse {
+  savedCount: number;
+  skippedCount: number;
+  items: UserVocabNotebookEntry[];
 // ---------------------------------------------------------------------------
 // Phase 12 Types (Anonymous Feedback, Study Sessions & Admin Reset Password)
 // ---------------------------------------------------------------------------

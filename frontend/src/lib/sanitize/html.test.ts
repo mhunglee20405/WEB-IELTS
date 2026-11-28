@@ -16,6 +16,20 @@ describe("HTML sanitization & URL validation", () => {
     expect(clean).not.toContain("aria-label");
   });
 
+  it("preserves safe diagram <img> tags and alignment styles while stripping Base64 data URIs", async () => {
+    const dirty =
+      '<figure class="image"><img src="https://cdn.example.com/map.png" alt="Museum floorplan" width="420" height="280" style="display: block; margin-left: auto; margin-right: auto;" /><figcaption>Level 1</figcaption></figure>' +
+      '<img src="/api/v1/media/images/stream/abc-map.webp" alt="Uploaded chart" />' +
+      '<img src="data:image/png;base64,iVBORw0KGgo=" alt="Inline base64 blocked" />';
+    const clean = await sanitizeHtml(dirty, "richText");
+
+    expect(clean).toContain('src="https://cdn.example.com/map.png"');
+    expect(clean).toContain('alt="Museum floorplan"');
+    expect(clean).toContain('width="420"');
+    expect(clean).toContain('src="/api/v1/media/images/stream/abc-map.webp"');
+    expect(clean).not.toContain("data:image/png;base64");
+  });
+
   it("delegates to native Element.prototype.setHTML when available", async () => {
     const host = document.createElement("div");
     const mockSetHTML = vi.fn();

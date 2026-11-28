@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Clock, Headphones, Layers, PlayCircle } from "lucide-react";
+import { BookOpen, Clock, FileCheck2, Headphones, Layers, PlayCircle, Sparkles } from "lucide-react";
 import {
   Badge,
   Card,
@@ -87,7 +87,7 @@ export default function StudentPracticeLibraryPage() {
     <div className="space-y-6">
       <PageHeader
         title="Thư viện luyện thi IELTS"
-        subtitle="Chọn đề Reading hoặc Listening theo từng phần (Part Practice) hoặc thi trọn bộ (Full Test) chuẩn máy tính."
+        subtitle="Chọn đề Reading, Listening, Vocabulary hoặc Grammar để luyện tập và thi thử chuẩn máy tính."
       />
 
       <FilterToolbar
@@ -95,9 +95,11 @@ export default function StudentPracticeLibraryPage() {
           <Tabs
             ariaLabel="Lọc theo kỹ năng IELTS"
             items={[
-              { id: "ALL", label: "Tất cả kỹ năng" },
-              { id: "READING", label: "IELTS Reading" },
-              { id: "LISTENING", label: "IELTS Listening" },
+              { id: "ALL", label: "Tất cả" },
+              { id: "READING", label: "Reading" },
+              { id: "LISTENING", label: "Listening" },
+              { id: "VOCABULARY", label: "Vocabulary" },
+              { id: "GRAMMAR", label: "Grammar" },
             ]}
             value={skillTab}
             hasPanels={false}
@@ -145,7 +147,24 @@ export default function StudentPracticeLibraryPage() {
       >
         <div className="lms-card-grid">
           {tests.map((test) => {
-            const minutes = Math.max(1, Math.round(test.totalDurationSeconds / 60));
+            const isQuizSkill = test.skill === "VOCABULARY" || test.skill === "GRAMMAR";
+            const minutes = Math.round(test.totalDurationSeconds / 60);
+            const skillBadgeClass =
+              test.skill === "READING"
+                ? "bg-blue-50 text-blue-700"
+                : test.skill === "LISTENING"
+                  ? "bg-sky-50 text-sky-700"
+                  : test.skill === "VOCABULARY"
+                    ? "bg-violet-50 text-violet-700"
+                    : "bg-teal-50 text-teal-700";
+            const skillLabel =
+              test.skill === "READING"
+                ? "Reading"
+                : test.skill === "LISTENING"
+                  ? "Listening"
+                  : test.skill === "VOCABULARY"
+                    ? "Vocabulary"
+                    : "Grammar";
             return (
               <Card
                 key={test.id}
@@ -153,15 +172,21 @@ export default function StudentPracticeLibraryPage() {
               >
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${skillBadgeClass}`}
+                    >
                       {test.skill === "READING" ? (
                         <BookOpen className="h-3.5 w-3.5" />
-                      ) : (
+                      ) : test.skill === "LISTENING" ? (
                         <Headphones className="h-3.5 w-3.5" />
+                      ) : test.skill === "VOCABULARY" ? (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      ) : (
+                        <FileCheck2 className="h-3.5 w-3.5" />
                       )}
-                      {test.skill === "READING" ? "Reading" : "Listening"}
+                      {skillLabel}
                     </span>
-                    {test.difficulty && (
+                    {!isQuizSkill && test.difficulty && (
                       <Badge variant="neutral">
                         {DIFFICULTY_LABELS[test.difficulty] ?? test.difficulty}
                       </Badge>
@@ -178,18 +203,18 @@ export default function StudentPracticeLibraryPage() {
                   <div className="flex flex-wrap gap-2 text-xs text-slate-600">
                     <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-medium">
                       <Layers className="h-3.5 w-3.5" />
-                      {test.partCount}{" "}
-                      {test.skill === "READING" ? "Passage" : "Section"} ·{" "}
-                      {test.totalQuestions} câu
+                      {isQuizSkill
+                        ? `${test.totalQuestions} câu trắc nghiệm`
+                        : `${test.partCount} ${test.skill === "READING" ? "Passage" : "Section"} · ${test.totalQuestions} câu`}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-medium">
                       <Clock className="h-3.5 w-3.5" />
-                      {minutes} phút
+                      {minutes > 0 ? `${minutes} phút` : "Không giới hạn"}
                     </span>
-                    {test.allowedModes?.includes("PART") && (
+                    {!isQuizSkill && test.allowedModes?.includes("PART") && (
                       <Badge variant="info">Part Practice</Badge>
                     )}
-                    {test.allowedModes?.includes("FULL") && (
+                    {!isQuizSkill && test.allowedModes?.includes("FULL") && (
                       <Badge variant="success">Full Test</Badge>
                     )}
                   </div>

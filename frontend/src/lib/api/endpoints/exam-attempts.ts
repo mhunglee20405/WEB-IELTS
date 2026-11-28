@@ -118,6 +118,7 @@ export const examAttemptsApi = {
       skill: target.skill as any,
       answerReviewAvailable: true,
       items: (target.items ?? target.questions ?? []) as any,
+      parts: (target.parts ?? []) as any,
     };
   },
 };

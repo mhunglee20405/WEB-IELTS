@@ -1,0 +1,34 @@
+# Dependencies & local builds
+node_modules
+dist
+coverage
+
+# Version control
+.git
+.gitignore
+
+# Environment & secret files
+.env
+.env*
+*.env
+
+# Local development files
+docker-compose.yml
+docker-compose*.yml
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test and documentation
+test
+docs
+*.md
+
+# IDE & OS files
+.idea
+.vscode
+.DS_Store
+Thumbs.db

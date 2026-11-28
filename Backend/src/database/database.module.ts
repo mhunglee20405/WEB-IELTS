@@ -55,6 +55,24 @@ export class DatabaseModule implements OnApplicationBootstrap {
     }
 
     const models = Object.values(this.connection.models);
+    let successCount = 0;
+    let warningCount = 0;
+
+    for (const model of models) {
+      try {
+        await model.createIndexes();
+        successCount++;
+      } catch (err: any) {
+        warningCount++;
+        this.logger.warn(
+          `Index sync warning on model [${model.modelName}]: ${err.message}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Verified indexes for ${models.length} Mongoose models (${successCount} synced, ${warningCount} warnings handled)`,
+    );
     await Promise.all(models.map((model) => model.syncIndexes()));
     this.logger.log(`Synchronized indexes for ${models.length} Mongoose models`);
   }

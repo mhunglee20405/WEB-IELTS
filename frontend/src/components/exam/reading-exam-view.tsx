@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { BookOpen, Columns2, HelpCircle, Type } from "lucide-react";
+import { useRef, useState } from "react";
+import { BookOpen, Columns2, HelpCircle, Highlighter, RotateCcw, Type } from "lucide-react";
 import { SafeHtml } from "@/components/ui/safe-html";
 import { ExamQuestionGroupRenderer } from "./question-renderer-v2";
+import {
+  ReadingVocabToolbarButton,
+  ReadingVocabWorkspace,
+  usePassageSelectionCapture,
+} from "./reading-vocab-workspace";
 import type { ExamAnswerValue, ExamPartPublic } from "@/lib/api/types";
 import { isAnsweredValue } from "@/lib/exam/question-meta";
 import { cn } from "@/lib/utils/cn";
@@ -17,6 +22,10 @@ export interface ReadingExamViewProps {
   activeQuestionId: string | null;
   disabled?: boolean;
   readOnly?: boolean;
+  /** When false (timed Exam Mode), hides Contextual Vocab Drawer & Select-to-Save while keeping basic Highlighting */
+  enableVocabNotebook?: boolean;
+  testId?: string;
+  testTitle?: string;
   onAnswerChange: (questionId: string, value: ExamAnswerValue) => void;
   onToggleFlag?: (questionId: string) => void;
 }
@@ -30,6 +39,53 @@ const SPLIT_GRID_CLASS: Record<SplitRatio, string> = {
   "60/40": "lg:grid-cols-[60fr_40fr]",
 };
 
+function wrapReadingSelectionInHighlight(container: HTMLElement): boolean {
+  if (typeof window === "undefined") return false;
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+
+  const range = selection.getRangeAt(0);
+  if (!container.contains(range.commonAncestorContainer)) return false;
+
+  const textNodes: Text[] = [];
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  let node = walker.nextNode();
+  while (node) {
+    if (node.textContent && node.textContent.trim().length > 0 && range.intersectsNode(node)) {
+      textNodes.push(node as Text);
+    }
+    node = walker.nextNode();
+  }
+
+  let wrappedAny = false;
+  for (const textNode of textNodes) {
+    if (textNode.parentElement?.closest("mark[data-ielts-hl]")) continue;
+    const len = textNode.textContent?.length ?? 0;
+    const startOffset = textNode === range.startContainer ? range.startOffset : 0;
+    const endOffset = textNode === range.endContainer ? range.endOffset : len;
+    if (endOffset <= startOffset) continue;
+
+    const subRange = document.createRange();
+    subRange.setStart(textNode, startOffset);
+    subRange.setEnd(textNode, endOffset);
+
+    const mark = document.createElement("mark");
+    mark.setAttribute("data-ielts-hl", "true");
+    mark.className =
+      "cursor-pointer rounded-xs bg-amber-200/85 px-0.5 text-slate-900 hover:bg-amber-300/90";
+    mark.title = "Bấm để xóa highlight";
+    try {
+      subRange.surroundContents(mark);
+      wrappedAny = true;
+    } catch {
+      // Ignore partial node boundary error
+    }
+  }
+
+  selection.removeAllRanges();
+  return wrappedAny;
+}
+
 export function ReadingExamView({
   parts,
   activePartId,
@@ -39,14 +95,28 @@ export function ReadingExamView({
   activeQuestionId,
   disabled = false,
   readOnly = false,
+  enableVocabNotebook = false,
+  testId,
+  testTitle,
   onAnswerChange,
   onToggleFlag,
 }: ReadingExamViewProps) {
   const [splitRatio, setSplitRatio] = useState<SplitRatio>("50/50");
   const [largeFont, setLargeFont] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileTab>("passage");
+  const [highlightEnabled, setHighlightEnabled] = useState(false);
+  const [highlightResetCounter, setHighlightResetCounter] = useState(0);
+  const [vocabDrawerOpen, setVocabDrawerOpen] = useState(false);
 
+  const passageContainerRef = useRef<HTMLDivElement>(null);
   const activePart = parts.find((p) => p.id === activePartId) ?? parts[0];
+
+  const {
+    candidate: selectionCandidate,
+    captureSelection,
+    clearCandidate,
+  } = usePassageSelectionCapture(passageContainerRef, enableVocabNotebook && !highlightEnabled);
+
   if (!activePart) return null;
 
   return (
@@ -101,6 +171,44 @@ export function ReadingExamView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Basic Highlight Toggle (always available, including Exam Mode) */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={highlightEnabled}
+            onClick={() => {
+              setHighlightEnabled((v) => !v);
+              clearCandidate();
+            }}
+            className={cn(
+              "inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+              highlightEnabled
+                ? "border-amber-300 bg-amber-50 font-semibold text-amber-900"
+                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+            )}
+          >
+            <Highlighter className="h-3.5 w-3.5" />
+            Highlight
+          </button>
+
+          {highlightEnabled && (
+            <button
+              type="button"
+              onClick={() => setHighlightResetCounter((c) => c + 1)}
+              className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Xóa highlight
+            </button>
+          )}
+
+          {/* Contextual Vocabulary Notebook Button (hidden in timed Exam Mode) */}
+          <ReadingVocabToolbarButton
+            passageId={activePart.id}
+            enabled={enableVocabNotebook}
+            onClick={() => setVocabDrawerOpen(true)}
+          />
+
           <button
             type="button"
             onClick={() => setLargeFont((v) => !v)}
@@ -193,6 +301,24 @@ export function ReadingExamView({
           </header>
 
           <div
+            key={`${activePart.id}-${highlightResetCounter}`}
+            ref={passageContainerRef}
+            onMouseUp={() => {
+              if (highlightEnabled && passageContainerRef.current) {
+                wrapReadingSelectionInHighlight(passageContainerRef.current);
+              } else if (enableVocabNotebook) {
+                captureSelection();
+              }
+            }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              const mark = target.closest("mark[data-ielts-hl]");
+              if (mark && mark.parentNode) {
+                const parent = mark.parentNode;
+                while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+                parent.removeChild(mark);
+              }
+            }}
             className={cn(
               "select-text space-y-4 leading-relaxed text-slate-800 pb-28",
               largeFont ? "text-base leading-7" : "text-[15px] leading-7",
@@ -237,6 +363,18 @@ export function ReadingExamView({
           ))}
         </div>
       </div>
+
+      <ReadingVocabWorkspace
+        passageId={activePart.id}
+        testId={testId}
+        testTitle={testTitle}
+        passageTitle={activePart.passageTitle ?? activePart.title}
+        enabled={enableVocabNotebook}
+        drawerOpen={vocabDrawerOpen}
+        onOpenDrawerChange={setVocabDrawerOpen}
+        selectionCandidate={selectionCandidate}
+        onClearSelection={clearCandidate}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   studySessionsApi,
   usersApi,
 } from "@/lib/api/endpoints";
+import { resolveBackendMediaUrl } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/error";
 import type {
   Assignment,
@@ -263,20 +264,41 @@ export const ALLOWED_AUDIO_MIME_TYPES = new Set([
   "audio/mp3",
   "audio/wav",
   "audio/x-wav",
+  "audio/wave",
+  "audio/vnd.wave",
   "audio/mp4",
   "audio/m4a",
   "audio/x-m4a",
   "audio/aac",
   "audio/ogg",
   "audio/webm",
+  "audio/flac",
+  "audio/x-flac",
+  "audio/opus",
 ]);
 
-export const MAX_AUDIO_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
+export const MAX_AUDIO_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
+function normalizeOrInferAudioMime(file: File): string {
+  const normalized = file.type ? file.type.split(";")[0]!.trim().toLowerCase() : "";
+  if (normalized === "audio/wave" || normalized === "audio/vnd.wave") return "audio/wav";
+  if (normalized && ALLOWED_AUDIO_MIME_TYPES.has(normalized)) return normalized;
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "mp3") return "audio/mpeg";
+  if (ext === "wav") return "audio/wav";
+  if (ext === "m4a" || ext === "mp4") return "audio/mp4";
+  if (ext === "aac") return "audio/aac";
+  if (ext === "ogg") return "audio/ogg";
+  if (ext === "webm") return "audio/webm";
+  if (ext === "flac") return "audio/flac";
+  return normalized || "audio/mpeg";
+}
 
 export function validateAudioFile(file: File): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const validExt = ["mp3", "wav", "m4a", "aac", "ogg", "webm"].includes(ext);
-  const validMime = file.type ? ALLOWED_AUDIO_MIME_TYPES.has(file.type.toLowerCase()) : false;
+  const validExt = ["mp3", "wav", "m4a", "aac", "ogg", "webm", "flac"].includes(ext);
+  const baseMime = file.type ? file.type.split(";")[0]!.trim().toLowerCase() : "";
+  const validMime = baseMime ? ALLOWED_AUDIO_MIME_TYPES.has(baseMime) : false;
 
   if (!validMime && !validExt) {
     return "Định dạng âm thanh chưa được hỗ trợ. Vui lòng dùng tệp MP3, WAV, M4A, OGG hoặc AAC.";
@@ -285,7 +307,7 @@ export function validateAudioFile(file: File): string | null {
     return "Tệp âm thanh trống. Vui lòng chọn tệp hợp lệ.";
   }
   if (file.size > MAX_AUDIO_SIZE_BYTES) {
-    return "Dung lượng tệp vượt quá giới hạn tối đa 100 MB.";
+    return "Dung lượng tệp vượt quá giới hạn tối đa 50 MB.";
   }
   return null;
 }
@@ -293,14 +315,14 @@ export function validateAudioFile(file: File): string | null {
 function uploadFileWithXhr(
   url: string,
   file: File,
+  mimeType: string,
   onProgress: (percent: number) => void,
 ): Promise<void> {
+  const resolvedUrl = resolveBackendMediaUrl(url);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    if (file.type) {
-      xhr.setRequestHeader("Content-Type", file.type);
-    }
+    xhr.open("PUT", resolvedUrl, true);
+    xhr.setRequestHeader("Content-Type", mimeType);
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         onProgress(Math.min(95, Math.round((event.loaded / event.total) * 95)));
@@ -314,7 +336,7 @@ function uploadFileWithXhr(
           new ApiError({
             statusCode: xhr.status || 500,
             code: "AUDIO_UPLOAD_FAILED",
-            message: "Tải tệp âm thanh lên kho lưu trữ thất bại.",
+            message: `Tải tệp âm thanh lên kho lưu trữ thất bại (HTTP ${xhr.status}).`,
           }),
         );
       }
@@ -336,7 +358,7 @@ export async function uploadPrivateListeningAudio(
   file: File,
   onProgress: (percent: number) => void,
 ): Promise<{ assetId: string }> {
-  const mimeType = file.type || "audio/mpeg";
+  const mimeType = normalizeOrInferAudioMime(file);
   onProgress(10);
 
   const init = await mediaApi.initAudioUpload({
@@ -350,7 +372,7 @@ export async function uploadPrivateListeningAudio(
     await new Promise((resolve) => setTimeout(resolve, 120));
     onProgress(85);
   } else {
-    await uploadFileWithXhr(init.uploadUrl, file, onProgress);
+    await uploadFileWithXhr(init.uploadUrl, file, mimeType, onProgress);
   }
 
   await mediaApi.completeAudioUpload({

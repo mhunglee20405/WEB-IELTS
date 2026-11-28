@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  BookMarked,
   BookOpen,
   Clock,
   Headphones,
@@ -16,11 +17,12 @@ import {
 import {
   AttemptResumeDialog,
 } from "@/components/exam/exam-shell";
+import { ReadingExamView } from "@/components/exam/reading-exam-view";
 import { Badge, Button, Card, PageHeader, QueryState } from "@/components/ui";
 import { examAttemptsApi, examTestsApi } from "@/lib/api/endpoints";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
 import { examKeys } from "@/lib/api/query-keys";
-import type { ExamMode } from "@/lib/api/types";
+import type { ExamAnswerValue, ExamMode } from "@/lib/api/types";
 import { cn } from "@/lib/utils/cn";
 
 export default function StudentPracticeDetailPage() {
@@ -42,9 +44,28 @@ export default function StudentPracticeDetailPage() {
   const [modeChoice, setSelectedMode] = useState<ExamMode | null>(null);
   const [partChoice, setSelectedPartId] = useState<string>("");
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
+  const [studyReaderOpen, setStudyReaderOpen] = useState(false);
+  const [studyAnswers, setStudyAnswers] = useState<Record<string, ExamAnswerValue | undefined>>({});
+  const [studyPartIdOverride, setStudyPartIdOverride] = useState<string>("");
 
-  const selectedMode: ExamMode =
-    modeChoice && test?.allowedModes.includes(modeChoice)
+  const activeStudyPartId =
+    studyPartIdOverride && test?.parts.some((p) => p.id === studyPartIdOverride)
+      ? studyPartIdOverride
+      : (requestedPartId && test?.parts.some((p) => p.id === requestedPartId)
+          ? requestedPartId
+          : (test?.parts[0]?.id ?? ""));
+
+  const studyPartQuery = useQuery({
+    queryKey: examKeys.testPartDetail(testId, activeStudyPartId),
+    queryFn: () => examTestsApi.getPart(testId, activeStudyPartId),
+    enabled: Boolean(studyReaderOpen && test?.skill === "READING" && activeStudyPartId),
+  });
+
+  const isQuizSkill = test?.skill === "VOCABULARY" || test?.skill === "GRAMMAR";
+
+  const selectedMode: ExamMode = isQuizSkill
+    ? "FULL"
+    : modeChoice && test?.allowedModes.includes(modeChoice)
       ? modeChoice
       : requestedMode && test?.allowedModes.includes(requestedMode)
         ? requestedMode
@@ -111,12 +132,20 @@ export default function StudentPracticeDetailPage() {
               title={test.title}
               subtitle={
                 test.subtitle ??
-                "Chọn chế độ luyện từng phần (Part Practice) hoặc thi trọn bộ (Full Test)."
+                (isQuizSkill
+                  ? "Bài luyện tập trắc nghiệm Vocabulary / Grammar gồm 4 lựa chọn A, B, C, D kèm chấm điểm & giải thích chi tiết."
+                  : "Chọn chế độ luyện từng phần (Part Practice) hoặc thi trọn bộ (Full Test).")
               }
               actions={
                 <div className="flex items-center gap-2">
                   <Badge variant="info">
-                    {test.skill === "READING" ? "IELTS Reading" : "IELTS Listening"}
+                    {test.skill === "READING"
+                      ? "IELTS Reading"
+                      : test.skill === "LISTENING"
+                        ? "IELTS Listening"
+                        : test.skill === "VOCABULARY"
+                          ? "Vocabulary"
+                          : "Grammar"}
                   </Badge>
                   <Badge variant="neutral">Phiên bản v{test.version}</Badge>
                 </div>
@@ -160,6 +189,26 @@ export default function StudentPracticeDetailPage() {
               </Card>
             )}
 
+            {isQuizSkill ? (
+              <Card className="space-y-3 border-indigo-200 bg-indigo-50/25">
+                <h2 className="text-base font-bold text-slate-900">
+                  Thông tin bài luyện tập Trắc nghiệm
+                </h2>
+                <div className="flex flex-wrap gap-3 text-sm text-slate-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 font-medium ring-1 ring-slate-200">
+                    <Layers className="h-4 w-4 text-indigo-600" />
+                    {test.totalQuestions} câu hỏi trắc nghiệm (A/B/C/D)
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 font-medium ring-1 ring-slate-200">
+                    <Clock className="h-4 w-4 text-indigo-600" />
+                    {test.totalDurationSeconds > 0
+                      ? `${Math.round(test.totalDurationSeconds / 60)} phút`
+                      : "Không giới hạn thời gian"}
+                  </span>
+                </div>
+              </Card>
+            ) : (
+            <>
             {/* Dynamic Mode Selection */}
             <div className="grid gap-4 md:grid-cols-2">
               {test.allowedModes.includes("PART") && (
@@ -289,6 +338,8 @@ export default function StudentPracticeDetailPage() {
                 })}
               </div>
             </section>
+            </>
+            )}
 
             {startMutation.isError && (
               <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
@@ -296,7 +347,22 @@ export default function StudentPracticeDetailPage() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {test.skill === "READING" && test.parts.length > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  data-testid="toggle-reading-study-btn"
+                  onClick={() => setStudyReaderOpen((v) => !v)}
+                >
+                  <BookMarked className="h-4 w-4 text-indigo-700" />
+                  {studyReaderOpen
+                    ? "Đóng chế độ Đọc & Học từ vựng"
+                    : "Đọc & Học từ vựng (Không tính giờ)"}
+                </Button>
+              )}
+
               <Button
                 variant="primary"
                 size="lg"
@@ -306,11 +372,72 @@ export default function StudentPracticeDetailPage() {
                 data-testid="start-exam-btn"
               >
                 <Play className="h-4 w-4" />
-                {selectedMode === "FULL"
-                  ? "Bắt đầu thi Full Test"
-                  : "Bắt đầu luyện Part đã chọn"}
+                {isQuizSkill
+                  ? "Bắt đầu làm bài"
+                  : selectedMode === "FULL"
+                    ? "Bắt đầu thi Full Test"
+                    : "Bắt đầu luyện Part đã chọn"}
               </Button>
             </div>
+
+            {studyReaderOpen && test.skill === "READING" && (
+              <Card className="space-y-3 border-indigo-200 bg-indigo-50/20 p-3 sm:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900">
+                      Chế độ Luyện tập Reading &amp; Sổ tay từ vựng (Không tính giờ)
+                    </h2>
+                    <p className="text-xs text-slate-600">
+                      Bôi đen từ bất kỳ trên bài đọc để lưu vào sổ cá nhân hoặc mở ngăn kéo Sổ từ vựng.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {test.parts.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setStudyPartIdOverride(p.id)}
+                        className={cn(
+                          "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
+                          p.id === activeStudyPartId
+                            ? "bg-indigo-600 text-white"
+                            : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                        )}
+                      >
+                        Passage {p.partNumber}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <QueryState
+                  isLoading={studyPartQuery.isLoading}
+                  isError={studyPartQuery.isError}
+                  error={studyPartQuery.error}
+                  isEmpty={!studyPartQuery.data}
+                  onRetry={() => void studyPartQuery.refetch()}
+                >
+                  {studyPartQuery.data && (
+                    <div className="h-[680px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                      <ReadingExamView
+                        parts={[studyPartQuery.data]}
+                        activePartId={studyPartQuery.data.id}
+                        onSelectPart={setStudyPartIdOverride}
+                        answers={studyAnswers}
+                        flaggedIds={new Set()}
+                        activeQuestionId={null}
+                        enableVocabNotebook
+                        testId={test.id}
+                        testTitle={test.title}
+                        onAnswerChange={(qId, val) =>
+                          setStudyAnswers((prev) => ({ ...prev, [qId]: val }))
+                        }
+                      />
+                    </div>
+                  )}
+                </QueryState>
+              </Card>
+            )}
 
             <AttemptResumeDialog
               open={resumeDialogOpen}

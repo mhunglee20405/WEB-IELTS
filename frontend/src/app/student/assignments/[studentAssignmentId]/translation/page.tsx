@@ -12,12 +12,15 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ContextualPassageReader,
+  ReadingVocabToolbarButton,
+} from "@/components/exam/reading-vocab-workspace";
 import { ReadingSplitWorkspace } from "@/components/student/reading-split-workspace";
 import {
   ConfirmDialog,
   PageHeader,
   QueryState,
-  SafeHtml,
   StatusBadge,
 } from "@/components/ui";
 import { studentAssignmentsApi } from "@/lib/api/endpoints";
@@ -29,12 +32,23 @@ import { formatVnDateTime } from "@/lib/time/vn-time";
 interface TranslationEditorProps {
   workspace: TranslationWorkspace;
   studentAssignmentId: string;
+  fallbackPassageId?: string;
+  fallbackTestId?: string;
 }
 
-function TranslationEditor({ workspace, studentAssignmentId }: TranslationEditorProps) {
+function TranslationEditor({
+  workspace,
+  studentAssignmentId,
+  fallbackPassageId,
+  fallbackTestId,
+}: TranslationEditorProps) {
   const queryClient = useQueryClient();
   const [text, setText] = useState<string>(() => workspace.draftText ?? "");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [vocabDrawerOpen, setVocabDrawerOpen] = useState(false);
+  const [selectedPassageId, setSelectedPassageId] = useState<string>(
+    workspace.passageId ?? "",
+  );
   const [feedbackBanner, setFeedbackBanner] = useState<{
     kind: "success" | "error";
     message: string;
@@ -220,12 +234,52 @@ function TranslationEditor({ workspace, studentAssignmentId }: TranslationEditor
     </div>
   );
 
+  const resolvedTestId = workspace.testId ?? workspace.examTestId ?? fallbackTestId;
+  const resolvedPassageId =
+    workspace.passageId ?? fallbackPassageId ?? studentAssignmentId;
+  const passages =
+    workspace.passages && workspace.passages.length > 0
+      ? workspace.passages
+      : [
+          {
+            passageId: resolvedPassageId,
+            partNumber: 1,
+            title: workspace.passageTitle,
+            passageTitle: workspace.passageTitle,
+            passageHtml: workspace.passageHtml,
+            passageVocabs: workspace.passageVocabs ?? [],
+          },
+        ];
+  const activePassage =
+    passages.find((p) => p.passageId === selectedPassageId) ?? passages[0];
+
   return (
     <ReadingSplitWorkspace
       leftLabel="Bài đọc gốc"
       rightLabel="Bản dịch tiếng Việt"
       leftTitle={workspace.passageTitle}
-      leftContent={<SafeHtml html={workspace.passageHtml} lang="en" preset="richText" />}
+      leftHeaderActions={
+        activePassage ? (
+          <ReadingVocabToolbarButton
+            passageId={activePassage.passageId}
+            enabled
+            initialItems={activePassage.passageVocabs}
+            onClick={() => setVocabDrawerOpen(true)}
+          />
+        ) : null
+      }
+      leftContent={
+        <ContextualPassageReader
+          passages={passages}
+          testId={resolvedTestId}
+          testTitle={workspace.passageTitle}
+          enableVocab
+          selectedPassageId={activePassage?.passageId}
+          onSelectPassageId={setSelectedPassageId}
+          drawerOpen={vocabDrawerOpen}
+          onOpenDrawerChange={setVocabDrawerOpen}
+        />
+      }
       rightContent={editorPanel}
     />
   );
@@ -244,6 +298,12 @@ export default function StudentAssignmentTranslationPage() {
       }
       return failureCount < 1;
     },
+  });
+
+  const detailQuery = useQuery({
+    queryKey: studentKeys.assignmentDetail(studentAssignmentId),
+    queryFn: () => studentAssignmentsApi.getDetail(studentAssignmentId),
+    enabled: Boolean(translationQuery.data && !translationQuery.data.passageId),
   });
 
   const isLocked =
@@ -298,9 +358,15 @@ export default function StudentAssignmentTranslationPage() {
         >
           {translationQuery.data ? (
             <TranslationEditor
-              key={`${translationQuery.data.translationId}-${translationQuery.data.status}`}
+              key={translationQuery.data.translationId}
               workspace={translationQuery.data}
               studentAssignmentId={studentAssignmentId}
+              fallbackPassageId={
+                detailQuery.data?.passageId ?? detailQuery.data?.exercise.id
+              }
+              fallbackTestId={
+                detailQuery.data?.testId ?? detailQuery.data?.examTestId
+              }
             />
           ) : null}
         </QueryState>

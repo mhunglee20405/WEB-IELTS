@@ -1133,6 +1133,7 @@ export class AssignmentsService implements OnModuleInit {
           : dto.maxAttempts !== undefined && dto.maxAttempts !== null
             ? dto.maxAttempts > 1
             : true,
+      strictExamMode: Boolean(dto.strictExamMode),
       maxAttempts: dto.maxAttempts,
       requiredScope: dto.requiredScope || 'FULL',
       requiredPartId: dto.requiredPartId,
@@ -1488,6 +1489,7 @@ export class AssignmentsService implements OnModuleInit {
         passedAt: sa.passedAt,
         lastSubmittedAt: sa.lastSubmittedAt,
         allowRetake: assignment.allowRetake,
+        strictExamMode: Boolean(assignment.strictExamMode),
         maxAttempts: assignment.maxAttempts,
       };
     });
@@ -1583,6 +1585,9 @@ export class AssignmentsService implements OnModuleInit {
     }
     if (dto.allowRetake !== undefined) {
       assignment.allowRetake = dto.allowRetake;
+    }
+    if (dto.strictExamMode !== undefined) {
+      assignment.strictExamMode = dto.strictExamMode;
     }
     if (dto.maxAttempts !== undefined) {
       assignment.maxAttempts = dto.maxAttempts;
@@ -2026,6 +2031,7 @@ export class AssignmentsService implements OnModuleInit {
       dueAt: raw.deadlineAt,
       dueAtVn: formatVnDateTime(raw.deadlineAt),
       allowRetake: raw.allowRetake,
+      strictExamMode: Boolean(raw.strictExamMode),
       maxAttempts: raw.maxAttempts,
       status: lifecycleStatus.toLowerCase(),
       rawStatus: raw.status,
@@ -2119,6 +2125,7 @@ export class AssignmentsService implements OnModuleInit {
       effectiveDeadlineAt: rawSa.effectiveDeadlineAt,
       effectiveDeadlineAtVn: formatVnDateTime(rawSa.effectiveDeadlineAt),
       allowRetake: raw.allowRetake,
+      strictExamMode: Boolean(raw.strictExamMode),
       maxAttempts: raw.maxAttempts,
       assignmentStatus: raw.status,
       myStatus: rawSa.status,

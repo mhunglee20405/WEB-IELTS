@@ -91,8 +91,50 @@ export function buildStudentAssignmentDetail(
       ? state.examV2.tests.find((t) => t.id === assignment.examTestId)
       : undefined;
     if (!v2Test) return null;
+    const scopedParts =
+      assignment.requiredScope === "PART" && assignment.requiredPartId
+        ? v2Test.parts.filter((p) => p.id === assignment.requiredPartId)
+        : v2Test.parts;
+    const passages =
+      v2Test.skill === "READING"
+        ? scopedParts.map((p) => ({
+            passageId: p.id,
+            partNumber: p.partNumber,
+            title: p.title,
+            passageTitle: p.passageTitle ?? p.title,
+            passageHtml:
+              p.passageHtml ||
+              (p.paragraphs
+                ? p.paragraphs.map((pr) => `<p><strong>${pr.label}.</strong> ${pr.text}</p>`).join("")
+                : ""),
+            passageVocabs: state.examV2.passageVocabs[p.id] ?? [],
+          }))
+        : [];
+    const primaryPassage = passages[0];
+    const flatQuestions = scopedParts.flatMap((part) =>
+      part.questionGroups.flatMap((g) =>
+        g.questions.map((q) => ({
+          id: q.id,
+          orderIndex: q.questionNumber,
+          prompt: q.prompt,
+          type: "fill_blank" as const,
+          options: q.options?.map((o) => ({
+            id: o.key,
+            label: o.label ?? o.key,
+            text: o.text,
+          })),
+          points: 1,
+        })),
+      ),
+    );
     return {
       ...summary,
+      examTestId: v2Test.id,
+      testId: v2Test.id,
+      strictExamMode: Boolean(assignment.strictExamMode),
+      passageId: primaryPassage?.passageId,
+      passages,
+      passageVocabs: primaryPassage?.passageVocabs ?? [],
       exercise: {
         id: v2Test.id,
         title: v2Test.title,
@@ -100,18 +142,42 @@ export function buildStudentAssignmentDetail(
         status: "published",
         version: v2Test.version,
         instructions: v2Test.instructions,
+        passageId: primaryPassage?.passageId,
+        passageHtml: passages.map((p) => p.passageHtml).filter(Boolean).join("\n\n"),
         durationMinutes: Math.max(1, Math.round(v2Test.totalDurationSeconds / 60)),
         passThreshold: PASS_SCORE_THRESHOLD,
         createdAt: v2Test.updatedAt,
         updatedAt: v2Test.updatedAt,
-        questions: [],
+        questions: flatQuestions,
       },
     };
   }
 
+  const passageVocabs = state.examV2.passageVocabs[exercise.id] ?? [];
+  const passages =
+    exercise.type === "reading"
+      ? [
+          {
+            passageId: exercise.id,
+            partNumber: 1,
+            title: exercise.title,
+            passageTitle: exercise.title,
+            passageHtml: exercise.passageHtml ?? "",
+            passageVocabs,
+          },
+        ]
+      : [];
+
   return {
     ...summary,
-    exercise: stripAnswerKeysFromExercise(exercise),
+    strictExamMode: Boolean(assignment.strictExamMode),
+    ...(exercise.type === "reading"
+      ? { passageId: exercise.id, passages, passageVocabs }
+      : {}),
+    exercise: {
+      ...stripAnswerKeysFromExercise(exercise),
+      ...(exercise.type === "reading" ? { passageId: exercise.id } : {}),
+    },
   };
 }
 

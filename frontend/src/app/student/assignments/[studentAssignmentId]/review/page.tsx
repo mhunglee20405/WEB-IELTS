@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Languages, Lock, RotateCcw } from "lucide-reac
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { ContextualPassageReader } from "@/components/exam/reading-vocab-workspace";
 import { PageHeader, QueryState, SafeHtml, StatusBadge } from "@/components/ui";
 import { assignmentsApi, studentAssignmentsApi } from "@/lib/api/endpoints";
 import { ApiError } from "@/lib/api/error";
@@ -55,8 +56,56 @@ export default function StudentAssignmentReviewPage() {
   });
 
   const hasTranslation = Boolean(translationQuery.data?.draftText?.trim());
-  const exType = detailQuery.data?.exerciseType || summary?.exerciseType;
+  const exType =
+    reviewQuery.data?.exerciseType || detailQuery.data?.exerciseType || summary?.exerciseType;
   const isReading = !exType || String(exType).toLowerCase() === "reading";
+  const reviewPassages = (() => {
+    if (!isReading) return [];
+    if (reviewQuery.data?.passages && reviewQuery.data.passages.length > 0) {
+      return reviewQuery.data.passages;
+    }
+    if (detailQuery.data?.passages && detailQuery.data.passages.length > 0) {
+      return detailQuery.data.passages;
+    }
+    const fallbackHtml =
+      reviewQuery.data?.passageHtml ||
+      detailQuery.data?.exercise.passageHtml ||
+      translationQuery.data?.passageHtml ||
+      "";
+    const fallbackPassageId =
+      reviewQuery.data?.passageId ||
+      detailQuery.data?.passageId ||
+      detailQuery.data?.exercise.passageId ||
+      detailQuery.data?.exercise.id ||
+      translationQuery.data?.passageId ||
+      "";
+    if (!fallbackPassageId) return [];
+    return [
+      {
+        passageId: fallbackPassageId,
+        partNumber: 1,
+        title:
+          reviewQuery.data?.passageTitle ||
+          detailQuery.data?.exercise.title ||
+          translationQuery.data?.passageTitle ||
+          "Bài đọc Reading",
+        passageTitle:
+          reviewQuery.data?.passageTitle ||
+          detailQuery.data?.exercise.title ||
+          translationQuery.data?.passageTitle,
+        passageHtml: fallbackHtml,
+        passageVocabs:
+          reviewQuery.data?.passageVocabs ?? detailQuery.data?.passageVocabs ?? [],
+      },
+    ];
+  })();
+  const resolvedTestId =
+    reviewQuery.data?.testId ??
+    reviewQuery.data?.examTestId ??
+    detailQuery.data?.testId ??
+    detailQuery.data?.examTestId;
+  const resolvedTestTitle =
+    reviewQuery.data?.title ?? detailQuery.data?.exercise.title ?? summary?.title;
 
   return (
     <div className="space-y-6">
@@ -257,6 +306,17 @@ export default function StudentAssignmentReviewPage() {
                     </Link>
                   </div>
                 )
+              ) : null}
+
+              {isReading && reviewPassages.length > 0 ? (
+                <ContextualPassageReader
+                  showHeader
+                  passages={reviewPassages}
+                  testId={resolvedTestId}
+                  testTitle={resolvedTestTitle}
+                  enableVocab
+                  passageContainerClassName="max-h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 text-[15px] leading-7 text-slate-800 shadow-2xs"
+                />
               ) : null}
 
               <div className="space-y-3">

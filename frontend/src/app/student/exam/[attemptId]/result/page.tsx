@@ -1,18 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  BookOpen,
   CheckCircle2,
+  Headphones,
   Languages,
   Lock,
   RotateCcw,
   XCircle,
 } from "lucide-react";
-import { Badge, Card, PageHeader, QueryState } from "@/components/ui";
+import { ExamListeningPlayer } from "@/components/exam/exam-listening-player";
+import {
+  ReadingVocabToolbarButton,
+  ReadingVocabWorkspace,
+  usePassageSelectionCapture,
+} from "@/components/exam/reading-vocab-workspace";
+import { Badge, Card, PageHeader, QueryState, SafeHtml } from "@/components/ui";
 import { examAttemptsApi, readingTranslationsApi } from "@/lib/api/endpoints";
 import { examKeys } from "@/lib/api/query-keys";
 import { formatExamDurationSeconds } from "@/lib/exam/question-meta";
@@ -22,6 +30,15 @@ export default function StudentExamResultPage() {
   const params = useParams<{ attemptId: string }>();
   const attemptId = decodeURIComponent(params.attemptId);
   const [reviewFilter, setReviewFilter] = useState<"ALL" | "WRONG_ONLY">("ALL");
+  const [selectedTranscriptPartId, setSelectedTranscriptPartId] = useState<string>("");
+  const [selectedReadingPartId, setSelectedReadingPartId] = useState<string>("");
+  const [vocabDrawerOpen, setVocabDrawerOpen] = useState(false);
+  const readingReviewPassageRef = useRef<HTMLDivElement>(null);
+  const {
+    candidate: readingSelectionCandidate,
+    captureSelection: captureReadingSelection,
+    clearCandidate: clearReadingSelection,
+  } = usePassageSelectionCapture(readingReviewPassageRef, true);
 
   const resultQuery = useQuery({
     queryKey: examKeys.attemptResult(attemptId),
@@ -43,6 +60,11 @@ export default function StudentExamResultPage() {
   });
 
   const reviewItems = reviewQuery.data?.items ?? [];
+  const reviewParts = reviewQuery.data?.parts ?? [];
+  const activeTranscriptPart =
+    reviewParts.find((p) => p.id === selectedTranscriptPartId) ?? reviewParts[0];
+  const activeReadingPart =
+    reviewParts.find((p) => p.id === selectedReadingPartId) ?? reviewParts[0];
   const filteredReviewItems =
     reviewFilter === "WRONG_ONLY"
       ? reviewItems.filter((item) => !item.isCorrect)
@@ -192,7 +214,8 @@ export default function StudentExamResultPage() {
               </Card>
             </div>
 
-            {/* Per-Part Breakdown Table */}
+            {/* Per-Part Breakdown Table (Reading & Listening multi-part exams) */}
+            {(result.skill === "READING" || result.skill === "LISTENING") && (
             <Card>
               <h2 className="mb-3 text-base font-bold text-slate-900">
                 Phân tích theo từng phần ({result.skill === "READING" ? "Passage" : "Section"})
@@ -233,6 +256,7 @@ export default function StudentExamResultPage() {
                 </table>
               </div>
             </Card>
+            )}
 
             {/* Reading Translation Gate (Shown ONLY for READING tests) */}
             {result.skill === "READING" && (
@@ -280,6 +304,174 @@ export default function StudentExamResultPage() {
                         Dịch Passage {p.partNumber}: {p.passageTitle}
                       </Link>
                     ))}
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* Reading Passage Review & Contextual Vocabulary Notebook */}
+            {result.skill === "READING" && reviewParts.length > 0 && activeReadingPart && (
+              <Card className="space-y-4 border-indigo-200 bg-indigo-50/20">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-indigo-700" />
+                      <h2 className="text-base font-bold text-slate-900">
+                        Đọc lại bài &amp; Sổ tay từ vựng theo ngữ cảnh
+                      </h2>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-600">
+                      Bôi đen từ bất kỳ trên bài đọc để lưu vào sổ cá nhân hoặc mở Sổ từ vựng gợi ý từ Giảng viên.
+                    </p>
+                  </div>
+                  <ReadingVocabToolbarButton
+                    passageId={activeReadingPart.id}
+                    enabled
+                    onClick={() => setVocabDrawerOpen(true)}
+                  />
+                </div>
+
+                {reviewParts.length > 1 && (
+                  <div className="flex flex-wrap gap-2">
+                    {reviewParts.map((part) => (
+                      <button
+                        key={part.id}
+                        type="button"
+                        onClick={() => setSelectedReadingPartId(part.id)}
+                        className={cn(
+                          "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                          part.id === activeReadingPart.id
+                            ? "bg-indigo-600 text-white"
+                            : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                        )}
+                      >
+                        Passage {part.partNumber}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div
+                  ref={readingReviewPassageRef}
+                  onMouseUp={captureReadingSelection}
+                  className="max-h-[420px] select-text overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 text-[15px] leading-7 text-slate-800 shadow-2xs"
+                >
+                  <p className="mb-3 text-sm font-bold text-slate-900">
+                    {activeReadingPart.passageTitle ?? activeReadingPart.title}
+                  </p>
+                  {activeReadingPart.passageHtml ? (
+                    <SafeHtml html={activeReadingPart.passageHtml} preset="richText" />
+                  ) : (
+                    <p className="text-xs italic text-slate-500">
+                      Nội dung bài đọc không có sẵn ở chế độ xem tóm tắt này.
+                    </p>
+                  )}
+                </div>
+
+                <ReadingVocabWorkspace
+                  passageId={activeReadingPart.id}
+                  testId={result.testId}
+                  testTitle={result.testTitle}
+                  passageTitle={activeReadingPart.passageTitle ?? activeReadingPart.title}
+                  enabled
+                  drawerOpen={vocabDrawerOpen}
+                  onOpenDrawerChange={setVocabDrawerOpen}
+                  selectionCandidate={readingSelectionCandidate}
+                  onClearSelection={clearReadingSelection}
+                />
+              </Card>
+            )}
+
+            {/* Listening Audio Script & Transcript Section (Shown ONLY for LISTENING tests) */}
+            {result.skill === "LISTENING" && (
+              <Card
+                className={cn(
+                  "border",
+                  result.answerReviewAvailable
+                    ? "border-blue-200 bg-blue-50/20"
+                    : "border-slate-200 bg-slate-50",
+                )}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Headphones className="h-5 w-5 text-blue-700" />
+                      <h2 className="text-base font-bold text-slate-900">
+                        Audio Script & Lời thoại bài nghe
+                      </h2>
+                    </div>
+                    <p className="text-sm text-slate-700">
+                      {result.answerReviewAvailable
+                        ? "Nghe lại từng Section và đối chiếu với bản ghi âm lời thoại (Transcript) đầy đủ."
+                        : `Bạn cần đạt tối thiểu ${result.passThresholdPercent}% để mở khóa toàn bộ Audio Script và lời thoại chi tiết.`}
+                    </p>
+                  </div>
+
+                  {!result.answerReviewAvailable && (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+                      <Lock className="h-3.5 w-3.5 text-amber-600" />
+                      Chưa mở khóa Script
+                    </span>
+                  )}
+                </div>
+
+                {result.answerReviewAvailable && reviewParts.length > 0 && (
+                  <div className="space-y-4">
+                    {/* Section Selector Tabs */}
+                    <div
+                      role="tablist"
+                      aria-label="Danh sách section transcript"
+                      className="flex shrink-0 flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                    >
+                      {reviewParts.map((part) => {
+                        const isSelected = (activeTranscriptPart?.id ?? "") === part.id;
+                        return (
+                          <button
+                            key={part.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={isSelected}
+                            onClick={() => setSelectedTranscriptPartId(part.id)}
+                            className={cn(
+                              "inline-flex min-h-9 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                              isSelected
+                                ? "bg-blue-600 text-white"
+                                : "bg-slate-100 text-slate-700 hover:bg-slate-200",
+                            )}
+                          >
+                            <Headphones className="h-3.5 w-3.5" />
+                            <span>Section {part.partNumber}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active Section Player & Transcript Display */}
+                    {activeTranscriptPart && (
+                      <div className="space-y-3">
+                        {activeTranscriptPart.audioAsset && (
+                          <ExamListeningPlayer
+                            sectionTitle={activeTranscriptPart.title}
+                            audioAsset={activeTranscriptPart.audioAsset}
+                          />
+                        )}
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
+                          <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                            Bản ghi lời thoại (Full Audio Transcript) — {activeTranscriptPart.title}
+                          </h3>
+                          {activeTranscriptPart.transcript ? (
+                            <div className="max-h-96 overflow-y-auto rounded-lg bg-slate-50 p-4 font-mono text-xs sm:text-sm leading-relaxed text-slate-800 whitespace-pre-line border border-slate-200">
+                              {activeTranscriptPart.transcript}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500 italic">
+                              Chưa có bản ghi âm lời thoại cho phần này.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </Card>
@@ -390,9 +582,20 @@ export default function StudentExamResultPage() {
                           </div>
 
                           <div className="mt-2.5 grid gap-2 text-xs sm:grid-cols-2">
-                            <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
-                              <span className="text-slate-500">Câu trả lời của bạn: </span>
-                              <strong className="text-slate-900">{stuText}</strong>
+                            <div
+                              className={cn(
+                                "rounded-lg px-3 py-2 ring-1",
+                                item.isCorrect
+                                  ? "bg-emerald-50/70 ring-emerald-200"
+                                  : "bg-rose-50/70 ring-rose-200",
+                              )}
+                            >
+                              <span className="text-slate-600">Câu trả lời của bạn: </span>
+                              <strong
+                                className={item.isCorrect ? "text-emerald-900" : "text-rose-800"}
+                              >
+                                {stuText}
+                              </strong>
                             </div>
                             <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-emerald-200">
                               <span className="text-slate-500">Đáp án chuẩn: </span>
@@ -405,15 +608,74 @@ export default function StudentExamResultPage() {
                             </div>
                           </div>
 
+                          {item.options && item.options.length > 0 && (
+                            <div className="mt-2.5 grid gap-1.5 sm:grid-cols-2">
+                              {item.options.map((opt) => {
+                                const corrSet = new Set(
+                                  (Array.isArray(item.correctAnswer)
+                                    ? item.correctAnswer
+                                    : item.correctAnswer
+                                      ? [String(item.correctAnswer)]
+                                      : []
+                                  ).map((k) => k.trim().toUpperCase()),
+                                );
+                                const stuSet = new Set(
+                                  (Array.isArray(item.studentAnswer)
+                                    ? item.studentAnswer
+                                    : item.studentAnswer
+                                      ? [String(item.studentAnswer)]
+                                      : []
+                                  ).map((k) => k.trim().toUpperCase()),
+                                );
+                                const keyNorm = opt.key.trim().toUpperCase();
+                                const isOptCorrect = corrSet.has(keyNorm);
+                                const isOptChosen = stuSet.has(keyNorm);
+                                return (
+                                  <div
+                                    key={opt.key}
+                                    className={cn(
+                                      "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs",
+                                      isOptCorrect
+                                        ? "border-emerald-300 bg-emerald-50 text-emerald-950 font-semibold"
+                                        : isOptChosen
+                                          ? "border-rose-300 bg-rose-50 text-rose-900 font-semibold"
+                                          : "border-slate-200 bg-white text-slate-700",
+                                    )}
+                                  >
+                                    <span>
+                                      <strong className="mr-1.5">{opt.key}.</strong>
+                                      {opt.text}
+                                    </span>
+                                    {isOptCorrect && (
+                                      <span className="shrink-0 text-[10px] font-bold text-emerald-700">
+                                        Đáp án đúng
+                                      </span>
+                                    )}
+                                    {!isOptCorrect && isOptChosen && (
+                                      <span className="shrink-0 text-[10px] font-bold text-rose-700">
+                                        Bạn chọn
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           {(item.explanation || item.referenceParagraph) && (
-                            <p className="mt-2 text-xs leading-relaxed text-slate-700">
+                            <div className="mt-2.5 rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2 text-xs leading-relaxed text-slate-700">
                               {item.referenceParagraph && (
                                 <span className="mr-1.5 rounded bg-blue-100 px-1.5 py-0.5 font-semibold text-blue-800">
                                   Đoạn {item.referenceParagraph}
                                 </span>
                               )}
-                              {item.explanation}
-                            </p>
+                              {item.explanation && (
+                                <>
+                                  <strong className="text-blue-950">Giải thích: </strong>
+                                  <span>{item.explanation}</span>
+                                </>
+                              )}
+                            </div>
                           )}
                         </div>
                       );

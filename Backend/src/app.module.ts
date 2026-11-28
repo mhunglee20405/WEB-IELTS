@@ -27,6 +27,7 @@ import { ReadingTranslationsModule } from 'src/modules/reading-translations/read
 import { MediaModule } from 'src/modules/media/media.module';
 import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 import { SystemModule } from 'src/modules/system/system.module';
+import { VocabularyModule } from 'src/modules/vocabulary/vocabulary.module';
 import { FeedbacksModule } from 'src/modules/feedbacks/feedbacks.module';
 import { StudySessionsModule } from 'src/modules/study-sessions/study-sessions.module';
 
@@ -108,6 +109,7 @@ import { StudySessionsModule } from 'src/modules/study-sessions/study-sessions.m
     MediaModule,
     DashboardModule,
     SystemModule,
+    VocabularyModule,
     FeedbacksModule,
     StudySessionsModule,
   ],

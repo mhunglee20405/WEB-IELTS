@@ -1,5 +1,5 @@
 import { isMockApiMode } from "../../env";
-import { apiRequest, buildQueryString } from "../client";
+import { apiRequest, buildQueryString, resolveBackendMediaUrl } from "../client";
 import { ApiError } from "../error";
 import { ExamTestDetailStudentSchema } from "../schemas";
 import type {
@@ -35,24 +35,36 @@ const ALLOWED_AUDIO_MIME_TYPES = new Set([
   "audio/mp3",
   "audio/wav",
   "audio/x-wav",
+  "audio/wave",
+  "audio/vnd.wave",
   "audio/mp4",
   "audio/x-m4a",
+  "audio/m4a",
   "audio/aac",
   "audio/ogg",
   "audio/webm",
+  "audio/flac",
+  "audio/x-flac",
+  "audio/opus",
 ]);
 
 function inferAudioMimeType(file: File): string {
-  if (file.type && ALLOWED_AUDIO_MIME_TYPES.has(file.type.toLowerCase())) {
-    return file.type.toLowerCase();
+  const normalizedType = file.type ? file.type.split(";")[0]!.trim().toLowerCase() : "";
+  if (normalizedType === "audio/wave" || normalizedType === "audio/vnd.wave") {
+    return "audio/wav";
+  }
+  if (normalizedType && ALLOWED_AUDIO_MIME_TYPES.has(normalizedType)) {
+    return normalizedType;
   }
   const lower = file.name.toLowerCase();
   if (lower.endsWith(".mp3")) return "audio/mpeg";
   if (lower.endsWith(".wav")) return "audio/wav";
-  if (lower.endsWith(".m4a")) return "audio/mp4";
+  if (lower.endsWith(".m4a") || lower.endsWith(".mp4")) return "audio/mp4";
+  if (lower.endsWith(".aac")) return "audio/aac";
   if (lower.endsWith(".ogg")) return "audio/ogg";
   if (lower.endsWith(".webm")) return "audio/webm";
-  return file.type || "application/octet-stream";
+  if (lower.endsWith(".flac")) return "audio/flac";
+  return normalizedType || "application/octet-stream";
 }
 
 function uploadFileToSignedUrl(
@@ -61,9 +73,10 @@ function uploadFileToSignedUrl(
   mimeType: string,
   onProgress?: (percent: number) => void,
 ): Promise<void> {
+  const resolvedUrl = resolveBackendMediaUrl(uploadUrl);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", uploadUrl, true);
+    xhr.open("PUT", resolvedUrl, true);
     xhr.setRequestHeader("Content-Type", mimeType);
 
     xhr.upload.onprogress = (event) => {
@@ -107,7 +120,7 @@ export function normalizeStudentTestDetail(raw: any): ExamTestDetailStudent {
   const duration =
     raw.totalDurationSeconds ??
     raw.fullDurationSeconds ??
-    (raw.skill === "READING" ? 3600 : 1800);
+    (raw.skill === "READING" ? 3600 : raw.skill === "LISTENING" ? 1800 : 900);
 
   const parts = (raw.parts || []).map((p: any, pIdx: number) => {
     let qMin = Infinity;
@@ -147,6 +160,7 @@ export function normalizeStudentTestDetail(raw: any): ExamTestDetailStudent {
         questionNumberEnd:
           gQuestions.length > 0 ? gQuestions[gQuestions.length - 1].questionNumber : 1,
         sharedOptions: g.sharedOptions,
+        summaryTemplateHtml: g.summaryTemplateHtml,
         maxWords: g.maxWords,
         questions: gQuestions,
       };
@@ -208,7 +222,7 @@ export function normalizeTeacherTestDetail(raw: any): ExamTestDetailAuthoring {
   const duration =
     raw.totalDurationSeconds ??
     raw.fullDurationSeconds ??
-    (raw.skill === "READING" ? 3600 : 1800);
+    (raw.skill === "READING" ? 3600 : raw.skill === "LISTENING" ? 1800 : 900);
 
   const parts = (raw.parts || []).map((p: any, pIdx: number) => {
     let qMin = Infinity;
@@ -253,6 +267,7 @@ export function normalizeTeacherTestDetail(raw: any): ExamTestDetailAuthoring {
         instructionHtml: g.instructionHtml ?? g.instruction ?? "",
         questionType: g.questionType ?? g.type,
         sharedOptions: g.sharedOptions,
+        summaryTemplateHtml: g.summaryTemplateHtml,
         maxWords: g.maxWords,
         maxSelections: g.maxSelections,
         questions: gQuestions,
@@ -318,16 +333,17 @@ export const teacherExamTestsApi = {
 
   create(payload: CreateTeacherExamTestRequest): Promise<ExamTestDetailAuthoring> {
     const isMock = isMockApiMode();
+    const isQuiz = payload.skill === "VOCABULARY" || payload.skill === "GRAMMAR";
+    const defaultDuration =
+      payload.skill === "READING" ? 3600 : payload.skill === "LISTENING" ? 1800 : 900;
     const body: Record<string, unknown> = {
       title: payload.title.trim(),
       skill: payload.skill,
       description: payload.description || payload.instructions || payload.subtitle || undefined,
-      allowedModes: payload.allowedModes ?? ["PART", "FULL"],
+      allowedModes: payload.allowedModes ?? (isQuiz ? ["FULL"] : ["PART", "FULL"]),
       passScore: payload.passScore ?? 70,
       fullDurationSeconds:
-        payload.fullDurationSeconds ??
-        payload.totalDurationSeconds ??
-        (payload.skill === "READING" ? 3600 : 1800),
+        payload.fullDurationSeconds ?? payload.totalDurationSeconds ?? defaultDuration,
       translationEnabled: payload.translationEnabled ?? (payload.skill === "READING"),
     };
 
@@ -336,7 +352,9 @@ export const teacherExamTestsApi = {
     if (payload.tags) body.tags = payload.tags;
 
     if (isMock) {
-      if (payload.totalDurationSeconds) body.totalDurationSeconds = payload.totalDurationSeconds;
+      if (payload.totalDurationSeconds !== undefined) {
+        body.totalDurationSeconds = payload.totalDurationSeconds;
+      }
       if (payload.instructions) body.instructions = payload.instructions;
     }
 
@@ -367,20 +385,24 @@ export const teacherExamTestsApi = {
     }
     if (payload.allowedModes) body.allowedModes = payload.allowedModes;
     if (payload.passScore !== undefined) body.passScore = payload.passScore;
-    if (payload.fullDurationSeconds || payload.totalDurationSeconds) {
-      body.fullDurationSeconds = payload.fullDurationSeconds ?? payload.totalDurationSeconds;
+    if (payload.fullDurationSeconds !== undefined) {
+      body.fullDurationSeconds = payload.fullDurationSeconds;
+    } else if (payload.totalDurationSeconds !== undefined) {
+      body.fullDurationSeconds = payload.totalDurationSeconds;
     }
     if (payload.translationEnabled !== undefined) {
       body.translationEnabled = payload.translationEnabled;
     }
 
-    if (payload.subtitle) body.subtitle = payload.subtitle;
+    if (payload.subtitle !== undefined) body.subtitle = payload.subtitle;
     if (payload.difficulty) body.difficulty = payload.difficulty;
     if (payload.tags) body.tags = payload.tags;
 
     if (isMock) {
-      if (payload.totalDurationSeconds) body.totalDurationSeconds = payload.totalDurationSeconds;
-      if (payload.instructions) body.instructions = payload.instructions;
+      if (payload.totalDurationSeconds !== undefined) {
+        body.totalDurationSeconds = payload.totalDurationSeconds;
+      }
+      if (payload.instructions !== undefined) body.instructions = payload.instructions;
     }
 
     return apiRequest<ExamTestDetailAuthoring, typeof body>({
@@ -399,13 +421,19 @@ export const teacherExamTestsApi = {
       });
     }
 
-    // Backend CreateExamPartDto: { type, ordinal, title, contentHtml, audioAssetId, durationSeconds }
+    // Backend CreateExamPartDto: { id?, type, ordinal, title, contentHtml, audioAssetId, audioPlaybackUrl, transcript, audioAllowPause, audioAllowSeek, audioMaxPlayCount, durationSeconds }
     const partDto = {
+      ...(payload.id ? { id: payload.id } : {}),
       type: payload.partType || (payload as any).type || "PASSAGE",
       ordinal: payload.partNumber || (payload as any).ordinal || 1,
       title: payload.title.trim(),
       contentHtml: payload.passageHtml || (payload as any).contentHtml || undefined,
       audioAssetId: payload.audioAsset?.assetId || (payload as any).audioAssetId || undefined,
+      audioPlaybackUrl: payload.audioAsset?.playbackUrl || undefined,
+      transcript: payload.transcript ?? undefined,
+      audioAllowPause: payload.audioAsset?.allowPause ?? true,
+      audioAllowSeek: payload.audioAsset?.allowSeek ?? true,
+      audioMaxPlayCount: payload.audioAsset?.maxPlayCount ?? undefined,
       durationSeconds: payload.durationSeconds,
     };
 
@@ -432,6 +460,7 @@ export const teacherExamTestsApi = {
           type: g.questionType,
           order: g.groupNumber || gIdx + 1,
           sharedOptions: g.sharedOptions?.map((o) => ({ key: o.key || (o as any).id || "", text: o.text })),
+          summaryTemplateHtml: g.summaryTemplateHtml || undefined,
           maxWords: g.maxWords,
           questions: g.questions.map((q) => {
             const acceptedKeys = Array.isArray(q.correctAnswer)
@@ -451,6 +480,7 @@ export const teacherExamTestsApi = {
                 caseSensitive: (q as any).caseSensitive ?? false,
                 maxWords: q.maxWords,
               },
+              explanation: q.explanation?.trim() || undefined,
             };
           }),
         };
@@ -484,6 +514,19 @@ export const teacherExamTestsApi = {
     if (payload.partNumber !== undefined) body.ordinal = payload.partNumber;
     if (payload.passageHtml !== undefined) body.contentHtml = payload.passageHtml;
     if (payload.audioAsset?.assetId) body.audioAssetId = payload.audioAsset.assetId;
+    if (payload.audioAsset?.playbackUrl !== undefined) {
+      body.audioPlaybackUrl = payload.audioAsset.playbackUrl;
+    }
+    if (payload.audioAsset?.allowPause !== undefined) {
+      body.audioAllowPause = payload.audioAsset.allowPause;
+    }
+    if (payload.audioAsset?.allowSeek !== undefined) {
+      body.audioAllowSeek = payload.audioAsset.allowSeek;
+    }
+    if (payload.audioAsset?.maxPlayCount !== undefined && payload.audioAsset.maxPlayCount !== null) {
+      body.audioMaxPlayCount = payload.audioAsset.maxPlayCount;
+    }
+    if (payload.transcript !== undefined) body.transcript = payload.transcript;
     if (payload.durationSeconds !== undefined) body.durationSeconds = payload.durationSeconds;
 
     return apiRequest<ExamPartAuthoring, typeof body>({
@@ -522,6 +565,7 @@ export const teacherExamTestsApi = {
         key: o.key || (o as any).id || "",
         text: o.text,
       })),
+      summaryTemplateHtml: payload.summaryTemplateHtml || undefined,
       maxWords: payload.maxWords,
       questions: payload.questions.map((q) => {
         const acceptedKeys = Array.isArray(q.correctAnswer)
@@ -577,6 +621,9 @@ export const teacherExamTestsApi = {
       }));
     }
     if (payload.maxWords !== undefined) body.maxWords = payload.maxWords;
+    if (payload.summaryTemplateHtml !== undefined) {
+      body.summaryTemplateHtml = payload.summaryTemplateHtml;
+    }
     if (payload.questions) {
       body.questions = payload.questions.map((q) => {
         const acceptedKeys = Array.isArray(q.correctAnswer)
@@ -682,11 +729,11 @@ export const teacherExamTestsApi = {
         message: "Định dạng âm thanh chưa được hỗ trợ. Vui lòng dùng MP3, WAV, M4A, OGG hoặc WebM.",
       });
     }
-    if (file.size > 100 * 1024 * 1024) {
+    if (file.size > 50 * 1024 * 1024) {
       throw new ApiError({
         statusCode: 400,
         code: "AUDIO_UPLOAD_FAILED",
-        message: "Dung lượng tệp âm thanh vượt quá giới hạn 100MB.",
+        message: "Dung lượng tệp âm thanh vượt quá giới hạn 50MB.",
       });
     }
 

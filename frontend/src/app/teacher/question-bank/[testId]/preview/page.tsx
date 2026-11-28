@@ -9,6 +9,7 @@ import {
   QuestionNavigator,
 } from "@/components/exam/exam-shell";
 import { ListeningExamView } from "@/components/exam/listening-exam-view";
+import { QuizExamView } from "@/components/exam/quiz-exam-view";
 import { ReadingExamView } from "@/components/exam/reading-exam-view";
 import { QueryState } from "@/components/ui";
 import { teacherExamTestsApi } from "@/lib/api/endpoints";
@@ -46,7 +47,7 @@ export default function TeacherPreviewExamTestPage() {
         onRetry={() => void previewQuery.refetch()}
       >
         {test && (
-          <div className="flex h-screen max-h-screen flex-col overflow-hidden bg-slate-50">
+          <div className="flex h-screen h-dvh max-h-dvh w-full flex-col overflow-hidden bg-slate-50">
             <ExamHeader
               title={test.title}
               skill={test.skill}
@@ -68,15 +69,29 @@ export default function TeacherPreviewExamTestPage() {
                   answers={sampleAnswers}
                   flaggedIds={flaggedIds}
                   activeQuestionId={activeQuestionId}
+                  enableVocabNotebook
+                  testId={test.id}
+                  testTitle={test.title}
+                  onAnswerChange={(qid, val) =>
+                    setSampleAnswers((prev) => ({ ...prev, [qid]: val }))
+                  }
+                />
+              ) : test.skill === "LISTENING" ? (
+                <ListeningExamView
+                  parts={test.parts}
+                  activePartId={activePartId}
+                  onSelectPart={setActivePartId}
+                  answers={sampleAnswers}
+                  flaggedIds={flaggedIds}
+                  activeQuestionId={activeQuestionId}
                   onAnswerChange={(qid, val) =>
                     setSampleAnswers((prev) => ({ ...prev, [qid]: val }))
                   }
                 />
               ) : (
-                <ListeningExamView
+                <QuizExamView
+                  skill={test.skill}
                   parts={test.parts}
-                  activePartId={activePartId}
-                  onSelectPart={setActivePartId}
                   answers={sampleAnswers}
                   flaggedIds={flaggedIds}
                   activeQuestionId={activeQuestionId}

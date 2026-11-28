@@ -50,7 +50,14 @@ export class ExamTestMapper {
       };
     });
 
-    const duration = raw.fullDurationSeconds || (raw.skill === 'READING' ? 3600 : 1800);
+    const duration =
+      raw.fullDurationSeconds !== undefined && raw.fullDurationSeconds !== null
+        ? raw.fullDurationSeconds
+        : raw.skill === 'READING'
+          ? 3600
+          : raw.skill === 'LISTENING'
+            ? 1800
+            : 900;
 
     return {
       id: extractObjectId(raw._id),
@@ -89,7 +96,14 @@ export class ExamTestMapper {
       return safePart;
     });
 
-    const duration = raw.fullDurationSeconds || (raw.skill === 'READING' ? 3600 : 1800);
+    const duration =
+      raw.fullDurationSeconds !== undefined && raw.fullDurationSeconds !== null
+        ? raw.fullDurationSeconds
+        : raw.skill === 'READING'
+          ? 3600
+          : raw.skill === 'LISTENING'
+            ? 1800
+            : 900;
 
     return {
       id: extractObjectId(raw._id),
@@ -158,6 +172,7 @@ export class ExamTestMapper {
         questionNumberStart: gQuestions.length > 0 ? gQuestions[0].questionNumber : 1,
         questionNumberEnd: gQuestions.length > 0 ? gQuestions[gQuestions.length - 1].questionNumber : 1,
         sharedOptions: g.sharedOptions || [],
+        summaryTemplateHtml: g.summaryTemplateHtml || undefined,
         maxWords: g.maxWords,
         questionIds: gQuestions.map((q: any) => q.questionNumber.toString()),
         questions: gQuestions,
@@ -179,8 +194,23 @@ export class ExamTestMapper {
       passageTitle: part.title,
       passageHtml: part.contentHtml || '',
       contentHtml: part.contentHtml || null,
-      audioAsset: part.audioAssetId ? { assetId: extractObjectId(part.audioAssetId) } : undefined,
-      audio: part.audioAssetId ? { assetId: extractObjectId(part.audioAssetId) } : null,
+      audioAsset: (part.audioAssetId || part.audioPlaybackUrl)
+        ? {
+            assetId: part.audioAssetId ? extractObjectId(part.audioAssetId) : `audio-part-${part.ordinal}`,
+            playbackUrl: part.audioPlaybackUrl || undefined,
+            durationSeconds: part.durationSeconds || undefined,
+            allowPause: part.audioAllowPause ?? true,
+            allowSeek: part.audioAllowSeek ?? true,
+            maxPlayCount: part.audioMaxPlayCount ?? null,
+            mimeType: 'audio/wav',
+          }
+        : undefined,
+      audio: (part.audioAssetId || part.audioPlaybackUrl)
+        ? {
+            assetId: part.audioAssetId ? extractObjectId(part.audioAssetId) : `audio-part-${part.ordinal}`,
+            playbackUrl: part.audioPlaybackUrl,
+          }
+        : null,
       durationSeconds: part.durationSeconds || undefined,
       questionCount: totalPartQuestions,
       questionNumberRange: { start: qMin, end: qMax },
@@ -209,6 +239,7 @@ export class ExamTestMapper {
           order: g.order || gIdx + 1,
           groupNumber: g.order || gIdx + 1,
           sharedOptions: g.sharedOptions,
+          summaryTemplateHtml: g.summaryTemplateHtml || undefined,
           maxWords: g.maxWords,
           questions: (g.questions || []).map((q: any) => {
             const num = Number(q.number);
@@ -227,6 +258,7 @@ export class ExamTestMapper {
               grading: q.grading,
               correctAnswer: acceptedKeys[0] || '',
               acceptedAnswers: acceptedKeys,
+              explanation: q.explanation || undefined,
             };
           }),
         };
@@ -249,7 +281,22 @@ export class ExamTestMapper {
         contentHtml: p.contentHtml,
         passageHtml: p.contentHtml || '',
         audioAssetId: p.audioAssetId ? extractObjectId(p.audioAssetId) : undefined,
-        audioAsset: p.audioAssetId ? { assetId: extractObjectId(p.audioAssetId) } : undefined,
+        audioPlaybackUrl: p.audioPlaybackUrl,
+        transcript: p.transcript,
+        audioAllowPause: p.audioAllowPause ?? true,
+        audioAllowSeek: p.audioAllowSeek ?? true,
+        audioMaxPlayCount: p.audioMaxPlayCount ?? null,
+        audioAsset: (p.audioAssetId || p.audioPlaybackUrl)
+          ? {
+              assetId: p.audioAssetId ? extractObjectId(p.audioAssetId) : `audio-part-${p.ordinal}`,
+              playbackUrl: p.audioPlaybackUrl || undefined,
+              durationSeconds: p.durationSeconds,
+              allowPause: p.audioAllowPause ?? true,
+              allowSeek: p.audioAllowSeek ?? true,
+              maxPlayCount: p.audioMaxPlayCount ?? null,
+              mimeType: 'audio/wav',
+            }
+          : undefined,
         durationSeconds: p.durationSeconds,
         questionCount: partQCount,
         questionNumberRange: { start: qMin, end: qMax },
@@ -257,7 +304,14 @@ export class ExamTestMapper {
       };
     });
 
-    const duration = raw.fullDurationSeconds || (raw.skill === 'READING' ? 3600 : 1800);
+    const duration =
+      raw.fullDurationSeconds !== undefined && raw.fullDurationSeconds !== null
+        ? raw.fullDurationSeconds
+        : raw.skill === 'READING'
+          ? 3600
+          : raw.skill === 'LISTENING'
+            ? 1800
+            : 900;
 
     return {
       id: extractObjectId(raw._id),
