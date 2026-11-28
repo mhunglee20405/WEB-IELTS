@@ -1,6 +1,16 @@
-import { Injectable, ConflictException, NotFoundException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Optional,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectModel, InjectConnection } from '@nestjs/mongoose';
 import { Model, Connection, Types } from 'mongoose';
+import { randomInt } from 'crypto';
 import * as argon2 from 'argon2';
 import { User, UserDocument } from 'src/database/schemas/user.schema';
 import {
@@ -12,14 +22,25 @@ import {
   TeacherProfileDocument,
 } from 'src/database/schemas/teacher-profile.schema';
 import { UserRole, UserStatus } from 'src/database/schemas/enums';
+import { AuthService } from '../auth/auth.service';
+import { AuditService } from '../audit/audit.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto, UpdateUserStatusDto, UpdateOwnProfileDto } from './dto/update-user.dto';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 
 export interface PaginatedUsers {
   items: Partial<UserDocument>[];
   total: number;
   page: number;
   limit: number;
+}
+
+export interface AdminResetPasswordResult {
+  userId: string;
+  email: string;
+  temporaryPassword: string;
+  mustChangePassword: boolean;
+  revokedAllSessions: boolean;
 }
 
 @Injectable()
@@ -31,6 +52,10 @@ export class UsersService {
     @InjectModel(TeacherProfile.name)
     private teacherProfileModel: Model<TeacherProfileDocument>,
     @Optional() @InjectConnection() private readonly connection?: Connection,
+    @Optional()
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService?: AuthService,
+    @Optional() private readonly auditService?: AuditService,
   ) {}
 
   private async runInTransaction<T>(work: (session?: any) => Promise<T>): Promise<T> {
@@ -215,12 +240,99 @@ export class UsersService {
     return this.sanitize(user);
   }
 
+  generateTemporaryPassword(): string {
+    const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let suffix = '';
+    for (let i = 0; i < 6; i++) {
+      suffix += charset[randomInt(0, charset.length)];
+    }
+    return `IELTS-${suffix}`;
+  }
+
+  async adminResetStudentPassword(
+    targetUserId: string,
+    dto: AdminResetPasswordDto = {},
+    actor?: UserDocument,
+  ): Promise<AdminResetPasswordResult> {
+    if (!Types.ObjectId.isValid(targetUserId)) {
+      throw new BadRequestException('Invalid user ID');
+    }
+
+    const user = await this.userModel.findById(targetUserId).exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role !== UserRole.STUDENT) {
+      throw new ForbiddenException({
+        code: 'ADMIN_RESET_STUDENT_ONLY',
+        message: 'Chỉ được cấp lại mật khẩu trực tiếp cho tài khoản học viên.',
+      });
+    }
+
+    let temporaryPassword: string;
+    if (dto?.newPassword !== undefined && dto?.newPassword !== null) {
+      const trimmed = typeof dto.newPassword === 'string' ? dto.newPassword.trim() : '';
+      if (trimmed.length < 8) {
+        throw new BadRequestException('Mật khẩu mới phải có ít nhất 8 ký tự.');
+      }
+      if (trimmed.length > 128) {
+        throw new BadRequestException('Mật khẩu mới không được vượt quá 128 ký tự.');
+      }
+      temporaryPassword = trimmed;
+    } else {
+      temporaryPassword = this.generateTemporaryPassword();
+    }
+
+    user.passwordHash = await argon2.hash(temporaryPassword, {
+      type: argon2.argon2id,
+    });
+    user.mustChangePassword = dto?.requirePasswordChange ?? true;
+    user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+    await user.save();
+
+    const userId =
+      typeof (user._id as Types.ObjectId | undefined)?.toHexString === 'function'
+        ? (user._id as Types.ObjectId).toHexString()
+        : String(user._id);
+
+    let revokedAllSessions = false;
+    if (this.authService) {
+      await this.authService.revokeAllUserSessions(userId);
+      revokedAllSessions = true;
+    }
+
+    await this.auditService?.log({
+      action: 'ADMIN_RESET_STUDENT_PASSWORD',
+      entityType: 'User',
+      entityId: user._id as Types.ObjectId,
+      actorId: (actor?._id ?? (actor as { id?: Types.ObjectId | string } | undefined)?.id) as
+        | Types.ObjectId
+        | string
+        | undefined,
+      metadata: {
+        targetRole: user.role,
+        mustChangePassword: user.mustChangePassword,
+        reason: dto?.reason?.trim() || undefined,
+      },
+    });
+
+    return {
+      userId,
+      email: user.email,
+      temporaryPassword,
+      mustChangePassword: user.mustChangePassword,
+      revokedAllSessions,
+    };
+  }
+
   sanitize(user: UserDocument): Partial<UserDocument> {
     const obj = user.toObject() as unknown as Record<string, unknown>;
     delete obj['passwordHash'];
     obj['id'] = (user._id as Types.ObjectId).toHexString();
     obj['roles'] = [obj['role']];
     obj['timezone'] = 'Asia/Ho_Chi_Minh';
+    obj['mustChangePassword'] = Boolean(user.mustChangePassword);
     return obj as unknown as Partial<UserDocument>;
   }
 }

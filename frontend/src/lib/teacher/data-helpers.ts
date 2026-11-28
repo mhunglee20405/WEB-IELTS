@@ -4,6 +4,7 @@ import {
   mediaApi,
   penaltiesApi,
   studentAssignmentsApi,
+  studySessionsApi,
   usersApi,
 } from "@/lib/api/endpoints";
 import { resolveBackendMediaUrl } from "@/lib/api/client";
@@ -14,6 +15,7 @@ import type {
   CourseStudent,
   PenaltyRecord,
   StudentAssignmentSummary,
+  TeacherStudySummaryItem,
   TranslationWorkspace,
 } from "@/lib/api/types";
 import { isMockApiMode } from "@/lib/env";
@@ -25,6 +27,9 @@ export interface TeacherStudentEntry extends CourseStudent {
     title: string;
     courseType?: "1:1" | "group";
   }>;
+  totalStudySeconds: number;
+  last7DaysStudySeconds: number;
+  lastActiveAt: string | null;
 }
 
 export interface TranslationQueueItem {
@@ -45,16 +50,26 @@ export async function fetchTeacherStudentDirectory(
     return [];
   }
 
-  const rosters = await Promise.all(
-    courses.map(async (course) => {
-      try {
-        const res = await coursesApi.listStudents(course.id, { limit: 100 });
-        return { course, students: res.items };
-      } catch {
-        return { course, students: [] as CourseStudent[] };
-      }
-    }),
-  );
+  const [rosters, studySummaryRes] = await Promise.all([
+    Promise.all(
+      courses.map(async (course) => {
+        try {
+          const res = await coursesApi.listStudents(course.id, { limit: 100 });
+          return { course, students: res.items };
+        } catch {
+          return { course, students: [] as CourseStudent[] };
+        }
+      }),
+    ),
+    studySessionsApi
+      .getTeacherSummary()
+      .catch(() => ({ items: [] as TeacherStudySummaryItem[] })),
+  ]);
+
+  const studyMap = new Map<string, TeacherStudySummaryItem>();
+  for (const item of studySummaryRes.items) {
+    studyMap.set(item.studentId, item);
+  }
 
   const map = new Map<string, TeacherStudentEntry>();
   for (const { course, students } of rosters) {
@@ -71,9 +86,13 @@ export async function fetchTeacherStudentDirectory(
           existing.courses.push(courseMeta);
         }
       } else {
+        const study = studyMap.get(student.studentId);
         map.set(student.studentId, {
           ...student,
           courses: [courseMeta],
+          totalStudySeconds: study?.totalStudySeconds ?? 0,
+          last7DaysStudySeconds: study?.last7DaysStudySeconds ?? 0,
+          lastActiveAt: study?.lastActiveAt ?? null,
         });
       }
     }

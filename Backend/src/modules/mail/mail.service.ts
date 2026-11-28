@@ -137,6 +137,28 @@ export class MailService {
         return { subject, html, text };
       }
 
+      case 'assignment-schedule-reminder': {
+        const courseTitle = payload.courseTitle || 'Khóa học';
+        const courseCode = payload.courseCode || '';
+        const isoWeek = payload.isoWeek || '';
+        const windowStartVn = payload.windowStartVn || '';
+        const windowEndVn = payload.windowEndVn || '';
+        const courseLabel = courseCode ? `${courseCode} (${courseTitle})` : courseTitle;
+        const weekLabel = isoWeek ? ` (${isoWeek})` : '';
+        const windowRange =
+          windowStartVn && windowEndVn ? `${windowStartVn} – ${windowEndVn}` : '7 ngày tới';
+
+        const subject = `[IELTS LMS] Nhắc lên lịch giao bài tuần tới${weekLabel}: ${courseLabel}`;
+        const html = `
+          <h2>Nhắc lên lịch giao bài tập tuần tới</h2>
+          <p>Chào thầy/cô,</p>
+          <p>Khóa học <strong>${courseLabel}</strong> chưa có bài tập nào được lên lịch trong 7 ngày tới (${windowRange})${weekLabel}.</p>
+          <p>Vui lòng truy cập hệ thống để lên lịch giao bài trước 1 tuần.</p>
+        `;
+        const text = `Nhắc lên lịch giao bài tuần tới${weekLabel}: Khóa học ${courseLabel} chưa có bài tập nào được lên lịch trong 7 ngày tới (${windowRange}). Vui lòng lên lịch giao bài trước 1 tuần.`;
+        return { subject, html, text };
+      }
+
       default: {
         const subject = payload.subject || `[IELTS LMS] Thông báo hệ thống`;
         const html = payload.body ? `<p>${payload.body}</p>` : `<p>Thông báo từ IELTS LMS</p>`;

@@ -11,6 +11,7 @@ export interface AuthUser {
   roles: UserRole[];
   status: UserStatus;
   timezone: string;
+  mustChangePassword?: boolean;
   phone?: string;
   avatarUrl?: string;
   createdAt?: string;
@@ -575,7 +576,8 @@ export type NotificationType =
   | "other"
   | "assignment_new"
   | "course_added"
-  | "extension_decided";
+  | "extension_decided"
+  | "assignment_schedule_reminder";
 
 export interface NotificationItem {
   id: string;
@@ -1303,6 +1305,101 @@ export interface BulkSaveUserVocabResponse {
   savedCount: number;
   skippedCount: number;
   items: UserVocabNotebookEntry[];
+// ---------------------------------------------------------------------------
+// Phase 12 Types (Anonymous Feedback, Study Sessions & Admin Reset Password)
+// ---------------------------------------------------------------------------
+
+export type FeedbackCategory =
+  | "CONTENT"
+  | "SYSTEM_BUG"
+  | "TEACHING"
+  | "FEATURE_REQUEST"
+  | "OTHER";
+
+export type FeedbackStatus = "NEW" | "REVIEWED" | "RESOLVED";
+
+export interface FeedbackItem {
+  id: string;
+  category: FeedbackCategory;
+  rating?: number | null;
+  content: string;
+  status: FeedbackStatus;
+  adminNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+export interface FeedbackCreateRequest {
+  category: FeedbackCategory;
+  rating?: number;
+  content: string;
+}
+
+export interface FeedbackCreateResponse {
+  id: string;
+  category: FeedbackCategory;
+  rating?: number | null;
+  status: FeedbackStatus;
+  createdAt: string;
+}
+
+export interface FeedbackListResponse extends PaginatedResponse<FeedbackItem> {
+  unreadCount: number;
+}
+
+export interface UpdateFeedbackStatusRequest {
+  status: FeedbackStatus;
+  adminNote?: string;
+}
+
+export interface StudyHeartbeatRequest {
+  deltaSeconds: number;
+  route?: string;
+}
+
+export interface StudyHeartbeatResponse {
+  accepted: boolean;
+  creditedSeconds: number;
+  todayStudySeconds: number;
+  totalStudySeconds: number;
+}
+
+export interface DailyStudyPoint {
+  dateVn: string;
+  studySeconds: number;
+}
+
+export interface StudySummary {
+  totalStudySeconds: number;
+  todayStudySeconds: number;
+  last7DaysStudySeconds: number;
+  lastActiveAt?: string | null;
+  dailyBreakdown: DailyStudyPoint[];
+}
+
+export interface TeacherStudySummaryItem {
+  studentId: string;
+  totalStudySeconds: number;
+  last7DaysStudySeconds: number;
+  lastActiveAt?: string | null;
+}
+
+export interface TeacherStudySummaryResponse {
+  items: TeacherStudySummaryItem[];
+}
+
+export interface AdminResetPasswordRequest {
+  newPassword?: string;
+  requirePasswordChange?: boolean;
+  reason?: string;
+}
+
+export interface AdminResetPasswordResponse {
+  userId: string;
+  email: string;
+  temporaryPassword: string;
+  mustChangePassword: boolean;
+  revokedAllSessions: boolean;
 }
 
 

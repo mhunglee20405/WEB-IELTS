@@ -30,6 +30,7 @@ const PORTAL_NAV_ITEMS: Record<PortalRole, PortalNavEntry[]> = {
     { href: "/student/extensions", label: "Xin gia hạn" },
     { href: "/student/penalties", label: "Điểm phạt" },
     { href: "/student/notifications", label: "Thông báo" },
+    { href: "/student/feedback", label: "Góp ý ẩn danh" },
     { href: "/student/profile", label: "Hồ sơ" },
   ],
   teacher: [
@@ -46,6 +47,7 @@ const PORTAL_NAV_ITEMS: Record<PortalRole, PortalNavEntry[]> = {
   admin: [
     { href: "/admin/users", label: "Tài khoản" },
     { href: "/admin/courses", label: "Quản lý khóa học" },
+    { href: "/admin/feedbacks", label: "Góp ý học viên" },
     { href: "/admin/audit", label: "Kiểm toán & Phạt" },
     { href: "/admin/settings", label: "Cấu hình hệ thống" },
     { href: "/admin/profile", label: "Hồ sơ cá nhân" },
@@ -143,6 +145,7 @@ const EXACT_ROUTE_TITLES: Record<string, string> = {
   "/student/extensions": "Xin gia hạn bài tập",
   "/student/penalties": "Điểm phạt quá hạn",
   "/student/notifications": "Thông báo học tập",
+  "/student/feedback": "Góp ý ẩn danh",
   "/student/profile": "Hồ sơ học viên",
   "/teacher/dashboard": "Tổng quan giảng dạy",
   "/teacher/calendar": "Lịch giảng dạy",
@@ -160,6 +163,7 @@ const EXACT_ROUTE_TITLES: Record<string, string> = {
   "/teacher/translations": "Chấm bài dịch đối chiếu",
   "/admin/users": "Quản lý tài khoản",
   "/admin/courses": "Quản lý khóa học toàn hệ thống",
+  "/admin/feedbacks": "Góp ý học viên",
   "/admin/audit": "Kiểm toán & Hoàn tác điểm phạt",
   "/admin/settings": "Cấu hình & Trạng thái hệ thống",
   "/admin/profile": "Hồ sơ quản trị viên",

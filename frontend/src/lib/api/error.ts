@@ -41,7 +41,7 @@ export class ApiError extends Error {
   }
 }
 
-const CODE_MESSAGES_VI: Record<string, string> = {
+export const CODE_MESSAGES_VI: Record<string, string> = {
   UNAUTHORIZED: "Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.",
   INVALID_CREDENTIALS: "Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.",
   TOO_MANY_REQUESTS:
@@ -88,6 +88,10 @@ const CODE_MESSAGES_VI: Record<string, string> = {
     "Bạn đang thao tác quá nhanh. Vui lòng chờ giây lát rồi thử lại.",
   ATTEMPT_EXPIRED:
     "Thời gian làm bài đã hết. Hệ thống đã khóa chỉnh sửa cho lượt thi này.",
+  FEEDBACK_DAILY_LIMIT_EXCEEDED:
+    "Bạn đã đạt giới hạn gửi góp ý trong ngày hôm nay (tối đa 5 lần).",
+  ADMIN_RESET_STUDENT_ONLY:
+    "Chỉ được cấp lại mật khẩu trực tiếp cho tài khoản học viên.",
 };
 
 export function normalizeApiError(error: unknown): ApiError {

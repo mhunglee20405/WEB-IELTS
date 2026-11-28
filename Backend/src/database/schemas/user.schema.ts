@@ -39,6 +39,9 @@ export class User {
   @Prop({ default: 0 })
   tokenVersion?: number;
 
+  @Prop({ type: Boolean, default: false })
+  mustChangePassword: boolean;
+
   // Virtual
   createdAt?: Date;
   updatedAt?: Date;

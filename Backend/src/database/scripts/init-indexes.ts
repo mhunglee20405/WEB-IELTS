@@ -20,7 +20,7 @@ async function initIndexes() {
 
     for (const [modelName, model] of models) {
       const startTime = Date.now();
-      await model.createIndexes();
+      await model.syncIndexes();
       const duration = Date.now() - startTime;
       const indexes = await model.collection.indexes();
       logger.log(

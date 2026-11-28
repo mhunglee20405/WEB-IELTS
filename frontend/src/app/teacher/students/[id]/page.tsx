@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Clock, ShieldAlert } from "lucide-react";
 import {
   DataTable,
   PageHeader,
@@ -11,14 +11,15 @@ import {
   StatusBadge,
   type DataTableColumn,
 } from "@/components/ui";
-import { assignmentsApi, penaltiesApi } from "@/lib/api/endpoints";
+import { formatStudyDuration } from "@/hooks/use-study-time-heartbeat";
+import { assignmentsApi, penaltiesApi, studySessionsApi } from "@/lib/api/endpoints";
 import { teacherKeys } from "@/lib/api/query-keys";
 import type { PenaltyRecord, StudentAssignmentSummary } from "@/lib/api/types";
 import {
   fetchAllTeacherAssignments,
   fetchTeacherStudentDirectory,
 } from "@/lib/teacher/data-helpers";
-import { formatVnDateTime } from "@/lib/time/vn-time";
+import { formatDateKeyVi, formatVnDateTime } from "@/lib/time/vn-time";
 
 export default function TeacherStudentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -54,6 +55,11 @@ export default function TeacherStudentDetailPage() {
   const penaltiesQuery = useQuery({
     queryKey: ["teacher", "student", studentId, "penalties"],
     queryFn: () => penaltiesApi.getByStudent(studentId),
+  });
+
+  const studyQuery = useQuery({
+    queryKey: teacherKeys.studentStudyDetail(studentId, 14),
+    queryFn: () => studySessionsApi.getStudentDetail(studentId, 14),
   });
 
   const penaltyColumns: DataTableColumn<PenaltyRecord>[] = [
@@ -141,6 +147,7 @@ export default function TeacherStudentDetailPage() {
   const student = profileQuery.data?.student;
   const studentAssignments = profileQuery.data?.assignments ?? [];
   const penaltySummary = penaltiesQuery.data;
+  const studySummary = studyQuery.data;
 
   return (
     <div className="space-y-6">
@@ -197,6 +204,85 @@ export default function TeacherStudentDetailPage() {
               ) : null}
             </section>
           ) : null}
+
+          <section className="lms-card space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <Clock className="h-5 w-5 text-blue-700" aria-hidden={true} />
+                <div>
+                  <h2 className="text-base font-semibold text-slate-950">
+                    Thống kê thời gian học trực tuyến
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    Tính theo thời gian học viên mở web và tương tác thực tế trên cổng học tập.
+                  </p>
+                </div>
+              </div>
+              {studySummary?.lastActiveAt ? (
+                <span className="text-xs text-slate-600">
+                  Hoạt động gần nhất: {formatVnDateTime(studySummary.lastActiveAt)}
+                </span>
+              ) : null}
+            </div>
+
+            {studySummary ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-medium text-slate-600">Tổng tích lũy</p>
+                    <p className="mt-1 text-lg font-bold text-slate-950 tabular-nums">
+                      {formatStudyDuration(studySummary.totalStudySeconds)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-medium text-slate-600">Hôm nay (giờ VN)</p>
+                    <p className="mt-1 text-lg font-bold text-slate-950 tabular-nums">
+                      {formatStudyDuration(studySummary.todayStudySeconds)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-medium text-slate-600">7 ngày gần nhất</p>
+                    <p className="mt-1 text-lg font-bold text-slate-950 tabular-nums">
+                      {formatStudyDuration(studySummary.last7DaysStudySeconds)}
+                    </p>
+                  </div>
+                </div>
+
+                {studySummary.dailyBreakdown.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Chi tiết 14 ngày gần đây
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {studySummary.dailyBreakdown.map((point) => (
+                        <div
+                          key={point.dateVn}
+                          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
+                        >
+                          <span className="font-medium text-slate-700">
+                            {formatDateKeyVi(point.dateVn)}
+                          </span>
+                          <span className="font-semibold text-slate-950 tabular-nums">
+                            {formatStudyDuration(point.studySeconds)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-600">
+                    Chưa có phiên học nào được ghi nhận trong 14 ngày qua.
+                  </p>
+                )}
+              </div>
+            ) : studyQuery.isLoading ? (
+              <p className="text-sm text-slate-600">Đang tải thống kê thời gian học...</p>
+            ) : (
+              <p className="text-sm text-slate-600">
+                Chưa thể tải thống kê thời gian học cho học viên này.
+              </p>
+            )}
+          </section>
 
           <DataTable
             caption={`Lịch sử điểm phạt (${penaltySummary?.records.length ?? 0})`}

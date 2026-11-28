@@ -16,6 +16,8 @@ import {
   LayoutDashboard,
   Languages,
   LogOut,
+  MessageSquarePlus,
+  MessageSquareText,
   Settings,
   ShieldCheck,
   UserCheck,
@@ -44,6 +46,8 @@ function renderNavIcon(href: string): ReactNode {
   if (href.endsWith("/extensions")) return <Clock className="h-4 w-4" />;
   if (href.endsWith("/penalties")) return <AlertTriangle className="h-4 w-4" />;
   if (href.endsWith("/notifications")) return <Bell className="h-4 w-4" />;
+  if (href.endsWith("/feedback")) return <MessageSquarePlus className="h-4 w-4" />;
+  if (href.endsWith("/feedbacks")) return <MessageSquareText className="h-4 w-4" />;
   if (href.endsWith("/profile")) return <UserCheck className="h-4 w-4" />;
   if (href.endsWith("/students")) return <GraduationCap className="h-4 w-4" />;
   if (href.endsWith("/question-bank")) return <FileText className="h-4 w-4" />;

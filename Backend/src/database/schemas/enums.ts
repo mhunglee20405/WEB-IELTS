@@ -105,6 +105,7 @@ export enum NotificationType {
   OVERDUE = 'overdue',
   COURSE_ENROLLED = 'course_enrolled',
   EXTENSION_REVIEWED = 'extension_reviewed',
+  ASSIGNMENT_SCHEDULE_REMINDER = 'assignment_schedule_reminder',
   OTHER = 'other',
 }
 
@@ -176,5 +177,21 @@ export enum ExamQuestionType {
   FLOW_CHART_COMPLETION = 'FLOW_CHART_COMPLETION',
   DIAGRAM_LABEL_COMPLETION = 'DIAGRAM_LABEL_COMPLETION',
   SHORT_ANSWER = 'SHORT_ANSWER',
+}
+
+// ─── Phase 12: Feedback Enums ─────────────────────────────────────────────────
+
+export enum FeedbackCategory {
+  CONTENT = 'CONTENT',
+  SYSTEM_BUG = 'SYSTEM_BUG',
+  TEACHING = 'TEACHING',
+  FEATURE_REQUEST = 'FEATURE_REQUEST',
+  OTHER = 'OTHER',
+}
+
+export enum FeedbackStatus {
+  NEW = 'NEW',
+  REVIEWED = 'REVIEWED',
+  RESOLVED = 'RESOLVED',
 }
 

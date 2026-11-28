@@ -85,6 +85,30 @@ describe('MailService', () => {
     expect(withUrl.text).toContain('https://lms.example.com/reset-password?token=tid.sec');
   });
 
+  it('renders assignment-schedule-reminder template with course title, course code, and week info', () => {
+    const rendered = service.renderTemplate('assignment-schedule-reminder', {
+      courseTitle: 'IELTS Intensive 7.5',
+      courseCode: 'IELTS-75',
+      isoWeek: '2026-W48',
+      windowStartVn: '2026-11-28',
+      windowEndVn: '2026-12-04',
+    });
+
+    expect(rendered.subject).toContain('IELTS Intensive 7.5');
+    expect(rendered.subject).toContain('IELTS-75');
+    expect(rendered.subject).toContain('2026-W48');
+    expect(rendered.html).toContain('IELTS Intensive 7.5');
+    expect(rendered.html).toContain('IELTS-75');
+    expect(rendered.html).toContain('2026-W48');
+    expect(rendered.html).toContain('2026-11-28');
+    expect(rendered.html).toContain('2026-12-04');
+    expect(rendered.text).toContain('IELTS Intensive 7.5');
+    expect(rendered.text).toContain('IELTS-75');
+    expect(rendered.text).toContain('2026-W48');
+    expect(rendered.text).toContain('2026-11-28');
+    expect(rendered.text).toContain('2026-12-04');
+  });
+
   it('dispatches email in mock mode in test environment', async () => {
     const res = await service.sendMail({
       to: 'student@ielts.local',

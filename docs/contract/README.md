@@ -21,6 +21,7 @@
 | 6 | [06-data-models-and-enums.md](./06-data-models-and-enums.md) | **Data SSOT** — Toàn bộ 18 Mongoose schemas (fields, constraints, indexes, relations) & bảng đối chiếu Enum BE↔FE. |
 | 7 | [07-drift-audit-be-fe.md](./07-drift-audit-be-fe.md) | **Drift Audit** — Danh sách các điểm lệch thực tế giữa 22 Backend controllers/DTOs và 19 Frontend endpoint modules/Zod schemas (xếp hạng `P0`–`P3`). |
 | 8 | [08-extension-and-versioning-guide.md](./08-extension-and-versioning-guide.md) | **Governance & Extension** — Quy ước mở rộng tính năng mới, template domain contract, checklist bảo mật/audit, quy trình kiểm chứng tự động (OpenAPI + Vitest). |
+| 9 | [09-platform-ux-feedback-study-time-ops.md](./09-platform-ux-feedback-study-time-ops.md) | **Canonical (Phase 12)** — Đồng hồ Header VN, Dark/Light mode toàn hệ thống, Góp ý ẩn danh (`/feedbacks`), Thời gian học online (`/study-sessions`), Admin cấp lại mật khẩu học viên (`POST /users/:id/reset-password`), Nhắc lên lịch giao bài trước 1 tuần (`jobs/reminders`). |
 
 ---
 

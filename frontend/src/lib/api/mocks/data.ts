@@ -9,14 +9,17 @@ import {
   type AuthUser,
   type Course,
   type CourseStudent,
+  type DailyStudyPoint,
   type ExerciseAuthoringDetail,
   type ExercisePublic,
   type ExtensionRequestItem,
+  type FeedbackItem,
   type Lesson,
   type NotificationItem,
   type PenaltyRecord,
   type StudentAssignmentDetail,
   type StudentAssignmentSummary,
+  type StudySummary,
   type SubmissionHistoryItem,
   type SubmissionResult,
   type TranslationWorkspace,
@@ -42,6 +45,10 @@ export interface MockStoreState {
   extensions: ExtensionRequestItem[];
   penalties: PenaltyRecord[];
   notifications: NotificationItem[];
+  feedbacks: FeedbackItem[];
+  feedbackDailyCounts: Record<string, number>;
+  studyProfiles: Record<string, StudySummary>;
+  lastHeartbeatAtMs: Record<string, number>;
   examV2: ExamV2MockState;
 }
 
@@ -745,6 +752,71 @@ export function createInitialMockState(): MockStoreState {
     },
   ];
 
+  const feedbacks: FeedbackItem[] = [
+    {
+      id: "fb-01",
+      category: "TEACHING",
+      rating: 5,
+      content:
+        "Bài giảng chiến lược True/False/Not Given rất dễ hiểu, mong có thêm đề luyện Reading nâng cao.",
+      status: "NEW",
+      adminNote: null,
+      reviewedAt: null,
+      createdAt: vnLocalDateTimeToIso(todayKey, 8.5),
+    },
+    {
+      id: "fb-02",
+      category: "SYSTEM_BUG",
+      rating: 4,
+      content:
+        "Khi mở bài Listening trên điện thoại, phần thanh tua âm thanh hơi sát lề phải.",
+      status: "REVIEWED",
+      adminNote: "Đã ghi nhận cho đội giao diện kiểm tra responsive.",
+      reviewedAt: vnLocalDateTimeToIso(yesterdayKey, 16.0),
+      createdAt: vnLocalDateTimeToIso(yesterdayKey, 10.0),
+    },
+  ];
+
+  const stu01Daily: DailyStudyPoint[] = [
+    { dateVn: addDaysToDateKey(todayKey, -6), studySeconds: 1800 },
+    { dateVn: addDaysToDateKey(todayKey, -5), studySeconds: 2400 },
+    { dateVn: addDaysToDateKey(todayKey, -4), studySeconds: 1800 },
+    { dateVn: addDaysToDateKey(todayKey, -3), studySeconds: 2100 },
+    { dateVn: twoDaysAgoKey, studySeconds: 2400 },
+    { dateVn: yesterdayKey, studySeconds: 2100 },
+    { dateVn: todayKey, studySeconds: 1800 },
+  ];
+
+  const stu02Daily: DailyStudyPoint[] = [
+    { dateVn: twoDaysAgoKey, studySeconds: 3600 },
+    { dateVn: yesterdayKey, studySeconds: 2400 },
+    { dateVn: todayKey, studySeconds: 1200 },
+  ];
+
+  const studyProfiles: Record<string, StudySummary> = {
+    "stu-01": {
+      totalStudySeconds: 42600,
+      todayStudySeconds: 1800,
+      last7DaysStudySeconds: 14400,
+      lastActiveAt: vnLocalDateTimeToIso(todayKey, 9.0),
+      dailyBreakdown: stu01Daily,
+    },
+    "stu-02": {
+      totalStudySeconds: 18000,
+      todayStudySeconds: 1200,
+      last7DaysStudySeconds: 7200,
+      lastActiveAt: vnLocalDateTimeToIso(todayKey, 8.2),
+      dailyBreakdown: stu02Daily,
+    },
+    "stu-03": {
+      totalStudySeconds: 0,
+      todayStudySeconds: 0,
+      last7DaysStudySeconds: 0,
+      lastActiveAt: null,
+      dailyBreakdown: [],
+    },
+  };
+
   return {
     currentUserId: "stu-01",
     users,
@@ -782,6 +854,10 @@ export function createInitialMockState(): MockStoreState {
     extensions,
     penalties,
     notifications,
+    feedbacks,
+    feedbackDailyCounts: {},
+    studyProfiles,
+    lastHeartbeatAtMs: {},
     examV2: createInitialExamV2MockState(),
   };
 }
