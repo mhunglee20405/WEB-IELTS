@@ -45,6 +45,9 @@ export const assignmentsApi = {
     if (payload.allowRetake !== undefined) {
       body.allowRetake = payload.allowRetake;
     }
+    if (payload.strictExamMode !== undefined) {
+      body.strictExamMode = payload.strictExamMode;
+    }
     return apiRequest<Assignment, typeof body>({
       method: "POST",
       path: "/assignments",

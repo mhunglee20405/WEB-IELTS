@@ -20,6 +20,7 @@ import {
   type ExamTestDetailStudent,
   type ExamTestSummary,
   type PaginatedResponse,
+  type PassageVocabItem,
   type ReadingTranslationDetail,
   type ReadingTranslationEligibilityResponse,
   type ReadingTranslationPassageEligibility,
@@ -34,6 +35,7 @@ import {
   type UpdateTeacherExamTestRequest,
   type UpsertExamPartInput,
   type UpsertExamQuestionGroupInput,
+  type UserVocabNotebookEntry,
   type ValidateExamTestIssue,
   type ValidateExamTestResponse,
 } from "../types";
@@ -48,6 +50,7 @@ export interface StoredMockExamAttempt {
   status: ExamAttemptStatus;
   partId: string | null;
   studentAssignmentId: string | null;
+  strictExamMode?: boolean;
   revision: number;
   startedAt: string;
   expiresAt: string;
@@ -92,6 +95,8 @@ export interface ExamV2MockState {
   attempts: Record<string, StoredMockExamAttempt>;
   unlockedPassagesByStudent: Record<string, Record<string, string>>;
   passageTranslations: Record<string, StoredMockPassageTranslation>;
+  passageVocabs: Record<string, PassageVocabItem[]>;
+  userVocabNotebooks: UserVocabNotebookEntry[];
 }
 
 export function stripQuestionForStudent(q: ExamQuestionAuthoring): ExamQuestionPublic {
@@ -672,8 +677,9 @@ export function createInitialExamV2MockState(): ExamV2MockState {
         questionNumberRange: { start: 1, end: 2 },
         audioAsset: {
           assetId: "audio-list-s1",
+          playbackUrl: "/audio/ielts-listening-section1.wav",
           durationSeconds: 180,
-          mimeType: "audio/mpeg",
+          mimeType: "audio/wav",
           allowPause: true,
           allowSeek: true,
           maxPlayCount: null,
@@ -687,6 +693,8 @@ export function createInitialExamV2MockState(): ExamV2MockState {
             groupNumber: 1,
             title: "Questions 1–2",
             instructionHtml: "<p>Complete the registration notes below.</p>",
+            summaryTemplateHtml:
+              '<p><strong>Northbridge Library Membership Notes</strong></p><ul><li>Library evening desk closing time on weekdays: <span class="ielts-blank blank-uid-m1">(1)_____</span></li><li>Temporary Wi-Fi access code: <span class="ielts-blank blank-uid-m2">(2)_____</span></li></ul>',
             questionType: "NOTE_COMPLETION",
             questionNumberStart: 1,
             questionNumberEnd: 2,
@@ -729,8 +737,9 @@ export function createInitialExamV2MockState(): ExamV2MockState {
         questionNumberRange: { start: 3, end: 4 },
         audioAsset: {
           assetId: "audio-list-s2",
+          playbackUrl: "/audio/ielts-listening-section2.wav",
           durationSeconds: 210,
-          mimeType: "audio/mpeg",
+          mimeType: "audio/wav",
           allowPause: true,
           allowSeek: false,
           maxPlayCount: 2,
@@ -787,8 +796,9 @@ export function createInitialExamV2MockState(): ExamV2MockState {
         questionNumberRange: { start: 5, end: 6 },
         audioAsset: {
           assetId: "audio-list-s3",
+          playbackUrl: "/audio/ielts-listening-section3.wav",
           durationSeconds: 200,
-          mimeType: "audio/mpeg",
+          mimeType: "audio/wav",
           allowPause: true,
           allowSeek: true,
           maxPlayCount: null,
@@ -847,8 +857,9 @@ export function createInitialExamV2MockState(): ExamV2MockState {
         questionNumberRange: { start: 7, end: 8 },
         audioAsset: {
           assetId: "audio-list-s4",
+          playbackUrl: "/audio/ielts-listening-section4.wav",
           durationSeconds: 240,
-          mimeType: "audio/mpeg",
+          mimeType: "audio/wav",
           allowPause: true,
           allowSeek: true,
           maxPlayCount: null,
@@ -1210,8 +1221,169 @@ export function createInitialExamV2MockState(): ExamV2MockState {
     courseTitle: null,
   };
 
+  const vocabQuizTest: ExamTestDetailAuthoring = {
+    id: "exam-vocab-01",
+    title: "Academic Vocabulary — Environment & Urbanisation",
+    subtitle: "Collocations và từ vựng học thuật chủ đề môi trường IELTS",
+    skill: "VOCABULARY",
+    status: "PUBLISHED",
+    version: 1,
+    partCount: 1,
+    totalQuestions: 3,
+    totalDurationSeconds: 600,
+    difficulty: "TARGET_65",
+    tags: ["Vocabulary", "Environment"],
+    allowedModes: ["FULL"],
+    createdBy: { id: "tch-01", fullName: "Giảng viên Trần Lan Hương" },
+    updatedAt: nowIso,
+    publishedAt: nowIso,
+    parts: [
+      {
+        id: "part-vocab-01",
+        partNumber: 1,
+        partType: "QUIZ",
+        title: "Vocabulary Quiz",
+        durationSeconds: 600,
+        questionCount: 3,
+        questionNumberRange: { start: 1, end: 3 },
+        questionGroups: [
+          {
+            id: "grp-vocab-01",
+            partId: "part-vocab-01",
+            groupNumber: 1,
+            title: "Trắc nghiệm Vocabulary",
+            instructionHtml: "<p>Chọn đáp án đúng nhất (A, B, C hoặc D).</p>",
+            questionType: "MULTIPLE_CHOICE_SINGLE",
+            questionNumberStart: 1,
+            questionNumberEnd: 3,
+            questions: [
+              {
+                id: "q-v1",
+                groupId: "grp-vocab-01",
+                questionNumber: 1,
+                prompt: "Governments must take urgent measures to ________ the impact of climate change.",
+                questionType: "MULTIPLE_CHOICE_SINGLE",
+                options: [
+                  { key: "A", text: "mitigate" },
+                  { key: "B", text: "exaggerate" },
+                  { key: "C", text: "neglect" },
+                  { key: "D", text: "prolong" },
+                ],
+                correctAnswer: "A",
+                explanation: "'mitigate the impact' là collocation chuẩn nghĩa 'giảm nhẹ tác động'.",
+              },
+              {
+                id: "q-v2",
+                groupId: "grp-vocab-01",
+                questionNumber: 2,
+                prompt: "The rapid ________ of coastal wetlands has threatened numerous migratory bird species.",
+                questionType: "MULTIPLE_CHOICE_SINGLE",
+                options: [
+                  { key: "A", text: "conservation" },
+                  { key: "B", text: "degradation" },
+                  { key: "C", text: "flourishing" },
+                  { key: "D", text: "stability" },
+                ],
+                correctAnswer: "B",
+                explanation: "'degradation' nghĩa là sự suy thoái / xuống cấp môi trường.",
+              },
+              {
+                id: "q-v3",
+                groupId: "grp-vocab-01",
+                questionNumber: 3,
+                prompt: "Which word is closest in meaning to 'ubiquitous'?",
+                questionType: "MULTIPLE_CHOICE_SINGLE",
+                options: [
+                  { key: "A", text: "rare" },
+                  { key: "B", text: "temporary" },
+                  { key: "C", text: "omnipresent" },
+                  { key: "D", text: "outdated" },
+                ],
+                correctAnswer: "C",
+                explanation: "'ubiquitous' = 'omnipresent' (có mặt ở khắp mọi nơi).",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const grammarQuizTest: ExamTestDetailAuthoring = {
+    id: "exam-grammar-01",
+    title: "IELTS Grammar — Complex Clauses & Inversion",
+    subtitle: "Ôn tập mệnh đề quan hệ, câu điều kiện và đảo ngữ Band 7.0+",
+    skill: "GRAMMAR",
+    status: "PUBLISHED",
+    version: 1,
+    partCount: 1,
+    totalQuestions: 2,
+    totalDurationSeconds: 600,
+    difficulty: "TARGET_75_PLUS",
+    tags: ["Grammar", "Inversion"],
+    allowedModes: ["FULL"],
+    createdBy: { id: "tch-01", fullName: "Giảng viên Trần Lan Hương" },
+    updatedAt: nowIso,
+    publishedAt: nowIso,
+    parts: [
+      {
+        id: "part-grammar-01",
+        partNumber: 1,
+        partType: "QUIZ",
+        title: "Grammar Quiz",
+        durationSeconds: 600,
+        questionCount: 2,
+        questionNumberRange: { start: 1, end: 2 },
+        questionGroups: [
+          {
+            id: "grp-grammar-01",
+            partId: "part-grammar-01",
+            groupNumber: 1,
+            title: "Trắc nghiệm Grammar",
+            instructionHtml: "<p>Chọn đáp án đúng nhất.</p>",
+            questionType: "MULTIPLE_CHOICE_SINGLE",
+            questionNumberStart: 1,
+            questionNumberEnd: 2,
+            questions: [
+              {
+                id: "q-g1",
+                groupId: "grp-grammar-01",
+                questionNumber: 1,
+                prompt: "Not only ________ the deadline, but she also submitted an exceptional report.",
+                questionType: "MULTIPLE_CHOICE_SINGLE",
+                options: [
+                  { key: "A", text: "she met" },
+                  { key: "B", text: "did she meet" },
+                  { key: "C", text: "had she met" },
+                  { key: "D", text: "she did meet" },
+                ],
+                correctAnswer: "B",
+                explanation: "Cấu trúc đảo ngữ với 'Not only' đứng đầu câu: Not only + trợ động từ + S + V.",
+              },
+              {
+                id: "q-g2",
+                groupId: "grp-grammar-01",
+                questionNumber: 2,
+                prompt: "________ the heavy rainfall, the outdoor exhibition proceeded as scheduled.",
+                questionType: "MULTIPLE_CHOICE_SINGLE",
+                options: [
+                  { key: "A", text: "Although" },
+                  { key: "B", text: "Despite of" },
+                  { key: "C", text: "Despite" },
+                  { key: "D", text: "Even though" },
+                ],
+                correctAnswer: "C",
+                explanation: "'Despite + cụm danh từ/V-ing'; không dùng 'Despite of'.",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
   return {
-    tests: [readingFullTest, listeningFullTest, singlePassagePractice, draftTest],
+    tests: [readingFullTest, listeningFullTest, singlePassagePractice, vocabQuizTest, grammarQuizTest, draftTest],
     attempts: {
       [seededAttemptId]: seededAttempt,
     },
@@ -1223,6 +1395,60 @@ export function createInitialExamV2MockState(): ExamV2MockState {
     passageTranslations: {
       "stu-01::part-r1-p1": seededTranslation,
     },
+    passageVocabs: {
+      "part-r1-p1": [
+        {
+          id: "pvoc-seed-01",
+          passageId: "part-r1-p1",
+          testId: readingFullTest.id,
+          partNumber: 1,
+          word: "urban heat island",
+          partOfSpeech: "phrase",
+          ipa: "/ˈɜːr.bən hiːt ˈaɪ.lənd/",
+          meaningVi: "hiệu ứng đảo nhiệt đô thị",
+          paraphraseNote: "elevated city temperatures vs surrounding rural zones",
+          contextSentence:
+            "Modern cities absorb solar radiation far more intensely than surrounding rural landscapes, generating urban heat islands that drive up summer cooling demand.",
+          order: 0,
+        },
+        {
+          id: "pvoc-seed-02",
+          passageId: "part-r1-p1",
+          testId: readingFullTest.id,
+          partNumber: 1,
+          word: "microclimate",
+          partOfSpeech: "n",
+          ipa: "/ˈmaɪ.kroʊˌklaɪ.mət/",
+          meaningVi: "vi khí hậu (khí hậu cục bộ trong khu vực nhỏ)",
+          paraphraseNote: "localized atmospheric conditions",
+          contextSentence:
+            "Architects and agronomists increasingly view indoor vertical farms as dual-purpose buffers for dense cities, moderating building microclimates while cultivating leafy crops close to consumers.",
+          order: 1,
+        },
+      ],
+    },
+    userVocabNotebooks: [
+      {
+        id: "uvoc-seed-01",
+        userId: "stu-01",
+        passageId: "part-r1-p1",
+        testId: readingFullTest.id,
+        sourcePassageTitle: seedPart.passageTitle ?? seedPart.title,
+        sourceTestTitle: readingFullTest.title,
+        sourcePassageVocabId: "pvoc-seed-01",
+        word: "urban heat island",
+        partOfSpeech: "phrase",
+        ipa: "/ˈɜːr.bən hiːt ˈaɪ.lənd/",
+        meaningVi: "hiệu ứng đảo nhiệt đô thị",
+        paraphraseNote: "elevated city temperatures vs surrounding rural zones",
+        contextSentence:
+          "Modern cities absorb solar radiation far more intensely than surrounding rural landscapes, generating urban heat islands that drive up summer cooling demand.",
+        personalNote: "Hay gặp trong bài Reading về kiến trúc xanh.",
+        status: "learning",
+        createdAt: "2026-11-10T10:50:00.000Z",
+        updatedAt: "2026-11-10T10:50:00.000Z",
+      },
+    ],
   };
 }
 
@@ -1295,6 +1521,23 @@ function validateAuthoringTest(test: ExamTestDetailAuthoring): ValidateExamTestR
           groupId: group.id,
           message: `Part ${part.partNumber} · Nhóm ${group.groupNumber}: Chưa có câu hỏi nào.`,
         });
+      }
+      if (test.skill === "VOCABULARY" || test.skill === "GRAMMAR") {
+        for (const q of group.questions) {
+          if (!q.prompt?.trim()) {
+            errors.push({
+              questionNumber: q.questionNumber,
+              message: `Câu ${q.questionNumber}: Vui lòng nhập nội dung câu hỏi.`,
+            });
+          }
+          const filledOpts = (q.options ?? []).filter((o) => o.text.trim());
+          if (filledOpts.length < 2) {
+            errors.push({
+              questionNumber: q.questionNumber,
+              message: `Câu ${q.questionNumber}: Vui lòng nhập ít nhất 2 lựa chọn đáp án.`,
+            });
+          }
+        }
       }
       for (const q of group.questions) {
         const hasAnswer = Array.isArray(q.correctAnswer)
@@ -1375,6 +1618,7 @@ function finalizeMockAttemptSubmission(
       questionNumber: q.questionNumber,
       questionType: q.questionType,
       prompt: q.prompt,
+      options: q.options,
       studentAnswer,
       correctAnswer: q.correctAnswer,
       acceptedAnswers: q.acceptedAnswers,
@@ -1418,6 +1662,7 @@ function finalizeMockAttemptSubmission(
     mode: attempt.mode,
     partId: attempt.partId,
     studentAssignmentId: attempt.studentAssignmentId,
+    strictExamMode: Boolean(attempt.strictExamMode),
     status: nextStatus,
     totalQuestions,
     correctCount: totalCorrect,
@@ -1466,6 +1711,7 @@ function toAttemptDetail(attempt: StoredMockExamAttempt): ExamAttemptDetail {
     status: attempt.status,
     partId: attempt.partId,
     studentAssignmentId: attempt.studentAssignmentId,
+    strictExamMode: Boolean(attempt.strictExamMode),
     revision: attempt.revision,
     startedAt: attempt.startedAt,
     expiresAt: attempt.expiresAt,
@@ -1490,6 +1736,7 @@ export interface ExamV2DispatchContext {
   body: unknown;
   headers?: Record<string, string>;
   currentUser: { id: string; fullName: string; email: string };
+  strictExamModeByStudentAssignmentId?: Record<string, boolean>;
 }
 
 export function dispatchExamV2MockRequest<T>(
@@ -1662,9 +1909,14 @@ export function dispatchExamV2MockRequest<T>(
       status: "IN_PROGRESS",
       partId: req.mode === "PART" ? (req.partId ?? null) : null,
       studentAssignmentId: req.studentAssignmentId ?? null,
+      strictExamMode: req.studentAssignmentId
+        ? Boolean(ctx.strictExamModeByStudentAssignmentId?.[req.studentAssignmentId])
+        : false,
       revision: 1,
       startedAt: new Date(nowMs).toISOString(),
-      expiresAt: new Date(nowMs + durationSeconds * 1000).toISOString(),
+      expiresAt: new Date(
+        nowMs + (durationSeconds > 0 ? durationSeconds : 86400) * 1000,
+      ).toISOString(),
       durationSeconds,
       partsAuthoring: selectedParts,
       answers: {},
@@ -1770,6 +2022,7 @@ export function dispatchExamV2MockRequest<T>(
 
     if (subRoute === "review" && method === "GET") {
       if (!attempt.result) mockNotFound("Chưa có kết quả cho lượt làm bài này.");
+      const test = (state.tests as Record<string, any>)[attempt.testId];
       return {
         handled: true,
         data: {
@@ -1779,6 +2032,17 @@ export function dispatchExamV2MockRequest<T>(
           skill: attempt.skill,
           answerReviewAvailable: true,
           items: attempt.reviewItems ?? [],
+          parts: test
+            ? (test.parts as any[]).map((p: any) => ({
+                id: p.id,
+                partNumber: p.partNumber,
+                title: p.title,
+                passageTitle: p.passageTitle ?? p.title,
+                passageHtml: p.passageHtml ?? "",
+                transcript: p.transcript,
+                audioAsset: p.audioAsset,
+              }))
+            : [],
         } as T,
       };
     }
@@ -2374,6 +2638,288 @@ export function dispatchExamV2MockRequest<T>(
       test.status = "ARCHIVED";
       test.updatedAt = new Date().toISOString();
       return { handled: true, data: test as T };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Contextual Vocabulary Notebook (/teacher/passages/:id/vocabs & /vocabulary/*)
+  // -------------------------------------------------------------------------
+  const teacherVocabSyncMatch = /^\/teacher\/passages\/([^/]+)\/vocabs\/sync$/.exec(pathname);
+  if (teacherVocabSyncMatch && method === "PUT") {
+    const passageId = decodeURIComponent(teacherVocabSyncMatch[1]!);
+    const req = (body ?? {}) as {
+      testId?: string;
+      partNumber?: number;
+      items?: Array<{
+        word: string;
+        partOfSpeech?: PassageVocabItem["partOfSpeech"];
+        ipa?: string;
+        meaningVi: string;
+        paraphraseNote?: string;
+        contextSentence?: string;
+      }>;
+    };
+    const nextList: PassageVocabItem[] = (req.items ?? []).map((item, idx) => ({
+      id: `pvoc-${passageId}-${idx + 1}`,
+      passageId,
+      testId: req.testId,
+      partNumber: req.partNumber,
+      word: item.word.trim(),
+      partOfSpeech: item.partOfSpeech ?? "n",
+      ipa: item.ipa?.trim() || undefined,
+      meaningVi: item.meaningVi.trim(),
+      paraphraseNote: item.paraphraseNote?.trim() || undefined,
+      contextSentence: item.contextSentence?.trim() || undefined,
+      order: idx,
+    }));
+    state.passageVocabs[passageId] = nextList;
+    return { handled: true, data: { passageId, items: nextList } as T };
+  }
+
+  const teacherVocabBaseMatch = /^\/teacher\/passages\/([^/]+)\/vocabs$/.exec(pathname);
+  if (teacherVocabBaseMatch) {
+    const passageId = decodeURIComponent(teacherVocabBaseMatch[1]!);
+    if (method === "GET") {
+      return {
+        handled: true,
+        data: { passageId, items: state.passageVocabs[passageId] ?? [] } as T,
+      };
+    }
+    if (method === "POST") {
+      const req = (body ?? {}) as any;
+      const list = state.passageVocabs[passageId] ?? [];
+      const created: PassageVocabItem = {
+        id: `pvoc-${Date.now()}`,
+        passageId,
+        testId: req.testId,
+        partNumber: req.partNumber,
+        word: String(req.word || "").trim(),
+        partOfSpeech: req.partOfSpeech ?? "n",
+        ipa: req.ipa?.trim() || undefined,
+        meaningVi: String(req.meaningVi || "").trim(),
+        paraphraseNote: req.paraphraseNote?.trim() || undefined,
+        contextSentence: req.contextSentence?.trim() || undefined,
+        order: list.length,
+      };
+      state.passageVocabs[passageId] = [...list, created];
+      return { handled: true, data: created as T };
+    }
+  }
+
+  const teacherVocabItemMatch = /^\/teacher\/passages\/([^/]+)\/vocabs\/([^/]+)$/.exec(pathname);
+  if (teacherVocabItemMatch) {
+    const passageId = decodeURIComponent(teacherVocabItemMatch[1]!);
+    const vocabId = decodeURIComponent(teacherVocabItemMatch[2]!);
+    const list = state.passageVocabs[passageId] ?? [];
+    const idx = list.findIndex((v) => v.id === vocabId);
+    if (idx === -1) mockNotFound("Không tìm thấy từ vựng.");
+    if (method === "PATCH") {
+      list[idx] = { ...list[idx]!, ...(body as any) };
+      return { handled: true, data: list[idx] as T };
+    }
+    if (method === "DELETE") {
+      state.passageVocabs[passageId] = list.filter((v) => v.id !== vocabId);
+      return { handled: true, data: { ok: true, id: vocabId } as T };
+    }
+  }
+
+  const studentPassageVocabMatch = /^\/vocabulary\/passages\/([^/]+)$/.exec(pathname);
+  if (studentPassageVocabMatch && method === "GET") {
+    const passageId = decodeURIComponent(studentPassageVocabMatch[1]!);
+    let foundTest: ExamTestDetailAuthoring | undefined;
+    let foundPart: ExamPartAuthoring | undefined;
+    for (const t of state.tests) {
+      const p = t.parts.find((item) => item.id === passageId);
+      if (p) {
+        foundTest = t;
+        foundPart = p;
+        break;
+      }
+    }
+    return {
+      handled: true,
+      data: {
+        passageId,
+        testId: foundTest?.id,
+        testTitle: foundTest?.title,
+        passageTitle: foundPart?.passageTitle ?? foundPart?.title,
+        partNumber: foundPart?.partNumber,
+        items: state.passageVocabs[passageId] ?? [],
+      } as T,
+    };
+  }
+
+  if (pathname === "/vocabulary/notebook" && method === "GET") {
+    const mine = state.userVocabNotebooks.filter((n) => n.userId === currentUser.id);
+    const search = sp.get("search")?.trim().toLowerCase();
+    const passageFilter = sp.get("passageId")?.trim();
+    const statusFilter = sp.get("status")?.trim();
+
+    let filtered = mine;
+    if (statusFilter) {
+      filtered = filtered.filter((n) => n.status === statusFilter);
+    }
+    if (passageFilter) {
+      filtered = filtered.filter((n) => n.passageId === passageFilter);
+    }
+    if (search) {
+      filtered = filtered.filter(
+        (n) =>
+          n.word.toLowerCase().includes(search) ||
+          n.meaningVi.toLowerCase().includes(search) ||
+          (n.contextSentence?.toLowerCase().includes(search) ?? false) ||
+          (n.personalNote?.toLowerCase().includes(search) ?? false),
+      );
+    }
+
+    const sourcesMap = new Map<
+      string,
+      { passageId: string; passageTitle: string; testId?: string; testTitle?: string; count: number }
+    >();
+    mine.forEach((entry) => {
+      if (!entry.passageId) return;
+      const cur = sourcesMap.get(entry.passageId);
+      if (cur) cur.count++;
+      else {
+        sourcesMap.set(entry.passageId, {
+          passageId: entry.passageId,
+          passageTitle: entry.sourcePassageTitle || "Bài đọc IELTS Reading",
+          testId: entry.testId,
+          testTitle: entry.sourceTestTitle,
+          count: 1,
+        });
+      }
+    });
+
+    const pageData = paginate(filtered, sp);
+    return {
+      handled: true,
+      data: {
+        ...pageData,
+        stats: {
+          total: mine.length,
+          learningCount: mine.filter((n) => n.status === "learning").length,
+          masteredCount: mine.filter((n) => n.status === "mastered").length,
+        },
+        sources: Array.from(sourcesMap.values()),
+      } as T,
+    };
+  }
+
+  if (pathname === "/vocabulary/notebook" && method === "POST") {
+    const req = (body ?? {}) as any;
+    const normalized = String(req.word || "").trim().replace(/\s+/g, " ").toLowerCase();
+    const dup = state.userVocabNotebooks.find(
+      (n) =>
+        n.userId === currentUser.id &&
+        n.word.trim().toLowerCase() === normalized &&
+        (n.passageId ?? undefined) === (req.passageId?.trim() || undefined),
+    );
+    if (dup) {
+      throw new ApiError({
+        statusCode: 409,
+        code: "DUPLICATE_VOCAB",
+        message: `Từ "${req.word}" đã được lưu trong bài đọc này.`,
+      });
+    }
+    const nowIso = new Date().toISOString();
+    const created: UserVocabNotebookEntry = {
+      id: `uvoc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      userId: currentUser.id,
+      passageId: req.passageId?.trim() || undefined,
+      testId: req.testId,
+      sourcePassageTitle: req.sourcePassageTitle,
+      sourceTestTitle: req.sourceTestTitle,
+      sourcePassageVocabId: req.sourcePassageVocabId,
+      word: String(req.word || "").trim(),
+      partOfSpeech: req.partOfSpeech ?? "n",
+      ipa: req.ipa?.trim() || undefined,
+      meaningVi: String(req.meaningVi || "").trim(),
+      contextSentence: req.contextSentence?.trim() || undefined,
+      personalNote: req.personalNote?.trim() || undefined,
+      paraphraseNote: req.paraphraseNote?.trim() || undefined,
+      status: req.status ?? "learning",
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    state.userVocabNotebooks.unshift(created);
+    return { handled: true, data: created as T };
+  }
+
+  if (pathname === "/vocabulary/notebook/bulk" && method === "POST") {
+    const req = (body ?? {}) as any;
+    const passageId = String(req.passageId || "").trim();
+    const sourceItems: PassageVocabItem[] =
+      state.passageVocabs[passageId] ?? req.items ?? [];
+    const existingSet = new Set(
+      state.userVocabNotebooks
+        .filter((n) => n.userId === currentUser.id && n.passageId === passageId)
+        .map((n) => n.word.trim().toLowerCase()),
+    );
+    const saved: UserVocabNotebookEntry[] = [];
+    let skippedCount = 0;
+    const nowIso = new Date().toISOString();
+    for (const item of sourceItems) {
+      const norm = item.word.trim().toLowerCase();
+      if (existingSet.has(norm)) {
+        skippedCount++;
+        continue;
+      }
+      existingSet.add(norm);
+      const entry: UserVocabNotebookEntry = {
+        id: `uvoc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        userId: currentUser.id,
+        passageId,
+        testId: req.testId ?? item.testId,
+        sourcePassageTitle: req.sourcePassageTitle,
+        sourceTestTitle: req.sourceTestTitle,
+        sourcePassageVocabId: item.id,
+        word: item.word,
+        partOfSpeech: item.partOfSpeech ?? "n",
+        ipa: item.ipa,
+        meaningVi: item.meaningVi,
+        paraphraseNote: item.paraphraseNote,
+        contextSentence: item.contextSentence,
+        status: "learning",
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      state.userVocabNotebooks.unshift(entry);
+      saved.push(entry);
+    }
+    return { handled: true, data: { savedCount: saved.length, skippedCount, items: saved } as T };
+  }
+
+  const notebookStatusMatch = /^\/vocabulary\/notebook\/([^/]+)\/status$/.exec(pathname);
+  if (notebookStatusMatch && method === "PATCH") {
+    const entryId = decodeURIComponent(notebookStatusMatch[1]!);
+    const entry = state.userVocabNotebooks.find(
+      (n) => n.id === entryId && n.userId === currentUser.id,
+    );
+    if (!entry) mockNotFound("Không tìm thấy mục từ vựng.");
+    entry.status = (body as any)?.status ?? "learning";
+    entry.updatedAt = new Date().toISOString();
+    return { handled: true, data: entry as T };
+  }
+
+  const notebookItemMatch = /^\/vocabulary\/notebook\/([^/]+)$/.exec(pathname);
+  if (notebookItemMatch) {
+    const entryId = decodeURIComponent(notebookItemMatch[1]!);
+    const idx = state.userVocabNotebooks.findIndex(
+      (n) => n.id === entryId && n.userId === currentUser.id,
+    );
+    if (idx === -1) mockNotFound("Không tìm thấy mục từ vựng.");
+    if (method === "PATCH") {
+      state.userVocabNotebooks[idx] = {
+        ...state.userVocabNotebooks[idx]!,
+        ...(body as any),
+        updatedAt: new Date().toISOString(),
+      };
+      return { handled: true, data: state.userVocabNotebooks[idx] as T };
+    }
+    if (method === "DELETE") {
+      state.userVocabNotebooks.splice(idx, 1);
+      return { handled: true, data: { ok: true, id: entryId } as T };
     }
   }
 

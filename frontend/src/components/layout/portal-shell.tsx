@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Bell,
+  BookMarked,
   BookOpen,
   Calendar,
   ClipboardCheck,
@@ -39,6 +40,7 @@ function renderNavIcon(href: string): ReactNode {
   if (href.endsWith("/courses")) return <BookOpen className="h-4 w-4" />;
   if (href.endsWith("/assignments")) return <ClipboardCheck className="h-4 w-4" />;
   if (href.endsWith("/practice")) return <BookOpen className="h-4 w-4" />;
+  if (href.endsWith("/vocab-notebook")) return <BookMarked className="h-4 w-4" />;
   if (href.endsWith("/extensions")) return <Clock className="h-4 w-4" />;
   if (href.endsWith("/penalties")) return <AlertTriangle className="h-4 w-4" />;
   if (href.endsWith("/notifications")) return <Bell className="h-4 w-4" />;
@@ -68,7 +70,14 @@ export function PortalShell({
   const pathname = usePathname();
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
+  const isFocusedPreviewSession =
+    portal === "teacher" && /^\/teacher\/question-bank\/[^/]+\/preview\/?$/.test(pathname);
+
   useDocumentTitle(getDocumentTitleForPathname(pathname));
+
+  if (isFocusedPreviewSession) {
+    return <>{children}</>;
+  }
 
   const navItems: NavItem[] = getPortalNavItems(portal).map((entry) => ({
     href: entry.href,

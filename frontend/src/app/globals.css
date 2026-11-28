@@ -554,7 +554,7 @@ dialog.lms-drawer[open]::backdrop {
     transform: translateY(6px);
   }
   to {
-    transform: translateY(0);
+    transform: none;
   }
 }
 

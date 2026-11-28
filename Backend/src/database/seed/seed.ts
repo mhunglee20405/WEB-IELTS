@@ -1194,6 +1194,577 @@ async function seed() {
     console.log(`  + CBT Exam Test created: ${examTest.title}`);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 10b. SEED CBT IELTS LISTENING TEST (4 SECTIONS - 40 QUESTIONS)
+  // ─────────────────────────────────────────────────────────────────────────────
+  let listeningTest = await ExamTestModel.findOne({ title: 'IELTS Cambridge Academic Listening Test 01' }).exec();
+  if (!listeningTest) {
+    listeningTest = await ExamTestModel.create({
+      title: 'IELTS Cambridge Academic Listening Test 01',
+      subtitle: '4 Sections • Accommodation, Library, Solar Project & Marine Biology',
+      skill: ExamSkill.LISTENING,
+      difficulty: ExamDifficulty.TARGET_65,
+      tags: ['Listening', 'Cambridge', 'Academic', 'Full Test'],
+      status: ExamTestStatus.PUBLISHED,
+      version: 1,
+      allowedModes: [ExamMode.PART, ExamMode.FULL],
+      passScore: 70,
+      fullDurationSeconds: 1800,
+      translationEnabled: false,
+      parts: [
+        // Section 1
+        {
+          ordinal: 1,
+          type: PartType.SECTION,
+          title: 'Section 1: Accommodation Registration',
+          audioPlaybackUrl: '/audio/ielts-listening-section1.wav',
+          durationSeconds: 420,
+          transcript: `[Audio Transcript - Section 1]
+Receptionist: Good morning, University Student Housing Office. How can I help you today?
+Sara: Hello, my name is Sara Henderson, and I am an incoming postgraduate student looking to secure on-campus accommodation.
+Receptionist: Certainly, Sara. Let me take down your details. What is your student identification code?
+Sara: My student ID is SH7492. [Q1]
+Receptionist: Thank you. And what type of room are you looking for? We have standard single rooms, twin shared rooms, and en-suite rooms with a private bathroom.
+Sara: I would definitely prefer an en-suite room if one is available. [Q2]
+Receptionist: Great, we have availability in en-suite. And what is your expected lease duration?
+Sara: I will be enrolled for the standard academic year, so nine months would be ideal. [Q3]
+Receptionist: Noted, nine months. When do you plan to move in?
+Sara: My flights arrive on September 14th, so my preferred move-in date is September 15th. [Q4]
+Receptionist: Perfect. Now regarding dining, do you prefer self-catering or one of our meal plans?
+Sara: I would like the half-board meal plan, providing breakfast and dinner on weekdays. [Q5]
+Receptionist: Very well. There is a refundable security deposit of 250 pounds required upon reservation. [Q6]
+Sara: That is fine. Can you put me down for Greenwood Hall? My sister stayed there two years ago. [Q7]
+Receptionist: Yes, Greenwood Hall still has three en-suite rooms open. Would you be paying by bank transfer or credit card?
+Sara: I can pay right now by credit card. [Q8]
+Receptionist: Excellent. Who is your primary emergency contact?
+Sara: My brother, David Henderson. [Q9]
+Receptionist: And do you have any special living requests?
+Sara: Yes, as I am doing intensive thesis research, I would prefer to be placed on a quiet floor. [Q10]
+Receptionist: That can easily be arranged. Thank you, Sara. We will send the confirmation email shortly.`,
+          questionGroups: [
+            {
+              id: 'sec1-grp1',
+              title: 'Questions 1–5',
+              instruction: 'Complete the notes below. Write NO MORE THAN TWO WORDS AND/OR A NUMBER for each answer.',
+              type: ExamQuestionType.NOTE_COMPLETION,
+              order: 1,
+              maxWords: 2,
+              summaryTemplateHtml: `<p><strong>University Student Housing — Registration Form</strong></p><table><tbody><tr><th>Applicant Name</th><td>Sara Henderson</td></tr><tr><th>Student ID Code</th><td><span class="ielts-blank blank-uid-s1q1">(1)_____</span></td></tr><tr><th>Preferred Room Type</th><td><span class="ielts-blank blank-uid-s1q2">(2)_____</span> (with private bathroom)</td></tr><tr><th>Expected Lease Duration</th><td><span class="ielts-blank blank-uid-s1q3">(3)_____</span></td></tr><tr><th>Preferred Move-in Date</th><td><span class="ielts-blank blank-uid-s1q4">(4)_____</span></td></tr><tr><th>Selected Meal Plan</th><td><span class="ielts-blank blank-uid-s1q5">(5)_____</span> (breakfast &amp; dinner on weekdays)</td></tr></tbody></table>`,
+              questions: [
+                {
+                  number: 1,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Student ID Code:',
+                  points: 1,
+                  grading: { acceptedKeys: ['SH7492', 'SH 7492'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara states her student ID is SH7492.',
+                },
+                {
+                  number: 2,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Preferred room type:',
+                  points: 1,
+                  grading: { acceptedKeys: ['en-suite', 'ensuite', 'en suite'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara mentions she would definitely prefer an en-suite room.',
+                },
+                {
+                  number: 3,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Lease duration:',
+                  points: 1,
+                  grading: { acceptedKeys: ['9 months', 'nine months', '9', 'nine'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara requests a duration of nine months for the academic year.',
+                },
+                {
+                  number: 4,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Preferred move-in date:',
+                  points: 1,
+                  grading: { acceptedKeys: ['September 15th', 'September 15', '15 September', '15th September', 'Sept 15'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara asks for September 15th as her move-in date.',
+                },
+                {
+                  number: 5,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Selected meal plan:',
+                  points: 1,
+                  grading: { acceptedKeys: ['half-board', 'half board'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara specifies half-board for breakfast and dinner.',
+                },
+              ],
+            },
+            {
+              id: 'sec1-grp2',
+              title: 'Questions 6–10',
+              instruction: 'Complete the notes below. Write NO MORE THAN TWO WORDS AND/OR A NUMBER for each answer.',
+              type: ExamQuestionType.NOTE_COMPLETION,
+              order: 2,
+              maxWords: 2,
+              summaryTemplateHtml: `<p><strong>Payment &amp; Residence Preferences</strong></p><ul><li>Refundable security deposit: &pound;<span class="ielts-blank blank-uid-s1q6">(6)_____</span> required upon reservation</li><li>Preferred residential hall: <span class="ielts-blank blank-uid-s1q7">(7)_____</span></li><li>Payment method: by <span class="ielts-blank blank-uid-s1q8">(8)_____</span></li><li>Emergency contact: David Henderson (her <span class="ielts-blank blank-uid-s1q9">(9)_____</span>)</li><li>Special living request: placed on a <span class="ielts-blank blank-uid-s1q10">(10)_____</span></li></ul>`,
+              questions: [
+                {
+                  number: 6,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Required security deposit amount:',
+                  points: 1,
+                  grading: { acceptedKeys: ['250', '250 pounds', '£250'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'The housing officer specifies a 250 pounds refundable security deposit.',
+                },
+                {
+                  number: 7,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Preferred residential hall name:',
+                  points: 1,
+                  grading: { acceptedKeys: ['Greenwood Hall', 'Greenwood'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara requests to be placed in Greenwood Hall.',
+                },
+                {
+                  number: 8,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Method of payment:',
+                  points: 1,
+                  grading: { acceptedKeys: ['credit card'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara confirms she can pay by credit card.',
+                },
+                {
+                  number: 9,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Emergency contact relationship:',
+                  points: 1,
+                  grading: { acceptedKeys: ['brother'], caseSensitive: false, maxWords: 1 },
+                  explanation: 'Sara lists her brother David Henderson as emergency contact.',
+                },
+                {
+                  number: 10,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Special housing request:',
+                  points: 1,
+                  grading: { acceptedKeys: ['quiet floor', 'quiet'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Sara asks to be placed on a quiet floor.',
+                },
+              ],
+            },
+          ],
+        },
+
+        // Section 2
+        {
+          ordinal: 2,
+          type: PartType.SECTION,
+          title: 'Section 2: City Library Orientation',
+          audioPlaybackUrl: '/audio/ielts-listening-section2.wav',
+          durationSeconds: 360,
+          transcript: `[Audio Transcript - Section 2]
+Arthur Collins: Welcome everyone to the City Central Library and Cultural Center. My name is Arthur Collins, and today I want to guide you through our collections, borrowing policies, and study facilities.
+First, regarding library hours: our main reading halls are open Monday through Friday from 8:30 AM to 9:00 PM [Q11], and on weekends from 10:00 AM to 6:00 PM. Please note that during the summer holiday period, we close at 5:00 PM on Sundays. [Q12]
+As a registered member, you are allowed to borrow up to ten physical books simultaneously [Q13] for a period of three weeks. [Q14] If you require extra time, renewal can be completed online twice, provided no other borrower has reserved the title. Overdue items incur a daily late fee of 50 pence per volume. [Q15]
+Now let me highlight five key facilities across our floors.
+On the Ground Floor, immediately beside the main entrance, you will find our Multimedia Center [Q16]. This contains thirty high-speed computers equipped with audio editing and language learning software.
+Moving up to the First Floor, the Eastern Wing houses the Archive and Rare Books Collection [Q17]. Access here requires advance booking and a photo ID.
+Opposite the archives on the First Floor is the Silent Study Zone [Q18]. Mobile phones must be switched off completely in this area.
+On the Second Floor, we have the Collaborative Project Hub [Q19], equipped with whiteboards and display screens for group presentations.
+Finally, in the Basement level, you will find the Family Reading Room [Q20] and Children's Discovery Corner, open every afternoon.`,
+          questionGroups: [
+            {
+              id: 'sec2-grp1',
+              title: 'Questions 11–15',
+              instruction: 'Choose the correct letter, A, B or C.',
+              type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+              order: 1,
+              questions: [
+                {
+                  number: 11,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'What are the library opening hours on weekdays?',
+                  options: [
+                    { key: 'A', text: '8:30 AM to 9:00 PM' },
+                    { key: 'B', text: '9:00 AM to 6:00 PM' },
+                    { key: 'C', text: '8:00 AM to 10:00 PM' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['A'], caseSensitive: false },
+                  explanation: 'Opening hours on weekdays are 8:30 AM to 9:00 PM.',
+                },
+                {
+                  number: 12,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'During summer holidays, when does the library close on Sundays?',
+                  options: [
+                    { key: 'A', text: '4:00 PM' },
+                    { key: 'B', text: '5:00 PM' },
+                    { key: 'C', text: '6:00 PM' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['B'], caseSensitive: false },
+                  explanation: 'During summer holidays, Sunday closing is at 5:00 PM.',
+                },
+                {
+                  number: 13,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'How many physical books can a member borrow simultaneously?',
+                  options: [
+                    { key: 'A', text: '5 books' },
+                    { key: 'B', text: '8 books' },
+                    { key: 'C', text: '10 books' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['C'], caseSensitive: false },
+                  explanation: 'Registered members can borrow up to ten books.',
+                },
+                {
+                  number: 14,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'How long is the standard loan period for borrowed books?',
+                  options: [
+                    { key: 'A', text: 'Two weeks' },
+                    { key: 'B', text: 'Three weeks' },
+                    { key: 'C', text: 'Four weeks' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['B'], caseSensitive: false },
+                  explanation: 'The standard borrowing period is three weeks.',
+                },
+                {
+                  number: 15,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'What is the daily overdue late fee per volume?',
+                  options: [
+                    { key: 'A', text: '20 pence' },
+                    { key: 'B', text: '50 pence' },
+                    { key: 'C', text: '1 pound' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['B'], caseSensitive: false },
+                  explanation: 'The speaker explicitly states 50 pence per volume.',
+                },
+              ],
+            },
+            {
+              id: 'sec2-grp2',
+              title: 'Questions 16–20',
+              instruction: 'Match the facility with its designated location. Choose the correct letter, A–E.',
+              type: ExamQuestionType.MATCHING_INFORMATION,
+              order: 2,
+              sharedOptions: [
+                { key: 'A', text: 'Ground Floor, beside main entrance' },
+                { key: 'B', text: 'First Floor, Eastern Wing' },
+                { key: 'C', text: 'First Floor, opposite archives' },
+                { key: 'D', text: 'Second Floor' },
+                { key: 'E', text: 'Basement level' },
+              ],
+              questions: [
+                {
+                  number: 16,
+                  type: ExamQuestionType.MATCHING_INFORMATION,
+                  prompt: 'Multimedia Center with language learning software',
+                  points: 1,
+                  grading: { acceptedKeys: ['A'], caseSensitive: false },
+                  explanation: 'Ground Floor beside the main entrance contains thirty computers.',
+                },
+                {
+                  number: 17,
+                  type: ExamQuestionType.MATCHING_INFORMATION,
+                  prompt: 'Archive and Rare Books Collection requiring photo ID',
+                  points: 1,
+                  grading: { acceptedKeys: ['B'], caseSensitive: false },
+                  explanation: 'First Floor Eastern Wing houses archives and rare books.',
+                },
+                {
+                  number: 18,
+                  type: ExamQuestionType.MATCHING_INFORMATION,
+                  prompt: 'Silent Study Zone requiring phones switched off',
+                  points: 1,
+                  grading: { acceptedKeys: ['C'], caseSensitive: false },
+                  explanation: 'First Floor opposite archives is the Silent Study Zone.',
+                },
+                {
+                  number: 19,
+                  type: ExamQuestionType.MATCHING_INFORMATION,
+                  prompt: 'Collaborative Project Hub with presentation whiteboards',
+                  points: 1,
+                  grading: { acceptedKeys: ['D'], caseSensitive: false },
+                  explanation: 'Second Floor collaborative hub has whiteboards and display screens.',
+                },
+                {
+                  number: 20,
+                  type: ExamQuestionType.MATCHING_INFORMATION,
+                  prompt: 'Family Reading Room and Children Discovery Corner',
+                  points: 1,
+                  grading: { acceptedKeys: ['E'], caseSensitive: false },
+                  explanation: 'Basement level houses family reading room.',
+                },
+              ],
+            },
+          ],
+        },
+
+        // Section 3
+        {
+          ordinal: 3,
+          type: PartType.SECTION,
+          title: 'Section 3: Renewable Solar Research Project',
+          audioPlaybackUrl: '/audio/ielts-listening-section3.wav',
+          durationSeconds: 400,
+          transcript: `[Audio Transcript - Section 3]
+Dr. Watson: Come in Jack, Emily, please take a seat. How is your preparatory work coming along for the solar panel efficiency research?
+Jack: Well Dr. Watson, we have analyzed the initial meteorological data from the three regional test stations, but we noticed significant discrepancies in the temperature coefficients.
+Dr. Watson: That is quite common, Jack. What did your regression model indicate?
+Jack: The regression showed that panel overheating reduced electrical output by nearly twelve percent [Q21] during peak afternoon sunlight hours.
+Dr. Watson: Indeed. That aligns with current research in photovoltaic degradation. What do you propose as your primary mitigation strategy?
+Jack: Emily and I want to investigate water-cooling microchannels [Q22] installed directly behind the crystalline silicon cells.
+Dr. Watson: That sounds promising. Have you considered the pumping energy costs?
+Jack: Yes, we plan to utilize gravity-assisted siphon mechanisms [Q23] to minimize supplementary power consumption.
+Dr. Watson: Let us outline the five stages of your upcoming field experiment.
+Stage one will be sensor calibration [Q26]: ensuring all thermal and voltage probes read within one-tenth of a percent accuracy.
+Stage two is ambient baseline measurement: recording solar irradiance without artificial cooling for a full forty-eight-hour [Q27] cycle.
+Stage three introduces continuous fluid circulation at three distinct flow rates. [Q28]
+Stage four is comparative thermal imaging using our department's infrared camera [Q24] to detect hotspot [Q29] formations.
+And stage five will be statistical error analysis using the Monte Carlo [Q30] simulation package.
+Sounds like a rigorous protocol. Submit your revised hypothesis document by Friday afternoon. [Q25]`,
+          questionGroups: [
+            {
+              id: 'sec3-grp1',
+              title: 'Questions 21–25',
+              instruction: 'Choose the correct letter, A, B or C.',
+              type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+              order: 1,
+              questions: [
+                {
+                  number: 21,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'What effect did panel overheating have on electrical output during peak afternoon hours?',
+                  options: [
+                    { key: 'A', text: 'Output dropped by nearly 12%' },
+                    { key: 'B', text: 'Voltage fluctuated unpredictably' },
+                    { key: 'C', text: 'Output increased by 8%' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['A'], caseSensitive: false },
+                  explanation: 'Jack states electrical output dropped by nearly twelve percent.',
+                },
+                {
+                  number: 22,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'What primary cooling technology do Jack and Emily propose to investigate?',
+                  options: [
+                    { key: 'A', text: 'Forced air ventilation fans' },
+                    { key: 'B', text: 'Water-cooling microchannels' },
+                    { key: 'C', text: 'Reflective optical coatings' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['B'], caseSensitive: false },
+                  explanation: 'They proposed water-cooling microchannels behind silicon cells.',
+                },
+                {
+                  number: 23,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'How will supplementary pumping energy be minimized in their design?',
+                  options: [
+                    { key: 'A', text: 'Gravity-assisted siphon mechanisms' },
+                    { key: 'B', text: 'Auxiliary wind turbines' },
+                    { key: 'C', text: 'Thermoelectric generators' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['A'], caseSensitive: false },
+                  explanation: 'Jack mentions gravity-assisted siphon mechanisms.',
+                },
+                {
+                  number: 24,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'What instrument will detect hotspot formations during Stage 4?',
+                  options: [
+                    { key: 'A', text: 'Thermal imaging infrared camera' },
+                    { key: 'B', text: 'Laser pyrometer' },
+                    { key: 'C', text: 'Digital multimeter' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['A'], caseSensitive: false },
+                  explanation: 'Dr. Watson mentions comparative thermal imaging with an infrared camera.',
+                },
+                {
+                  number: 25,
+                  type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                  prompt: 'When is the revised hypothesis document due to Dr. Watson?',
+                  options: [
+                    { key: 'A', text: 'Wednesday morning' },
+                    { key: 'B', text: 'Friday afternoon' },
+                    { key: 'C', text: 'Next Monday' },
+                  ],
+                  points: 1,
+                  grading: { acceptedKeys: ['B'], caseSensitive: false },
+                  explanation: 'Dr. Watson requests submission by Friday afternoon.',
+                },
+              ],
+            },
+            {
+              id: 'sec3-grp2',
+              title: 'Questions 26–30',
+              instruction: 'Complete the flow-chart below. Write NO MORE THAN TWO WORDS AND/OR A NUMBER for each answer.',
+              type: ExamQuestionType.FLOW_CHART_COMPLETION,
+              order: 2,
+              maxWords: 2,
+              questions: [
+                {
+                  number: 26,
+                  type: ExamQuestionType.FLOW_CHART_COMPLETION,
+                  prompt: 'Stage 1: Sensor ________ ensuring voltage probes within 0.1% accuracy',
+                  points: 1,
+                  grading: { acceptedKeys: ['calibration'], caseSensitive: false, maxWords: 1 },
+                  explanation: 'Stage 1 will be sensor calibration.',
+                },
+                {
+                  number: 27,
+                  type: ExamQuestionType.FLOW_CHART_COMPLETION,
+                  prompt: 'Stage 2: Ambient baseline measurement for a full ________ hour cycle',
+                  points: 1,
+                  grading: { acceptedKeys: ['48', 'forty-eight', 'forty eight'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Stage 2 records for a full forty-eight-hour cycle.',
+                },
+                {
+                  number: 28,
+                  type: ExamQuestionType.FLOW_CHART_COMPLETION,
+                  prompt: 'Stage 3: Fluid circulation tested at three distinct ________',
+                  points: 1,
+                  grading: { acceptedKeys: ['flow rates', 'rates'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Tested at three distinct flow rates.',
+                },
+                {
+                  number: 29,
+                  type: ExamQuestionType.FLOW_CHART_COMPLETION,
+                  prompt: 'Stage 4: Thermal imaging to detect ________ formations',
+                  points: 1,
+                  grading: { acceptedKeys: ['hotspot', 'hotspots', 'hot-spot', 'hot-spots'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Infrared imaging detects hotspot formations.',
+                },
+                {
+                  number: 30,
+                  type: ExamQuestionType.FLOW_CHART_COMPLETION,
+                  prompt: 'Stage 5: Statistical error analysis using the ________ simulation package',
+                  points: 1,
+                  grading: { acceptedKeys: ['Monte Carlo', 'monte carlo'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Monte Carlo simulation package will be used for error analysis.',
+                },
+              ],
+            },
+          ],
+        },
+
+        // Section 4
+        {
+          ordinal: 4,
+          type: PartType.SECTION,
+          title: 'Section 4: Ocean Acidification & Coral Ecosystems',
+          audioPlaybackUrl: '/audio/ielts-listening-section4.wav',
+          durationSeconds: 480,
+          transcript: `[Audio Transcript - Section 4]
+Professor: Good afternoon, students. Today we examine one of the most critical anthropogenic threats to marine biodiversity: ocean acidification.
+Since the onset of the industrial revolution, atmospheric concentrations of carbon dioxide [Q31] have risen exponentially, primarily from the combustion of fossil fuels and extensive deforestation. Approximately thirty percent of this anthropogenic carbon dioxide is absorbed directly by the world's oceans.
+When carbon dioxide dissolves in seawater, it initiates a series of chemical reactions producing carbonic acid. This process liberates hydrogen ions, which subsequently bind with carbonate ions. The consequence is a substantial depletion of carbonate ions available for marine calcifiers.
+Organisms such as hard corals, mollusks, and pteropods depend on carbonate ions to build and maintain their calcium carbonate [Q32] skeletons. In water with lower saturation states, these skeletal structures become brittle and may even begin to dissolve.
+Coral reefs in tropical shallow water [Q34] are particularly vulnerable. A drop in seawater pH impairs the calcification rate of reef-building scleractinian corals. Concurrently, elevated sea surface temperatures induce coral bleaching [Q33], wherein corals expel their vital symbiotic algae [Q36], known as zooxanthellae.
+The loss of reef structural complexity causes devastating cascades throughout marine biodiversity [Q35]. Over a quarter of all marine species rely on healthy coral formations for feeding, shelter, and breeding grounds.
+Furthermore, coastal communities face heightened risks: living barrier reefs dissipate up to ninety-seven percent of wave energy, protecting shorelines against storm surges and coastal erosion. Overfishing of herbivorous [Q38] fish species compounds the dilemma by allowing macroalgae to outcompete struggling coral recruits. Concurrent temperature rise [Q37] exacerbates physiological degradation.
+To foster ecological resilience, scientists are trialing artificial reefs [Q39] and selective coral breeding programs. Nonetheless, international treaties [Q40] enforcing rapid decarbonization remain the only viable long-term solution.`,
+          questionGroups: [
+            {
+              id: 'sec4-grp1',
+              title: 'Questions 31–40',
+              instruction: 'Complete the notes below. Write NO MORE THAN TWO WORDS for each answer.',
+              type: ExamQuestionType.NOTE_COMPLETION,
+              order: 1,
+              maxWords: 2,
+              summaryTemplateHtml: `<p><strong>Lecture Notes: Ocean Acidification &amp; Coral Ecosystems</strong></p><p><strong>1. Causes &amp; Chemical Process</strong></p><ul><li>Around 30% of anthropogenic <span class="ielts-blank blank-uid-s4q31">(31)_____</span> is absorbed by oceans.</li><li>Lower carbonate ion availability prevents marine organisms from building <span class="ielts-blank blank-uid-s4q32">(32)_____</span> skeletons.</li></ul><p><strong>2. Impact on Coral Reefs</strong></p><ul><li>Elevated sea temperatures cause widespread coral <span class="ielts-blank blank-uid-s4q33">(33)_____</span>.</li><li>Reefs located in tropical <span class="ielts-blank blank-uid-s4q34">(34)_____</span> are especially vulnerable.</li><li>Structural loss triggers a cascade damaging overall marine <span class="ielts-blank blank-uid-s4q35">(35)_____</span>.</li><li>Stressed corals expel essential <span class="ielts-blank blank-uid-s4q36">(36)_____</span> (zooxanthellae), worsened by <span class="ielts-blank blank-uid-s4q37">(37)_____</span>.</li></ul><p><strong>3. Compounding Stressors &amp; Conservation</strong></p><ul><li>Overfishing of <span class="ielts-blank blank-uid-s4q38">(38)_____</span> fish enables macroalgae overgrowth.</li><li>Restoration initiatives include deploying <span class="ielts-blank blank-uid-s4q39">(39)_____</span> and selective breeding.</li><li>Enforcing rapid decarbonization through <span class="ielts-blank blank-uid-s4q40">(40)_____</span> remains the only viable long-term solution.</li></ul>`,
+              questions: [
+                {
+                  number: 31,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Primary gas driving ocean acidification:',
+                  points: 1,
+                  grading: { acceptedKeys: ['carbon dioxide', 'CO2'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Atmospheric concentrations of carbon dioxide drive acidification.',
+                },
+                {
+                  number: 32,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Compound corals require to construct skeletal structures:',
+                  points: 1,
+                  grading: { acceptedKeys: ['calcium carbonate', 'carbonate'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Marine calcifiers build calcium carbonate skeletons.',
+                },
+                {
+                  number: 33,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Thermal stress leads to widespread coral ________:',
+                  points: 1,
+                  grading: { acceptedKeys: ['bleaching', 'coral bleaching'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Elevated sea surface temperatures induce coral bleaching.',
+                },
+                {
+                  number: 34,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Reefs located in tropical ________ are most vulnerable:',
+                  points: 1,
+                  grading: { acceptedKeys: ['shallow water', 'shallow waters'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Coral reefs in tropical shallow water are particularly vulnerable.',
+                },
+                {
+                  number: 35,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Loss of reef architecture devastates overall marine ________:',
+                  points: 1,
+                  grading: { acceptedKeys: ['biodiversity', 'life', 'species'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Structural complexity loss causes cascades throughout marine biodiversity.',
+                },
+                {
+                  number: 36,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Stressed corals expel their vital ________:',
+                  points: 1,
+                  grading: { acceptedKeys: ['symbiotic algae', 'algae', 'zooxanthellae'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Corals expel their vital symbiotic algae, known as zooxanthellae.',
+                },
+                {
+                  number: 37,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Concurrent environmental degradation caused by ________:',
+                  points: 1,
+                  grading: { acceptedKeys: ['temperature rise', 'warming'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Concurrent temperature rise compounds the dilemma.',
+                },
+                {
+                  number: 38,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Overfishing of ________ fish allows macroalgae to overtake reefs:',
+                  points: 1,
+                  grading: { acceptedKeys: ['herbivorous', 'herbivorous fish'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Overfishing of herbivorous fish species worsens the crisis.',
+                },
+                {
+                  number: 39,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Physical remediation effort: constructing ________:',
+                  points: 1,
+                  grading: { acceptedKeys: ['artificial reefs', 'artificial reef'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'Scientists are trialing artificial reefs and selective breeding.',
+                },
+                {
+                  number: 40,
+                  type: ExamQuestionType.NOTE_COMPLETION,
+                  prompt: 'Only viable long-term global solution: ________ for decarbonization:',
+                  points: 1,
+                  grading: { acceptedKeys: ['international treaties', 'international treaty', 'treaties'], caseSensitive: false, maxWords: 2 },
+                  explanation: 'International treaties enforcing rapid decarbonization remain the only viable solution.',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      createdBy: teacherA._id,
+    });
+    console.log(`  + CBT Exam Test created: ${listeningTest.title} (4 Sections, 40 Questions)`);
+  }
+
   // Translation 1: Student 0 Draft
   const passageId = 'passage-bees-1';
   const sa0 = await StudentAssignmentModel.findOne({ studentId: studentB._id }).exec();

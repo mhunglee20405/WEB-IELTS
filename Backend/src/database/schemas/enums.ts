@@ -120,6 +120,8 @@ export enum EmailDeliveryStatus {
 export enum ExamSkill {
   READING = 'READING',
   LISTENING = 'LISTENING',
+  VOCABULARY = 'VOCABULARY',
+  GRAMMAR = 'GRAMMAR',
 }
 
 export enum ExamMode {
@@ -137,6 +139,7 @@ export enum ExamDifficulty {
 export enum PartType {
   PASSAGE = 'PASSAGE',
   SECTION = 'SECTION',
+  QUIZ = 'QUIZ',
 }
 
 export enum AttemptStatus {

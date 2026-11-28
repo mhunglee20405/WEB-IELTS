@@ -176,8 +176,8 @@ export function ExamHeader({
   onRequestSubmit?: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs">
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs">
+      <div className="flex w-full max-w-none flex-wrap items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href={backHref}
@@ -188,9 +188,23 @@ export function ExamHeader({
           </Link>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="info">{skill === "READING" ? "Reading" : "Listening"}</Badge>
+              <Badge variant="info">
+                {skill === "READING"
+                  ? "Reading"
+                  : skill === "LISTENING"
+                    ? "Listening"
+                    : skill === "VOCABULARY"
+                      ? "Vocabulary"
+                      : "Grammar"}
+              </Badge>
               <Badge variant="neutral">
-                {isPreview ? "Xem trước đề" : mode === "FULL" ? "Full Test" : "Part Practice"}
+                {isPreview
+                  ? "Xem trước đề"
+                  : skill === "VOCABULARY" || skill === "GRAMMAR"
+                    ? "Trắc nghiệm"
+                    : mode === "FULL"
+                      ? "Full Test"
+                      : "Part Practice"}
               </Badge>
             </div>
             <h1 className="mt-0.5 truncate text-sm font-bold text-slate-900 sm:text-base">
@@ -266,9 +280,9 @@ export function QuestionNavigator({
   return (
     <nav
       aria-label="Điều hướng câu hỏi"
-      className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur-xs sm:px-6"
+      className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur-xs sm:px-6"
     >
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 overflow-x-auto pb-0.5">
+      <div className="flex w-full max-w-none flex-wrap items-center gap-2 overflow-x-auto pb-0.5">
         {parts.map((part) => (
           <div
             key={part.id}
@@ -280,7 +294,11 @@ export function QuestionNavigator({
             )}
           >
             <span className="mr-1 text-[11px] font-bold tracking-wide text-slate-600 uppercase">
-              {part.partType === "PASSAGE" ? `P${part.partNumber}` : `S${part.partNumber}`}
+              {part.partType === "PASSAGE"
+                ? `P${part.partNumber}`
+                : part.partType === "QUIZ"
+                  ? "Câu"
+                  : `S${part.partNumber}`}
             </span>
             {part.questionGroups.flatMap((g) =>
               g.questions.map((q) => {
@@ -486,7 +504,7 @@ export function ExamShell({
 }) {
   return (
     <ExamErrorBoundary backHref={backHref}>
-      <div className="flex min-h-screen flex-col bg-slate-50">{children}</div>
+      <div className="flex min-h-dvh w-full flex-col bg-slate-50">{children}</div>
     </ExamErrorBoundary>
   );
 }

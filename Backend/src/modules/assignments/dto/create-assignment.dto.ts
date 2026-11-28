@@ -80,6 +80,11 @@ export class CreateAssignmentDto {
   @IsBoolean()
   allowRetake?: boolean;
 
+  @ApiPropertyOptional({ default: false, description: 'Strict timed exam mode (hides contextual vocab notebook during active attempt)' })
+  @IsOptional()
+  @IsBoolean()
+  strictExamMode?: boolean;
+
   @ApiPropertyOptional({ example: 3, minimum: 1, description: 'Maximum allowed attempts if allowRetake is true' })
   @IsOptional()
   @IsNumber()

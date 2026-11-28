@@ -49,6 +49,9 @@ export class Assignment {
   @Prop({ default: false })
   allowRetake: boolean;
 
+  @Prop({ default: false })
+  strictExamMode?: boolean;
+
   @Prop({ min: 1 })
   maxAttempts?: number;
 

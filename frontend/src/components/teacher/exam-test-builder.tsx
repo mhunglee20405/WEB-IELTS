@@ -18,8 +18,10 @@ import {
   Upload,
 } from "lucide-react";
 import { Badge, Button, Card, RichTextEditor, SafeHtml } from "@/components/ui";
+import { resolveBackendMediaUrl } from "@/lib/api/client";
 import { teacherExamTestsApi } from "@/lib/api/endpoints/teacher-exam-tests";
 import { mediaApi } from "@/lib/api/endpoints/media";
+import { vocabularyApi } from "@/lib/api/endpoints/vocabulary";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
 import { examKeys } from "@/lib/api/query-keys";
 import type {
@@ -39,180 +41,17 @@ import {
   EXAM_QUESTION_TYPE_LABELS,
   MATCHING_QUESTION_TYPES,
 } from "@/lib/exam/question-meta";
-
-interface DraftQuestion {
-  id?: string;
-  prompt: string;
-  questionType: ExamQuestionType;
-  optionsText: string; // one per line: A|Option text
-  maxWords: number;
-  maxSelections: number;
-  correctAnswerText: string; // comma separated if multiple
-  acceptedAnswersText: string;
-  referenceParagraph: string;
-  explanation: string;
-}
-
-interface DraftGroup {
-  id?: string;
-  title: string;
-  instructionHtml: string;
-  questionType: ExamQuestionType;
-  sharedOptionsText: string; // key|text per line
-  maxWords: number;
-  maxSelections: number;
-  questions: DraftQuestion[];
-}
-
-interface DraftPart {
-  id?: string;
-  title: string;
-  passageTitle: string;
-  passageHtml: string;
-  instructions: string;
-  durationMinutes: number;
-  audioAssetId: string;
-  audioAllowPause: boolean;
-  audioAllowSeek: boolean;
-  audioMaxPlayCount: string;
-  transcript: string;
-  groups: DraftGroup[];
-}
-
-function formatOptionsToText(options?: Array<{ key: string; text: string }>): string {
-  if (!options || options.length === 0) return "";
-  return options.map((o) => `${o.key}|${o.text}`).join("\n");
-}
-
-function parseOptionsFromText(raw: string): Array<{ key: string; text: string }> {
-  return raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, idx) => {
-      const sepIdx = line.indexOf("|");
-      if (sepIdx === -1) {
-        const defaultKey = String.fromCharCode(65 + idx);
-        return { key: defaultKey, text: line };
-      }
-      return {
-        key: line.slice(0, sepIdx).trim() || String.fromCharCode(65 + idx),
-        text: line.slice(sepIdx + 1).trim(),
-      };
-    });
-}
-
-function toDraftPart(part: ExamPartAuthoring): DraftPart {
-  return {
-    id: part.id,
-    title: part.title,
-    passageTitle: part.passageTitle ?? part.title,
-    passageHtml:
-      part.passageHtml ??
-      (part as any).contentHtml ??
-      (part.paragraphs
-        ? part.paragraphs.map((p) => `<p><strong>Paragraph ${p.label}.</strong> ${p.text}</p>`).join("")
-        : ""),
-    instructions: part.instructions ?? "",
-    durationMinutes: Math.max(1, Math.round(((part.durationSeconds ?? (part as any).fullDurationSeconds) ?? 1200) / 60)),
-    audioAssetId: part.audioAsset?.assetId ?? (part as any).audioAssetId ?? "",
-    audioAllowPause: part.audioAsset?.allowPause ?? true,
-    audioAllowSeek: part.audioAsset?.allowSeek ?? true,
-    audioMaxPlayCount:
-      part.audioAsset?.maxPlayCount !== null && part.audioAsset?.maxPlayCount !== undefined
-        ? String(part.audioAsset.maxPlayCount)
-        : "",
-    transcript: part.transcript ?? "",
-    groups: (part.questionGroups || []).map((g: any) => ({
-      id: g.id,
-      title: g.title ?? "",
-      instructionHtml: g.instructionHtml ?? g.instruction ?? "",
-      questionType: g.questionType ?? g.type,
-      sharedOptionsText: formatOptionsToText(g.sharedOptions),
-      maxWords: g.maxWords ?? 2,
-      maxSelections: g.maxSelections ?? 2,
-      questions: (g.questions || []).map((q: any) => {
-        const correctKeys = Array.isArray(q.correctAnswer)
-          ? q.correctAnswer
-          : q.correctAnswer
-            ? [q.correctAnswer]
-            : (q.grading?.acceptedKeys || []);
-        const accepted = q.acceptedAnswers ?? (Array.isArray(q.grading?.acceptedKeys) ? q.grading.acceptedKeys : []);
-        return {
-          id: q.id,
-          prompt: q.prompt || "",
-          questionType: q.questionType ?? q.type ?? g.questionType ?? g.type,
-          optionsText: formatOptionsToText(q.options),
-          maxWords: q.maxWords ?? g.maxWords ?? 2,
-          maxSelections: q.maxSelections ?? g.maxSelections ?? 2,
-          correctAnswerText: correctKeys.join(", "),
-          acceptedAnswersText: accepted.join(", "),
-          referenceParagraph: q.referenceParagraph ?? "",
-          explanation: q.explanation ?? "",
-        };
-      }),
-    })),
-  };
-}
-
-function createEmptyQuestion(questionType: ExamQuestionType): DraftQuestion {
-  return {
-    prompt: "",
-    questionType,
-    optionsText:
-      questionType === "MULTIPLE_CHOICE_SINGLE" ||
-      questionType === "MULTIPLE_CHOICE_MULTIPLE"
-        ? "A|Option A\nB|Option B\nC|Option C\nD|Option D"
-        : "",
-    maxWords: 2,
-    maxSelections: 2,
-    correctAnswerText:
-      questionType === "TRUE_FALSE_NOT_GIVEN"
-        ? "TRUE"
-        : questionType === "YES_NO_NOT_GIVEN"
-          ? "YES"
-          : questionType === "MULTIPLE_CHOICE_MULTIPLE"
-            ? "A, B"
-            : "A",
-    acceptedAnswersText: "",
-    referenceParagraph: "",
-    explanation: "",
-  };
-}
-
-function createEmptyDraftPart(skill: ExamSkill, partIndex: number): DraftPart {
-  return {
-    title: `${skill === "READING" ? "Passage" : "Section"} ${partIndex + 1}`,
-    passageTitle: "",
-    passageHtml:
-      skill === "READING"
-        ? "<p><strong>Paragraph A.</strong> Nhập nội dung đoạn văn tiếng Anh học thuật tại đây...</p>"
-        : "",
-    instructions: "",
-    durationMinutes: skill === "READING" ? 20 : 10,
-    audioAssetId: "",
-    audioAllowPause: true,
-    audioAllowSeek: true,
-    audioMaxPlayCount: "",
-    transcript: "",
-    groups: [
-      {
-        title: `Questions 1–2`,
-        instructionHtml: "<p>Answer the questions below.</p>",
-        questionType:
-          skill === "READING" ? "TRUE_FALSE_NOT_GIVEN" : "NOTE_COMPLETION",
-        sharedOptionsText: "",
-        maxWords: 2,
-        maxSelections: 2,
-        questions: [
-          createEmptyQuestion(
-            skill === "READING" ? "TRUE_FALSE_NOT_GIVEN" : "NOTE_COMPLETION",
-          ),
-        ],
-      },
-    ],
-  };
-}
+import { parseSlashAnswers } from "@/lib/exam/listening-template";
+import {
+  createEmptyDraftPart,
+  createEmptyQuestion,
+  parseOptionsFromText,
+  toDraftPart,
+  type DraftPart,
+} from "./exam-builder-types";
+import { ListeningTestBuilder } from "./listening-test-builder";
+import { PassageVocabAuthoring } from "./passage-vocab-authoring";
+import { QuizTestBuilder } from "./quiz-test-builder";
 
 export function ExamTestBuilder({
   initialTest,
@@ -232,8 +71,9 @@ export function ExamTestBuilder({
   );
   const [tagsText, setTagsText] = useState((initialTest?.tags ?? []).join(", "));
   const [durationMinutes, setDurationMinutes] = useState(
-    Math.max(1, Math.round((initialTest?.totalDurationSeconds ?? 1200) / 60)),
+    initialTest ? Math.max(0, Math.round(initialTest.totalDurationSeconds / 60)) : 20,
   );
+  const isQuizSkill = skill === "VOCABULARY" || skill === "GRAMMAR";
   const [allowPartMode, setAllowPartMode] = useState(
     initialTest?.allowedModes.includes("PART") ?? true,
   );
@@ -249,7 +89,16 @@ export function ExamTestBuilder({
 
   const [dirty, setDirty] = useState(false);
   const [uploadPercent, setUploadPercent] = useState<Record<number, number>>({});
-  const [previewAudioUrl, setPreviewAudioUrl] = useState<Record<number, string>>({});
+  const [previewAudioUrl, setPreviewAudioUrl] = useState<Record<number, string>>(() => {
+    const initial: Record<number, string> = {};
+    (initialTest?.parts ?? []).forEach((p, idx) => {
+      const rawUrl = p.audioAsset?.playbackUrl;
+      if (rawUrl) {
+        initial[idx] = resolveBackendMediaUrl(rawUrl);
+      }
+    });
+    return initial;
+  });
   const [showPassagePreview, setShowPassagePreview] = useState<Record<number, boolean>>({});
   const [validationResult, setValidationResult] = useState<ValidateExamTestResponse | null>(
     null,
@@ -259,7 +108,7 @@ export function ExamTestBuilder({
     text: string;
   } | null>(null);
 
-  useEffect(() => {
+    useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (dirty && !isPublishedLocked) {
         e.preventDefault();
@@ -268,6 +117,51 @@ export function ExamTestBuilder({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty, isPublishedLocked]);
+
+  useEffect(() => {
+    if (!initialTest || initialTest.skill !== "READING") return;
+    let cancelled = false;
+    void Promise.all(
+      initialTest.parts.map(async (p) => {
+        try {
+          const res = await vocabularyApi.getTeacherPassageVocabs(p.id);
+          return { partId: p.id, items: res.items };
+        } catch {
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      const byPartId = new Map<string, DraftPart["vocabs"]>();
+      results.forEach((entry) => {
+        if (!entry) return;
+        byPartId.set(
+          entry.partId,
+          entry.items.map((v) => ({
+            id: v.id,
+            word: v.word,
+            partOfSpeech: v.partOfSpeech,
+            ipa: v.ipa ?? "",
+            meaningVi: v.meaningVi,
+            paraphraseNote: v.paraphraseNote ?? "",
+            contextSentence: v.contextSentence ?? "",
+          })),
+        );
+      });
+      if (byPartId.size > 0) {
+        setParts((prev) =>
+          prev.map((part) =>
+            part.id && byPartId.has(part.id) && part.vocabs === undefined
+              ? { ...part, vocabs: byPartId.get(part.id) }
+              : part,
+          ),
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialTest]);
 
   const markDirty = () => {
     setDirty(true);
@@ -281,9 +175,17 @@ export function ExamTestBuilder({
     }
 
     return {
+      ...(part.id ? { id: part.id } : {}),
       partNumber: partIndex + 1,
-      partType: skill === "READING" ? "PASSAGE" : "SECTION",
-      title: part.title.trim() || `${skill === "READING" ? "Passage" : "Section"} ${partIndex + 1}`,
+      partType:
+        skill === "READING" ? "PASSAGE" : skill === "LISTENING" ? "SECTION" : "QUIZ",
+      title:
+        part.title.trim() ||
+        (skill === "READING"
+          ? `Passage ${partIndex + 1}`
+          : skill === "LISTENING"
+            ? `Section ${partIndex + 1}`
+            : `${skill === "VOCABULARY" ? "Vocabulary" : "Grammar"} Quiz`),
       instructions: part.instructions.trim() || undefined,
       passageTitle:
         skill === "READING" ? part.passageTitle.trim() || part.title.trim() : undefined,
@@ -292,6 +194,7 @@ export function ExamTestBuilder({
         skill === "LISTENING" && part.audioAssetId.trim()
           ? {
               assetId: part.audioAssetId.trim(),
+              playbackUrl: part.audioPlaybackUrl || undefined,
               durationSeconds: part.durationMinutes * 60,
               allowPause: part.audioAllowPause,
               allowSeek: part.audioAllowSeek,
@@ -307,6 +210,7 @@ export function ExamTestBuilder({
         groupNumber: gIdx + 1,
         title: g.title.trim() || undefined,
         instructionHtml: g.instructionHtml || "<p>Answer the questions below.</p>",
+        summaryTemplateHtml: g.summaryTemplateHtml?.trim() || undefined,
         questionType: g.questionType,
         sharedOptions: MATCHING_QUESTION_TYPES.has(g.questionType)
           ? parseOptionsFromText(g.sharedOptionsText)
@@ -316,20 +220,31 @@ export function ExamTestBuilder({
         questions: g.questions.map((q) => {
           const qNum = runningQ++;
           let correctAnswer: ExamAnswerValue = q.correctAnswerText.trim();
+          let extraAccepted: string[] = [];
+
           if (q.questionType === "MULTIPLE_CHOICE_MULTIPLE") {
             correctAnswer = q.correctAnswerText
               .split(",")
               .map((s) => s.trim())
               .filter(Boolean);
+          } else if (skill === "LISTENING" || q.correctAnswerText.includes("/")) {
+            const parsed = parseSlashAnswers(q.correctAnswerText, q.questionType);
+            correctAnswer = parsed.primary;
+            extraAccepted = parsed.accepted;
           }
-          const acceptedAnswers = q.acceptedAnswersText
+
+          const manualAccepted = q.acceptedAnswersText
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean);
+          const mergedAccepted = Array.from(new Set([...extraAccepted, ...manualAccepted]));
+
           return {
             id: q.id,
             questionNumber: qNum,
-            prompt: q.prompt.trim(),
+            prompt:
+              q.prompt.trim() ||
+              (g.summaryTemplateHtml?.trim() ? `Blank (${qNum})` : ""),
             questionType: q.questionType,
             options:
               q.optionsText.trim().length > 0
@@ -338,7 +253,7 @@ export function ExamTestBuilder({
             maxWords: q.maxWords,
             maxSelections: q.maxSelections,
             correctAnswer,
-            acceptedAnswers: acceptedAnswers.length > 0 ? acceptedAnswers : undefined,
+            acceptedAnswers: mergedAccepted.length > 0 ? mergedAccepted : undefined,
             referenceParagraph: q.referenceParagraph.trim() || undefined,
             explanation: q.explanation.trim() || undefined,
           };
@@ -352,11 +267,13 @@ export function ExamTestBuilder({
       if (title.trim().length < 3) {
         throw new Error("Tiêu đề đề thi phải có tối thiểu 3 ký tự.");
       }
-      const allowedModes: ExamMode[] = [];
-      if (allowPartMode) allowedModes.push("PART");
-      if (allowFullMode) allowedModes.push("FULL");
-      if (allowedModes.length === 0) {
-        allowedModes.push("PART");
+      const allowedModes: ExamMode[] = isQuizSkill ? ["FULL"] : [];
+      if (!isQuizSkill) {
+        if (allowPartMode) allowedModes.push("PART");
+        if (allowFullMode) allowedModes.push("FULL");
+        if (allowedModes.length === 0) {
+          allowedModes.push("PART");
+        }
       }
       const parsedTags = tagsText
         .split(",")
@@ -396,7 +313,31 @@ export function ExamTestBuilder({
         await teacherExamTestsApi.createPart(testId, buildPartInput(parts[i]!, i));
       }
 
-      return teacherExamTestsApi.getById(testId);
+      const savedDetail = await teacherExamTestsApi.getById(testId);
+      if (skill === "READING") {
+        for (let i = 0; i < savedDetail.parts.length; i++) {
+          const savedPart = savedDetail.parts[i];
+          const draftVocabs = parts[i]?.vocabs;
+          if (savedPart && draftVocabs !== undefined) {
+            await vocabularyApi
+              .syncTeacherPassageVocabs(savedPart.id, {
+                testId: savedDetail.id,
+                partNumber: savedPart.partNumber,
+                items: draftVocabs.map((v) => ({
+                  word: v.word.trim(),
+                  partOfSpeech: v.partOfSpeech,
+                  ipa: v.ipa.trim() || undefined,
+                  meaningVi: v.meaningVi.trim(),
+                  paraphraseNote: v.paraphraseNote.trim() || undefined,
+                  contextSentence: v.contextSentence.trim() || undefined,
+                })),
+              })
+              .catch(() => null);
+          }
+        }
+      }
+
+      return savedDetail;
     },
     onSuccess: (saved) => {
       setDirty(false);
@@ -475,8 +416,15 @@ export function ExamTestBuilder({
       markDirty();
       const playback = await mediaApi.getAudioPlayback(uploaded.assetId).catch(() => null);
       if (playback?.streamUrl) {
-        setPreviewAudioUrl((prev) => ({ ...prev, [partIdx]: playback.streamUrl }));
+        setPreviewAudioUrl((prev) => ({
+          ...prev,
+          [partIdx]: resolveBackendMediaUrl(playback.streamUrl),
+        }));
       }
+      setStatusBanner({
+        type: "success",
+        text: `Đã tải lên tệp audio "${uploaded.filename}" thành công (Asset: ${uploaded.assetId}).`,
+      });
     } catch (err) {
       setStatusBanner({ type: "error", text: getFriendlyErrorMessage(err) });
     }
@@ -559,7 +507,7 @@ export function ExamTestBuilder({
       {/* Test Metadata */}
       <Card className="space-y-4">
         <h2 className="text-base font-bold text-slate-900">1. Thông tin chung đề thi</h2>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className={isQuizSkill ? "space-y-4" : "grid gap-4 md:grid-cols-2"}>
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-title-input">
               Tiêu đề đề thi *
@@ -572,14 +520,74 @@ export function ExamTestBuilder({
                 setTitle(e.target.value);
                 markDirty();
               }}
-              placeholder="Ví dụ: IELTS Reading Practice — Marine Biology"
+              placeholder={
+                isQuizSkill
+                  ? "Ví dụ: Academic Vocabulary — Environment & Climate"
+                  : "Ví dụ: IELTS Reading Practice — Marine Biology"
+              }
               className="lms-input w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
 
+          <div className={isQuizSkill ? "grid gap-4 sm:grid-cols-2" : "contents"}>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-skill-select">
+                Kỹ năng / Dạng bài IELTS
+              </label>
+              <select
+                id="exam-skill-select"
+                disabled={isPublishedLocked || isEditingExisting}
+                value={skill}
+                onChange={(e) => {
+                  const nextSkill = e.target.value as ExamSkill;
+                  setSkill(nextSkill);
+                  setParts([createEmptyDraftPart(nextSkill, 0)]);
+                  if (nextSkill === "LISTENING") {
+                    setAllowFullMode(true);
+                  } else if (nextSkill === "VOCABULARY" || nextSkill === "GRAMMAR") {
+                    setDurationMinutes(15);
+                    setAllowFullMode(true);
+                    setAllowPartMode(false);
+                  }
+                  markDirty();
+                }}
+                className="lms-input w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="READING">IELTS Reading (Passage)</option>
+                <option value="LISTENING">IELTS Listening (Section + Audio)</option>
+                <option value="VOCABULARY">Vocabulary (Trắc nghiệm Từ vựng)</option>
+                <option value="GRAMMAR">Grammar (Trắc nghiệm Ngữ pháp)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-dur-input">
+                {isQuizSkill
+                  ? "Thời gian làm bài (phút, nhập 0 nếu không giới hạn)"
+                  : "Tổng thời gian (phút)"}
+              </label>
+              <input
+                id="exam-dur-input"
+                type="number"
+                min={isQuizSkill ? 0 : 1}
+                max={180}
+                disabled={isPublishedLocked}
+                value={durationMinutes}
+                onChange={(e) => {
+                  const raw = Number(e.target.value);
+                  setDurationMinutes(
+                    isQuizSkill ? Math.max(0, Number.isFinite(raw) ? raw : 0) : raw || 20,
+                  );
+                  markDirty();
+                }}
+                className="lms-input w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-subtitle-input">
-              Mô tả ngắn
+              {isQuizSkill ? "Mô tả ngắn / Chủ đề" : "Mô tả ngắn"}
             </label>
             <input
               id="exam-subtitle-input"
@@ -589,142 +597,140 @@ export function ExamTestBuilder({
                 setSubtitle(e.target.value);
                 markDirty();
               }}
-              placeholder="Ghi chú phạm vi hoặc kỹ năng trọng tâm..."
+              placeholder={
+                isQuizSkill
+                  ? "Chủ điểm từ vựng hoặc ngữ pháp trọng tâm của bài luyện tập..."
+                  : "Ghi chú phạm vi hoặc kỹ năng trọng tâm..."
+              }
               className="lms-input w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-skill-select">
-              Kỹ năng IELTS
-            </label>
-            <select
-              id="exam-skill-select"
-              disabled={isPublishedLocked || isEditingExisting}
-              value={skill}
-              onChange={(e) => {
-                const nextSkill = e.target.value as ExamSkill;
-                setSkill(nextSkill);
-                setParts([createEmptyDraftPart(nextSkill, 0)]);
-                markDirty();
-              }}
-              className="lms-input w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-            >
-              <option value="READING">IELTS Reading (Passage)</option>
-              <option value="LISTENING">IELTS Listening (Section + Audio)</option>
-            </select>
-          </div>
+          {!isQuizSkill && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-diff-select">
+                  Độ khó
+                </label>
+                <select
+                  id="exam-diff-select"
+                  disabled={isPublishedLocked}
+                  value={difficulty}
+                  onChange={(e) => {
+                    setDifficulty(e.target.value);
+                    markDirty();
+                  }}
+                  className="lms-input w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="FOUNDATION">Nền tảng</option>
+                  <option value="INTERMEDIATE">Trung cấp</option>
+                  <option value="TARGET_65">Target 6.5</option>
+                  <option value="TARGET_75_PLUS">Target 7.5+</option>
+                </select>
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-diff-select">
-                Độ khó
-              </label>
-              <select
-                id="exam-diff-select"
-                disabled={isPublishedLocked}
-                value={difficulty}
-                onChange={(e) => {
-                  setDifficulty(e.target.value);
-                  markDirty();
-                }}
-                className="lms-input w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-              >
-                <option value="FOUNDATION">Nền tảng</option>
-                <option value="INTERMEDIATE">Trung cấp</option>
-                <option value="TARGET_65">Target 6.5</option>
-                <option value="TARGET_75_PLUS">Target 7.5+</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-dur-input">
-                Tổng thời gian (phút)
-              </label>
-              <input
-                id="exam-dur-input"
-                type="number"
-                min={1}
-                max={180}
-                disabled={isPublishedLocked}
-                value={durationMinutes}
-                onChange={(e) => {
-                  setDurationMinutes(Number(e.target.value) || 20);
-                  markDirty();
-                }}
-                className="lms-input w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-tags-input">
+                  Tags (cách nhau dấu phẩy)
+                </label>
+                <input
+                  id="exam-tags-input"
+                  disabled={isPublishedLocked}
+                  value={tagsText}
+                  onChange={(e) => {
+                    setTagsText(e.target.value);
+                    markDirty();
+                  }}
+                  placeholder="Academic, Environment, True/False"
+                  className="lms-input w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
 
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-slate-700">
+                  Chế độ thi cho phép
+                </span>
+                <div className="flex flex-wrap gap-4 pt-1.5 text-sm">
+                  <label className="inline-flex min-h-10 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      disabled={isPublishedLocked}
+                      checked={allowPartMode}
+                      onChange={(e) => {
+                        setAllowPartMode(e.target.checked);
+                        markDirty();
+                      }}
+                    />
+                    Cho phép Part Practice
+                  </label>
+                  <label className="inline-flex min-h-10 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      disabled={isPublishedLocked}
+                      checked={allowFullMode}
+                      onChange={(e) => {
+                        setAllowFullMode(e.target.checked);
+                        markDirty();
+                      }}
+                    />
+                    Cho phép Full Test
+                  </label>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {!isQuizSkill && (
           <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-tags-input">
-              Tags (cách nhau dấu phẩy)
+            <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-inst-input">
+              Hướng dẫn làm bài cho học viên
             </label>
-            <input
-              id="exam-tags-input"
+            <textarea
+              id="exam-inst-input"
+              rows={2}
               disabled={isPublishedLocked}
-              value={tagsText}
+              value={instructions}
               onChange={(e) => {
-                setTagsText(e.target.value);
+                setInstructions(e.target.value);
                 markDirty();
               }}
-              placeholder="Academic, Environment, True/False"
-              className="lms-input w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="lms-input w-full rounded-lg border border-slate-300 p-2.5 text-sm"
             />
           </div>
-
-          <div>
-            <span className="mb-1 block text-xs font-semibold text-slate-700">
-              Chế độ thi cho phép
-            </span>
-            <div className="flex flex-wrap gap-4 pt-1.5 text-sm">
-              <label className="inline-flex min-h-10 items-center gap-2">
-                <input
-                  type="checkbox"
-                  disabled={isPublishedLocked}
-                  checked={allowPartMode}
-                  onChange={(e) => {
-                    setAllowPartMode(e.target.checked);
-                    markDirty();
-                  }}
-                />
-                Cho phép Part Practice
-              </label>
-              <label className="inline-flex min-h-10 items-center gap-2">
-                <input
-                  type="checkbox"
-                  disabled={isPublishedLocked}
-                  checked={allowFullMode}
-                  onChange={(e) => {
-                    setAllowFullMode(e.target.checked);
-                    markDirty();
-                  }}
-                />
-                Cho phép Full Test
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="exam-inst-input">
-            Hướng dẫn làm bài cho học viên
-          </label>
-          <textarea
-            id="exam-inst-input"
-            rows={2}
-            disabled={isPublishedLocked}
-            value={instructions}
-            onChange={(e) => {
-              setInstructions(e.target.value);
-              markDirty();
-            }}
-            className="lms-input w-full rounded-lg border border-slate-300 p-2.5 text-sm"
-          />
-        </div>
+        )}
       </Card>
 
-      {/* Parts (Reading Passages / Listening Sections) */}
+      {/* Parts (Reading Passages / Listening Recordings / Vocabulary & Grammar Quiz) */}
+      {skill === "LISTENING" ? (
+        <ListeningTestBuilder
+          testTitle={title}
+          parts={parts}
+          setParts={setParts}
+          isPublishedLocked={isPublishedLocked}
+          uploadPercent={uploadPercent}
+          previewAudioUrl={previewAudioUrl}
+          onAudioFileChange={(pIdx, f) => void handleAudioFileChange(pIdx, f)}
+          onSetPreviewAudioUrl={(pIdx, url) =>
+            setPreviewAudioUrl((prev) => ({ ...prev, [pIdx]: url }))
+          }
+          onError={(msg) => setStatusBanner({ type: "error", text: msg })}
+          markDirty={markDirty}
+          savedPreviewHref={
+            initialTest
+              ? `/teacher/question-bank/${encodeURIComponent(initialTest.id)}/preview`
+              : undefined
+          }
+        />
+      ) : isQuizSkill ? (
+        <QuizTestBuilder
+          skill={skill}
+          parts={parts}
+          setParts={setParts}
+          disabled={isPublishedLocked}
+          markDirty={markDirty}
+        />
+      ) : (
       <div className="space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-slate-900">
@@ -828,6 +834,22 @@ export function ExamTestBuilder({
                   placeholder="Nhập nội dung bài đọc Reading, định dạng in đậm Paragraph A, B, C, tiêu đề, bảng số liệu..."
                   height={380}
                 />
+
+                <PassageVocabAuthoring
+                  passageId={part.id}
+                  testId={initialTest?.id}
+                  partNumber={partIdx + 1}
+                  vocabs={part.vocabs ?? []}
+                  disabled={isPublishedLocked}
+                  onChange={(nextVocabs) => {
+                    setParts((prev) =>
+                      prev.map((item, i) =>
+                        i === partIdx ? { ...item, vocabs: nextVocabs } : item,
+                      ),
+                    );
+                    markDirty();
+                  }}
+                />
               </div>
             ) : (
               <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
@@ -880,9 +902,38 @@ export function ExamTestBuilder({
                   />
                 )}
 
-                {previewAudioUrl[partIdx] && (
+                {previewAudioUrl[partIdx] ? (
                   <audio controls src={previewAudioUrl[partIdx]} className="w-full" />
-                )}
+                ) : part.audioAssetId.trim() ? (
+                  <div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        void mediaApi
+                          .getAudioPlayback(part.audioAssetId.trim())
+                          .then((res) => {
+                            if (res?.streamUrl) {
+                              setPreviewAudioUrl((prev) => ({
+                                ...prev,
+                                [partIdx]: resolveBackendMediaUrl(res.streamUrl),
+                              }));
+                            }
+                          })
+                          .catch((err) => {
+                            setStatusBanner({
+                              type: "error",
+                              text: getFriendlyErrorMessage(err),
+                            });
+                          });
+                      }}
+                    >
+                      <Headphones className="h-3.5 w-3.5" />
+                      Nghe thử audio đã lưu
+                    </Button>
+                  </div>
+                ) : null}
 
                 <div className="grid gap-3 sm:grid-cols-3 text-xs">
                   <label className="inline-flex min-h-9 items-center gap-2">
@@ -984,6 +1035,7 @@ export function ExamTestBuilder({
                                   {
                                     title: `Nhóm câu ${p.groups.length + 1}`,
                                     instructionHtml: "<p>Complete the items below.</p>",
+                                    summaryTemplateHtml: "",
                                     questionType: qType,
                                     sharedOptionsText: "",
                                     maxWords: 2,
@@ -1386,6 +1438,7 @@ export function ExamTestBuilder({
           </Card>
         ))}
       </div>
+      )}
 
       {/* Bottom Save & Publish Action Bar */}
       <div className="sticky bottom-3 z-20 flex flex-wrap items-center justify-end gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-xs">
@@ -1405,7 +1458,7 @@ export function ExamTestBuilder({
           data-testid="teacher-publish-exam-btn"
         >
           <CheckCircle2 className="h-4 w-4" />
-          {initialTest?.status === "PUBLISHED" ? "Cập nhật đề thi" : "Xuất bản đề thi"}
+          {initialTest?.status === "PUBLISHED" ? "Lưu cập nhật đề thi" : "Xuất bản đề thi"}
         </Button>
       </div>
     </div>

@@ -6,6 +6,8 @@ import { SubmissionsService } from './submissions.service';
 import { Submission, SubmissionSchema } from 'src/database/schemas/submission.schema';
 import { Assignment, AssignmentSchema } from 'src/database/schemas/assignment.schema';
 import { Course, CourseSchema } from 'src/database/schemas/course.schema';
+import { ExamTest, ExamTestSchema } from 'src/database/schemas/exam-test.schema';
+import { PassageVocab, PassageVocabSchema } from 'src/database/schemas/passage-vocab.schema';
 import {
   StudentAssignment,
   StudentAssignmentSchema,
@@ -23,6 +25,8 @@ import { ExtensionRequestsModule } from 'src/modules/extensions/extensions.modul
       { name: Submission.name, schema: SubmissionSchema },
       { name: Assignment.name, schema: AssignmentSchema },
       { name: Course.name, schema: CourseSchema },
+      { name: ExamTest.name, schema: ExamTestSchema },
+      { name: PassageVocab.name, schema: PassageVocabSchema },
       { name: StudentAssignment.name, schema: StudentAssignmentSchema },
       { name: TranslationSubmission.name, schema: TranslationSubmissionSchema },
     ]),

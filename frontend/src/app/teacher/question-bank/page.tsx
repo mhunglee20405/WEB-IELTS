@@ -10,9 +10,11 @@ import {
   CopyPlus,
   Edit3,
   Eye,
+  FileCheck2,
   Headphones,
   Layers,
   Plus,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import {
@@ -37,6 +39,29 @@ import type {
 } from "@/lib/api/types";
 
 type BankSkillTab = "ALL" | ExamSkill;
+
+const SKILL_BADGE_MAP: Record<
+  ExamSkill,
+  { label: string; className: string }
+> = {
+  READING: { label: "Reading", className: "bg-blue-50 text-blue-700 ring-1 ring-blue-200/70" },
+  LISTENING: { label: "Listening", className: "bg-sky-50 text-sky-700 ring-1 ring-sky-200/70" },
+  VOCABULARY: {
+    label: "Vocabulary",
+    className: "bg-violet-50 text-violet-700 ring-1 ring-violet-200/70",
+  },
+  GRAMMAR: {
+    label: "Grammar",
+    className: "bg-teal-50 text-teal-700 ring-1 ring-teal-200/70",
+  },
+};
+
+function renderSkillIcon(skill: ExamSkill) {
+  if (skill === "READING") return <BookOpen className="h-3.5 w-3.5" />;
+  if (skill === "LISTENING") return <Headphones className="h-3.5 w-3.5" />;
+  if (skill === "VOCABULARY") return <Sparkles className="h-3.5 w-3.5" />;
+  return <FileCheck2 className="h-3.5 w-3.5" />;
+}
 
 const STATUS_BADGE_MAP: Record<
   ExamTestStatus,
@@ -127,7 +152,7 @@ export default function TeacherQuestionBankPage() {
     <div className="space-y-6">
       <PageHeader
         title="Kho đề thi IELTS (Question Bank v2)"
-        subtitle="Quản lý đề Reading & Listening nhiều phần, 15 dạng câu hỏi IELTS, xem trước góc nhìn học viên và ghép Full Test."
+        subtitle="Quản lý đề Reading, Listening, Vocabulary & Grammar, xem trước góc nhìn học viên và ghép Full Test."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link
@@ -143,7 +168,7 @@ export default function TeacherQuestionBankPage() {
               className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
               <Plus className="h-4 w-4" />
-              Tạo Passage / Section mới
+              Tạo đề thi mới
             </Link>
           </div>
         }
@@ -155,8 +180,10 @@ export default function TeacherQuestionBankPage() {
             ariaLabel="Lọc kho đề theo kỹ năng IELTS"
             items={[
               { id: "ALL", label: "Tất cả kỹ năng" },
-              { id: "READING", label: "Reading Bank" },
-              { id: "LISTENING", label: "Listening Bank" },
+              { id: "READING", label: "Reading" },
+              { id: "LISTENING", label: "Listening" },
+              { id: "VOCABULARY", label: "Vocabulary" },
+              { id: "GRAMMAR", label: "Grammar" },
             ]}
             value={skillTab}
             hasPanels={false}
@@ -215,6 +242,9 @@ export default function TeacherQuestionBankPage() {
         <div className="lms-card-grid">
           {items.map((test) => {
             const badge = STATUS_BADGE_MAP[test.status];
+            const skillBadge = SKILL_BADGE_MAP[test.skill];
+            const isQuizSkill = test.skill === "VOCABULARY" || test.skill === "GRAMMAR";
+            const durationMins = Math.round(test.totalDurationSeconds / 60);
             return (
               <Card
                 key={test.id}
@@ -222,13 +252,11 @@ export default function TeacherQuestionBankPage() {
               >
                 <div className="space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                      {test.skill === "READING" ? (
-                        <BookOpen className="h-3.5 w-3.5" />
-                      ) : (
-                        <Headphones className="h-3.5 w-3.5" />
-                      )}
-                      {test.skill} · v{test.version}
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${skillBadge.className}`}
+                    >
+                      {renderSkillIcon(test.skill)}
+                      {skillBadge.label} · v{test.version}
                     </span>
                     <Badge variant={badge.variant}>{badge.label}</Badge>
                   </div>
@@ -239,13 +267,19 @@ export default function TeacherQuestionBankPage() {
                   )}
 
                   <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                    {!isQuizSkill && (
+                      <>
+                        <span>
+                          {test.partCount} {test.skill === "READING" ? "Passage" : "Section"}
+                        </span>
+                        <span>·</span>
+                      </>
+                    )}
                     <span>
-                      {test.partCount} {test.skill === "READING" ? "Passage" : "Section"}
+                      {test.totalQuestions} {isQuizSkill ? "câu trắc nghiệm" : "câu hỏi"}
                     </span>
                     <span>·</span>
-                    <span>{test.totalQuestions} câu hỏi</span>
-                    <span>·</span>
-                    <span>{Math.max(1, Math.round(test.totalDurationSeconds / 60))} phút</span>
+                    <span>{durationMins > 0 ? `${durationMins} phút` : "Không giới hạn"}</span>
                   </div>
 
                   <p className="text-xs text-slate-500">
@@ -256,13 +290,13 @@ export default function TeacherQuestionBankPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
                   {/* Single Primary Action per Card */}
-                  {test.status === "DRAFT" ? (
+                  {test.status === "DRAFT" || isQuizSkill ? (
                     <Link
                       href={`/teacher/question-bank/${encodeURIComponent(test.id)}/edit`}
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
-                      Biên soạn đề
+                      {test.status === "DRAFT" ? "Biên soạn đề" : "Sửa đề"}
                     </Link>
                   ) : (
                     <Button

@@ -213,8 +213,11 @@ export class ExamAttemptsService {
         .findOne({ idempotencyKey: dto.idempotencyKey, studentId: student._id })
         .exec();
       if (existingKeyAttempt) {
-        const existingTest = await this.examTestModel.findById(existingKeyAttempt.testId).exec();
-        return this.formatAttemptResponse(existingKeyAttempt, existingTest);
+        const [existingTest, linkedAsn] = await Promise.all([
+          this.examTestModel.findById(existingKeyAttempt.testId).exec(),
+          this.resolveLinkedAssignment(existingKeyAttempt),
+        ]);
+        return this.formatAttemptResponse(existingKeyAttempt, existingTest, linkedAsn);
       }
     }
 
@@ -426,22 +429,24 @@ export class ExamAttemptsService {
       }
     }
 
-    // Calculate duration
+    // Calculate duration (0 = unlimited / untimed quiz)
     let durationSeconds = 3600;
     if (linkedAssignment?.durationSecondsOverride) {
       durationSeconds = linkedAssignment.durationSecondsOverride;
-    } else if (dto.mode === ExamMode.PART && selectedPart?.durationSeconds) {
+    } else if (dto.mode === ExamMode.PART && selectedPart?.durationSeconds !== undefined) {
       durationSeconds = selectedPart.durationSeconds;
-    } else if (test.fullDurationSeconds) {
+    } else if (test.fullDurationSeconds !== undefined && test.fullDurationSeconds !== null) {
       durationSeconds = test.fullDurationSeconds;
     } else if (dto.mode === ExamMode.PART) {
-      durationSeconds = test.skill === ExamSkill.READING ? 1200 : 600;
+      durationSeconds = test.skill === ExamSkill.READING ? 1200 : test.skill === ExamSkill.LISTENING ? 600 : 900;
     } else {
-      durationSeconds = test.skill === ExamSkill.READING ? 3600 : 1800;
+      durationSeconds = test.skill === ExamSkill.READING ? 3600 : test.skill === ExamSkill.LISTENING ? 1800 : 900;
     }
 
     const startedAt = new Date();
-    let expiresAt = new Date(startedAt.getTime() + durationSeconds * 1000);
+    const effectiveWindowMs =
+      durationSeconds > 0 ? durationSeconds * 1000 : 24 * 60 * 60 * 1000;
+    let expiresAt = new Date(startedAt.getTime() + effectiveWindowMs);
     const effectiveDeadline = linkedStudentAssignment?.effectiveDeadlineAt || linkedAssignment?.deadlineAt;
     if (effectiveDeadline) {
       const deadline = new Date(effectiveDeadline);
@@ -470,7 +475,7 @@ export class ExamAttemptsService {
 
     try {
       const saved = await attempt.save();
-      return this.formatAttemptResponse(saved, test);
+      return this.formatAttemptResponse(saved, test, linkedAssignment);
     } catch (err: any) {
       if (err?.code === 11000) {
         if (dto.idempotencyKey) {
@@ -478,7 +483,7 @@ export class ExamAttemptsService {
             .findOne({ idempotencyKey: dto.idempotencyKey, studentId: student._id })
             .exec();
           if (existingByKey) {
-            return this.formatAttemptResponse(existingByKey, test);
+            return this.formatAttemptResponse(existingByKey, test, linkedAssignment);
           }
           const isKeyCollision =
             Boolean(err?.keyPattern?.idempotencyKey) ||
@@ -489,7 +494,7 @@ export class ExamAttemptsService {
         }
         const duplicateActive = await this.examAttemptModel.findOne(activeFilter).exec();
         if (duplicateActive) {
-          return this.formatAttemptResponse(duplicateActive, test);
+          return this.formatAttemptResponse(duplicateActive, test, linkedAssignment);
         }
         throw new ConflictException({
           statusCode: 409,
@@ -511,7 +516,10 @@ export class ExamAttemptsService {
       throw new NotFoundException('Exam attempt not found');
     }
 
-    const test = await this.examTestModel.findById(attempt.testId).exec();
+    const [test, linkedAsn] = await Promise.all([
+      this.examTestModel.findById(attempt.testId).exec(),
+      this.resolveLinkedAssignment(attempt),
+    ]);
     await this.assertActorCanAccessAttempt(
       attempt,
       test,
@@ -519,7 +527,7 @@ export class ExamAttemptsService {
       'You cannot access another student’s attempt',
     );
 
-    return this.formatAttemptResponse(attempt, test);
+    return this.formatAttemptResponse(attempt, test, linkedAsn);
   }
 
   async saveAnswers(attemptId: string, dto: SaveAnswersDto, actor: UserDocument) {
@@ -1053,6 +1061,7 @@ export class ExamAttemptsService {
             points: q.points ?? 1,
             options: q.options,
             grading: q.grading,
+            explanation: q.explanation,
             partId: extractObjectId((part as any)._id),
           });
         }
@@ -1077,7 +1086,11 @@ export class ExamAttemptsService {
         partId: q?.partId,
         studentAnswer: studentVal ?? null,
         correctAnswer: q?.grading?.acceptedKeys || [],
-        explanation: 'Đáp án chính xác theo quy chuẩn chấm điểm IELTS.',
+        explanation:
+          q?.explanation ||
+          (attempt.skill === ExamSkill.VOCABULARY || attempt.skill === ExamSkill.GRAMMAR
+            ? undefined
+            : 'Đáp án chính xác theo quy chuẩn chấm điểm IELTS.'),
         isCorrect: gradeRes.isCorrect,
         points: q?.points ?? 1,
         awardedPoints: gradeRes.awardedPoints,
@@ -1096,6 +1109,20 @@ export class ExamAttemptsService {
       answerReviewAvailable: true,
       questions: reviewQuestions,
       items: reviewQuestions,
+      parts: (test.parts || []).map((p: any) => ({
+        id: extractObjectId(p._id),
+        partNumber: p.ordinal,
+        title: p.title,
+        passageTitle: p.title,
+        passageHtml: p.contentHtml || '',
+        transcript: p.transcript || undefined,
+        audioAsset: (p.audioAssetId || p.audioPlaybackUrl) ? {
+          assetId: p.audioAssetId ? extractObjectId(p.audioAssetId) : `audio-${p.ordinal}`,
+          playbackUrl: p.audioPlaybackUrl || undefined,
+          durationSeconds: p.durationSeconds,
+          mimeType: 'audio/wav',
+        } : undefined,
+      })),
     };
   }
 
@@ -1111,8 +1138,8 @@ export class ExamAttemptsService {
     let isPassed = preCalculated?.isPassed;
     let scorePercent = preCalculated?.scorePercent;
     let passScore = preCalculated?.passScore;
+    const linkedAsn = await this.resolveLinkedAssignment(attempt);
     if (passScore === undefined) {
-      const linkedAsn = await this.resolveLinkedAssignment(attempt);
       passScore = linkedAsn?.targetScorePercent ?? test.passScore ?? 70;
     }
 
@@ -1262,6 +1289,7 @@ export class ExamAttemptsService {
       testTitle: test.title || 'IELTS Exam Test',
       submissionId: submissionId || null,
       studentAssignmentId: attempt.studentAssignmentId ? extractObjectId(attempt.studentAssignmentId) : null,
+      strictExamMode: Boolean(linkedAsn?.strictExamMode),
       status: attempt.status === AttemptStatus.AUTO_SUBMITTED ? 'SUBMITTED' : attempt.status,
       skill: attempt.skill,
       mode: attempt.mode,
@@ -1383,6 +1411,7 @@ export class ExamAttemptsService {
         questionNumberStart: gQuestions.length > 0 ? gQuestions[0].questionNumber : 1,
         questionNumberEnd: gQuestions.length > 0 ? gQuestions[gQuestions.length - 1].questionNumber : 1,
         sharedOptions: g.sharedOptions || [],
+        summaryTemplateHtml: g.summaryTemplateHtml || undefined,
         maxWords: g.maxWords,
         questions: gQuestions,
       };
@@ -1403,8 +1432,23 @@ export class ExamAttemptsService {
       passageTitle: part.title,
       passageHtml: part.contentHtml || '',
       contentHtml: part.contentHtml || null,
-      audioAsset: part.audioAssetId ? { assetId: extractObjectId(part.audioAssetId) } : undefined,
-      audio: part.audioAssetId ? { assetId: extractObjectId(part.audioAssetId) } : null,
+      audioAsset: (part.audioAssetId || part.audioPlaybackUrl)
+        ? {
+            assetId: part.audioAssetId ? extractObjectId(part.audioAssetId) : `audio-part-${part.ordinal}`,
+            playbackUrl: part.audioPlaybackUrl || undefined,
+            durationSeconds: part.durationSeconds || undefined,
+            allowPause: part.audioAllowPause ?? true,
+            allowSeek: part.audioAllowSeek ?? true,
+            maxPlayCount: part.audioMaxPlayCount ?? null,
+            mimeType: 'audio/wav',
+          }
+        : undefined,
+      audio: (part.audioAssetId || part.audioPlaybackUrl)
+        ? {
+            assetId: part.audioAssetId ? extractObjectId(part.audioAssetId) : `audio-part-${part.ordinal}`,
+            playbackUrl: part.audioPlaybackUrl,
+          }
+        : null,
       durationSeconds: part.durationSeconds || undefined,
       questionCount: totalPartQuestions,
       questionNumberRange: { start: qMin, end: qMax },
@@ -1412,7 +1456,11 @@ export class ExamAttemptsService {
     };
   }
 
-  private formatAttemptResponse(attempt: ExamAttemptDocument, test?: ExamTestDocument | null) {
+  private formatAttemptResponse(
+    attempt: ExamAttemptDocument,
+    test?: ExamTestDocument | null,
+    linkedAssignment?: AssignmentDocument | null,
+  ) {
     const raw = typeof attempt.toObject === 'function' ? attempt.toObject() : attempt;
 
     const remainingSeconds = attempt.expiresAt
@@ -1460,9 +1508,14 @@ export class ExamAttemptsService {
       Array.isArray(v) ? v.length > 0 : String(v ?? '').trim().length > 0,
     ).length;
 
-    const durationSeconds = raw.expiresAt && raw.startedAt
-      ? Math.max(0, Math.floor((new Date(raw.expiresAt).getTime() - new Date(raw.startedAt).getTime()) / 1000))
-      : 3600;
+    const isUntimed =
+      test?.fullDurationSeconds === 0 && raw.mode === ExamMode.FULL;
+    const durationSeconds = isUntimed
+      ? 0
+      : raw.expiresAt && raw.startedAt
+        ? Math.max(0, Math.floor((new Date(raw.expiresAt).getTime() - new Date(raw.startedAt).getTime()) / 1000))
+        : 3600;
+    const resolvedRemainingSeconds = isUntimed ? 0 : remainingSeconds;
 
     const id = extractObjectId(raw._id);
     const testId = extractObjectId(raw.testId);
@@ -1477,11 +1530,12 @@ export class ExamAttemptsService {
       mode: raw.mode,
       partId: raw.partId ? extractObjectId(raw.partId) : null,
       studentAssignmentId: raw.studentAssignmentId ? extractObjectId(raw.studentAssignmentId) : null,
+      strictExamMode: Boolean(linkedAssignment?.strictExamMode),
       status: raw.status,
       startedAt: raw.startedAt instanceof Date ? raw.startedAt.toISOString() : new Date(raw.startedAt).toISOString(),
       expiresAt: raw.expiresAt instanceof Date ? raw.expiresAt.toISOString() : new Date(raw.expiresAt).toISOString(),
       serverTime: new Date().toISOString(),
-      remainingSeconds,
+      remainingSeconds: resolvedRemainingSeconds,
       durationSeconds,
       revision: raw.answersRevision ?? 0,
       answersRevision: raw.answersRevision ?? 0,

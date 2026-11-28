@@ -4,6 +4,7 @@ import { Headphones, RefreshCw, ShieldAlert } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QueryState } from "@/components/ui";
+import { resolveBackendMediaUrl } from "@/lib/api/client";
 import { mediaApi } from "@/lib/api/endpoints";
 import { studentKeys } from "@/lib/api/query-keys";
 import { isMockApiMode } from "@/lib/env";
@@ -71,7 +72,7 @@ export function SignedAudioPlayer({ assetId, title }: SignedAudioPlayerProps) {
     }
   };
 
-  const streamUrl = data?.streamUrl ?? "";
+  const streamUrl = resolveBackendMediaUrl(data?.streamUrl ?? "");
   const safeStreamUrl = streamUrl && isAllowedStreamUrl(streamUrl) ? streamUrl : null;
   const hasUnsafeUrl = Boolean(streamUrl && !safeStreamUrl);
 

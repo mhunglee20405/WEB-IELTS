@@ -15,8 +15,9 @@ import {
   SubmitConfirmationDialog,
 } from "@/components/exam/exam-shell";
 import { ListeningExamView } from "@/components/exam/listening-exam-view";
+import { QuizExamView } from "@/components/exam/quiz-exam-view";
 import { ReadingExamView } from "@/components/exam/reading-exam-view";
-import { Button, QueryState } from "@/components/ui";
+import { Badge, Button, QueryState } from "@/components/ui";
 import { createIdempotencyKey } from "@/lib/api/client";
 import { examAttemptsApi } from "@/lib/api/endpoints/exam-attempts";
 import { getFriendlyErrorMessage } from "@/lib/api/error";
@@ -83,14 +84,15 @@ function ActiveExamWorkspace({
   const autoExpiredRef = useRef(false);
 
   const isLocked = serverLocked || attempt.status !== "IN_PROGRESS";
+  const isUntimed = attempt.durationSeconds <= 0;
 
   const timer = useExamTimer({
     expiresAt: attempt.expiresAt,
     serverTime: attempt.serverTime,
     initialRemainingSeconds: attempt.remainingSeconds,
-    active: !isLocked,
+    active: !isLocked && !isUntimed,
     onExpire: () => {
-      if (autoExpiredRef.current) return;
+      if (isUntimed || autoExpiredRef.current) return;
       autoExpiredRef.current = true;
       setServerLocked(true);
       void executeSubmit(true);
@@ -149,14 +151,14 @@ function ActiveExamWorkspace({
   const answeredCount = countAnsweredQuestions(autosave.answers);
 
   return (
-    <div className="flex h-screen max-h-screen flex-col overflow-hidden bg-slate-50">
+    <div className="flex h-screen h-dvh max-h-dvh w-full flex-col overflow-hidden bg-slate-50">
       <ExamHeader
         title={attempt.testTitle}
         skill={attempt.skill}
         mode={attempt.mode}
         backHref={`/student/practice/${encodeURIComponent(attempt.testId)}`}
         isSubmitting={submitMutation.isPending}
-        isLocked={isLocked || timer.isExpired}
+        isLocked={isLocked || (!isUntimed && timer.isExpired)}
         onRequestSubmit={() => setSubmitOpen(true)}
         autosaveNode={
           <AutosaveIndicator
@@ -173,12 +175,16 @@ function ActiveExamWorkspace({
           />
         }
         timerNode={
-          <ExamTimer
-            formatted={timer.formatted}
-            isWarningLow={timer.isWarningLow}
-            isCritical={timer.isCritical}
-            isExpired={timer.isExpired || attempt.status === "EXPIRED"}
-          />
+          isUntimed ? (
+            <Badge variant="neutral">Không giới hạn thời gian</Badge>
+          ) : (
+            <ExamTimer
+              formatted={timer.formatted}
+              isWarningLow={timer.isWarningLow}
+              isCritical={timer.isCritical}
+              isExpired={timer.isExpired || attempt.status === "EXPIRED"}
+            />
+          )
         }
       />
 
@@ -187,7 +193,7 @@ function ActiveExamWorkspace({
           role="status"
           className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm font-medium text-amber-950"
         >
-          {attempt.status === "EXPIRED" || timer.isExpired
+          {attempt.status === "EXPIRED" || (!isUntimed && timer.isExpired)
             ? "Thời gian làm bài đã hết. Bài thi đã khóa chỉnh sửa."
             : "Lượt làm bài này đã được nộp."}{" "}
           <Link
@@ -222,11 +228,16 @@ function ActiveExamWorkspace({
             answers={autosave.answers}
             flaggedIds={flaggedSet}
             activeQuestionId={activeQuestionId}
-            disabled={isLocked || timer.isExpired}
+            disabled={isLocked || (!isUntimed && timer.isExpired)}
+            enableVocabNotebook={
+              isLocked || (Boolean(attempt.studentAssignmentId) && !attempt.strictExamMode)
+            }
+            testId={attempt.testId}
+            testTitle={attempt.testTitle}
             onAnswerChange={autosave.setAnswer}
             onToggleFlag={autosave.toggleFlag}
           />
-        ) : (
+        ) : attempt.skill === "LISTENING" ? (
           <ListeningExamView
             parts={attempt.parts}
             activePartId={activePartId}
@@ -234,7 +245,18 @@ function ActiveExamWorkspace({
             answers={autosave.answers}
             flaggedIds={flaggedSet}
             activeQuestionId={activeQuestionId}
-            disabled={isLocked || timer.isExpired}
+            disabled={isLocked || (!isUntimed && timer.isExpired)}
+            onAnswerChange={autosave.setAnswer}
+            onToggleFlag={autosave.toggleFlag}
+          />
+        ) : (
+          <QuizExamView
+            skill={attempt.skill}
+            parts={attempt.parts}
+            answers={autosave.answers}
+            flaggedIds={flaggedSet}
+            activeQuestionId={activeQuestionId}
+            disabled={isLocked || (!isUntimed && timer.isExpired)}
             onAnswerChange={autosave.setAnswer}
             onToggleFlag={autosave.toggleFlag}
           />

@@ -336,6 +336,7 @@ export const ExercisePublicSchema = z.preprocess(
     status: ExerciseStatusSchema,
     version: z.number().int().min(1),
     instructions: z.string().optional(),
+    passageId: z.string().optional(),
     passageHtml: z.string().optional(),
     audioAssetId: z.string().optional(),
     durationMinutes: z.number().optional(),
@@ -394,6 +395,29 @@ export const TranslationStatusSchema = z.enum([
   "approved",
 ]);
 
+export const AssignmentPassageVocabSchema = z.object({
+  id: z.string(),
+  passageId: z.string(),
+  testId: z.string().optional(),
+  partNumber: z.number().optional(),
+  word: z.string(),
+  partOfSpeech: z.enum(["n", "v", "adj", "adv", "phrase"]),
+  ipa: z.string().optional(),
+  meaningVi: z.string(),
+  paraphraseNote: z.string().optional(),
+  contextSentence: z.string().optional(),
+  order: z.number().optional(),
+});
+
+export const AssignmentReadingPassageContextSchema = z.object({
+  passageId: z.string(),
+  partNumber: z.number(),
+  title: z.string(),
+  passageTitle: z.string().optional(),
+  passageHtml: z.string(),
+  passageVocabs: z.array(AssignmentPassageVocabSchema).optional(),
+});
+
 export const StudentAssignmentSummarySchema = z.object({
   studentAssignmentId: z.string(),
   assignmentId: z.string(),
@@ -417,6 +441,18 @@ export const StudentAssignmentSummarySchema = z.object({
   translationAvailable: z.boolean(),
   translationStatus: TranslationStatusSchema,
   penaltyApplied: z.boolean(),
+  examTestId: z.string().optional(),
+  testId: z.string().optional(),
+  requiredScope: z.enum(["PART", "FULL"]).optional(),
+  requiredPartId: z.string().nullable().optional(),
+  allowedModes: z.array(z.enum(["PART", "FULL"])).optional(),
+  durationSecondsOverride: z.number().nullable().optional(),
+  maxAttempts: z.number().nullable().optional(),
+  allowRetake: z.boolean().optional(),
+  strictExamMode: z.boolean().optional(),
+  passageId: z.string().optional(),
+  passages: z.array(AssignmentReadingPassageContextSchema).optional(),
+  passageVocabs: z.array(AssignmentPassageVocabSchema).optional(),
 });
 
 export const StudentAssignmentDetailSchema = z.preprocess(
@@ -468,6 +504,16 @@ export const AnswerReviewResponseSchema = z.object({
   studentAssignmentId: z.string(),
   passed: z.boolean(),
   score: z.number(),
+  title: z.string().optional(),
+  exerciseType: ExerciseTypeSchema.optional(),
+  examTestId: z.string().optional(),
+  testId: z.string().optional(),
+  passageId: z.string().optional(),
+  passageTitle: z.string().optional(),
+  passageHtml: z.string().optional(),
+  passages: z.array(AssignmentReadingPassageContextSchema).optional(),
+  passageVocabs: z.array(AssignmentPassageVocabSchema).optional(),
+  strictExamMode: z.boolean().optional(),
   items: z.array(AnswerReviewItemSchema),
 });
 
@@ -730,6 +776,7 @@ export const CreateAssignmentFormSchema = z.object({
   durationSecondsOverride: z.coerce.number().int().min(60).max(10800).optional().nullable(),
   maxAttempts: z.coerce.number().int().min(1).max(20).optional().nullable(),
   allowRetake: z.boolean().optional(),
+  strictExamMode: z.boolean().optional(),
 });
 
 export const CreateUserFormSchema = z.object({
@@ -776,10 +823,10 @@ export const TranslationReviewFormSchema = z.object({
 // Phase 9 Exam Modes V2 Schemas (with strict Student DTO stripping)
 // ---------------------------------------------------------------------------
 
-export const ExamSkillSchema = z.enum(["READING", "LISTENING"]);
+export const ExamSkillSchema = z.enum(["READING", "LISTENING", "VOCABULARY", "GRAMMAR"]);
 export const ExamModeSchema = z.enum(["PART", "FULL"]);
 export const ExamTestStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]);
-export const ExamPartTypeSchema = z.enum(["PASSAGE", "SECTION"]);
+export const ExamPartTypeSchema = z.enum(["PASSAGE", "SECTION", "QUIZ"]);
 export const ExamAttemptStatusSchema = z.enum([
   "IN_PROGRESS",
   "SUBMITTED",
@@ -959,6 +1006,7 @@ export const ExamAttemptDetailSchema = z
     status: ExamAttemptStatusSchema,
     partId: z.string().nullable().optional(),
     studentAssignmentId: z.string().nullable().optional(),
+    strictExamMode: z.boolean().optional(),
     revision: z.number(),
     startedAt: z.string(),
     expiresAt: z.string(),
@@ -982,6 +1030,7 @@ export const ExamResultResponseSchema = z.object({
   mode: ExamModeSchema,
   partId: z.string().nullable().optional(),
   studentAssignmentId: z.string().nullable().optional(),
+  strictExamMode: z.boolean().optional(),
   status: z
     .enum(["SUBMITTED", "EXPIRED", "AUTO_SUBMITTED", "IN_PROGRESS"])
     .transform((s) => (s === "AUTO_SUBMITTED" || s === "IN_PROGRESS" ? "SUBMITTED" : s)),

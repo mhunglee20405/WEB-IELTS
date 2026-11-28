@@ -122,6 +122,24 @@ function buildUrl(path: string): string {
   return `${base}${normalizedPath}`;
 }
 
+/**
+ * Resolves relative `/api/...` media upload or stream URLs against the Backend API origin
+ * while keeping static `/audio/...` frontend assets and full `http(s)://` URLs unchanged.
+ */
+export function resolveBackendMediaUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("/api/")) {
+    try {
+      const apiOrigin = new URL(env.NEXT_PUBLIC_API_BASE_URL).origin;
+      return `${apiOrigin}${trimmed}`;
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
 export async function apiRequest<TResponse, TBody = unknown>(
   options: ApiRequestOptions<TBody>,
 ): Promise<TResponse> {

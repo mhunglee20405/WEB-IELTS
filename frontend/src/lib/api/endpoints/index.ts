@@ -16,5 +16,6 @@ export { examAttemptsApi } from "./exam-attempts";
 export { readingTranslationsApi } from "./reading-translations";
 export { teacherExamTestsApi } from "./teacher-exam-tests";
 export { systemApi } from "./system";
+export { vocabularyApi } from "./vocabulary";
 
 

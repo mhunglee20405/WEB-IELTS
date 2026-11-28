@@ -57,7 +57,12 @@ export class ExamTestsService {
   }
 
   private checkDraftStatus(test: ExamTestDocument) {
-    if (test.status !== ExamTestStatus.DRAFT) {
+    if (test.status === ExamTestStatus.ARCHIVED) {
+      throw new BadRequestException('Archived tests cannot be modified.');
+    }
+    const isQuizSkill =
+      test.skill === ExamSkill.VOCABULARY || test.skill === ExamSkill.GRAMMAR;
+    if (test.status !== ExamTestStatus.DRAFT && !isQuizSkill) {
       throw new BadRequestException(
         'Only DRAFT tests can be modified directly. Create a new version instead.',
       );
@@ -69,6 +74,15 @@ export class ExamTestsService {
       throw new ForbiddenException('Students cannot create exam tests');
     }
 
+    const isQuizSkill =
+      dto.skill === ExamSkill.VOCABULARY || dto.skill === ExamSkill.GRAMMAR;
+    const defaultDuration =
+      dto.skill === ExamSkill.READING
+        ? 3600
+        : dto.skill === ExamSkill.LISTENING
+          ? 1800
+          : 900;
+
     const test = new this.examTestModel({
       title: dto.title,
       subtitle: dto.subtitle,
@@ -77,10 +91,14 @@ export class ExamTestsService {
       difficulty: dto.difficulty || ExamDifficulty.TARGET_65,
       tags: dto.tags || [],
       examPreset: dto.examPreset,
-      allowedModes: dto.allowedModes || [ExamMode.PART, ExamMode.FULL],
+      allowedModes:
+        dto.allowedModes || (isQuizSkill ? [ExamMode.FULL] : [ExamMode.PART, ExamMode.FULL]),
       passScore: dto.passScore ?? 70,
-      fullDurationSeconds: dto.fullDurationSeconds || (dto.skill === ExamSkill.READING ? 3600 : 1800),
-      translationEnabled: Boolean(dto.translationEnabled),
+      fullDurationSeconds:
+        dto.fullDurationSeconds !== undefined && dto.fullDurationSeconds !== null
+          ? dto.fullDurationSeconds
+          : defaultDuration,
+      translationEnabled: isQuizSkill ? false : Boolean(dto.translationEnabled),
       status: ExamTestStatus.DRAFT,
       version: 1,
       parts: [],
@@ -301,13 +319,28 @@ export class ExamTestsService {
       throw new BadRequestException('Listening tests only accept SECTION parts');
     }
 
+    const resolvedAudioAssetId =
+      dto.audioAssetId && Types.ObjectId.isValid(dto.audioAssetId)
+        ? new Types.ObjectId(dto.audioAssetId)
+        : undefined;
+    const resolvedPlaybackUrl =
+      dto.audioPlaybackUrl ||
+      (dto.audioAssetId && !Types.ObjectId.isValid(dto.audioAssetId)
+        ? dto.audioAssetId
+        : undefined);
+
     const newPart: any = {
-      _id: new Types.ObjectId(),
+      _id: dto.id && Types.ObjectId.isValid(dto.id) ? new Types.ObjectId(dto.id) : new Types.ObjectId(),
       type: dto.type,
       ordinal: dto.ordinal,
       title: dto.title,
       contentHtml: dto.contentHtml,
-      audioAssetId: dto.audioAssetId && Types.ObjectId.isValid(dto.audioAssetId) ? new Types.ObjectId(dto.audioAssetId) : undefined,
+      audioAssetId: resolvedAudioAssetId,
+      audioPlaybackUrl: resolvedPlaybackUrl,
+      transcript: dto.transcript,
+      audioAllowPause: dto.audioAllowPause ?? true,
+      audioAllowSeek: dto.audioAllowSeek ?? true,
+      audioMaxPlayCount: dto.audioMaxPlayCount ?? null,
       durationSeconds: dto.durationSeconds,
       questionGroups: [],
     };
@@ -337,8 +370,20 @@ export class ExamTestsService {
     if (dto.ordinal !== undefined) part.ordinal = dto.ordinal;
     if (dto.contentHtml !== undefined) part.contentHtml = dto.contentHtml;
     if (dto.audioAssetId !== undefined) {
-      part.audioAssetId = dto.audioAssetId && Types.ObjectId.isValid(dto.audioAssetId) ? new Types.ObjectId(dto.audioAssetId) : undefined;
+      if (dto.audioAssetId && Types.ObjectId.isValid(dto.audioAssetId)) {
+        part.audioAssetId = new Types.ObjectId(dto.audioAssetId);
+      } else if (dto.audioAssetId && !dto.audioPlaybackUrl) {
+        part.audioAssetId = undefined;
+        part.audioPlaybackUrl = dto.audioAssetId;
+      } else {
+        part.audioAssetId = undefined;
+      }
     }
+    if (dto.audioPlaybackUrl !== undefined) part.audioPlaybackUrl = dto.audioPlaybackUrl;
+    if (dto.transcript !== undefined) part.transcript = dto.transcript;
+    if (dto.audioAllowPause !== undefined) part.audioAllowPause = dto.audioAllowPause;
+    if (dto.audioAllowSeek !== undefined) part.audioAllowSeek = dto.audioAllowSeek;
+    if (dto.audioMaxPlayCount !== undefined) part.audioMaxPlayCount = dto.audioMaxPlayCount;
     if (dto.durationSeconds !== undefined) part.durationSeconds = dto.durationSeconds;
 
     const saved = await test.save();
@@ -395,6 +440,7 @@ export class ExamTestsService {
       order: dto.order,
       sharedOptions: dto.sharedOptions,
       maxWords: dto.maxWords,
+      summaryTemplateHtml: dto.summaryTemplateHtml,
       questions: dto.questions.map((q) => ({
         number: q.number,
         prompt: q.prompt,
@@ -402,6 +448,7 @@ export class ExamTestsService {
         points: q.points ?? 1,
         options: q.options,
         grading: q.grading,
+        explanation: q.explanation?.trim() || undefined,
       })),
     };
 
@@ -445,6 +492,7 @@ export class ExamTestsService {
     if (dto.order !== undefined) targetGroup.order = dto.order;
     if (dto.sharedOptions !== undefined) targetGroup.sharedOptions = dto.sharedOptions;
     if (dto.maxWords !== undefined) targetGroup.maxWords = dto.maxWords;
+    if (dto.summaryTemplateHtml !== undefined) targetGroup.summaryTemplateHtml = dto.summaryTemplateHtml;
     if (dto.questions !== undefined) {
       targetGroup.questions = dto.questions.map((q) => ({
         number: q.number,
@@ -453,6 +501,7 @@ export class ExamTestsService {
         points: q.points ?? 1,
         options: q.options,
         grading: q.grading,
+        explanation: q.explanation?.trim() || undefined,
       }));
     }
 
@@ -478,9 +527,15 @@ export class ExamTestsService {
     const seenNumbers = new Set<number>();
     let totalQuestions = 0;
 
+    const isQuizSkill =
+      test.skill === ExamSkill.VOCABULARY || test.skill === ExamSkill.GRAMMAR;
+
     for (const p of test.parts || []) {
       if (test.skill === ExamSkill.READING && !p.contentHtml) {
         errors.push(`Passage "${p.title}" must contain contentHtml reading text`);
+      }
+      if (test.skill === ExamSkill.LISTENING && !p.audioAssetId && !p.audioPlaybackUrl) {
+        errors.push(`Section "${p.title}" must contain an uploaded audio file`);
       }
 
       let partQuestions = 0;
@@ -492,6 +547,16 @@ export class ExamTestsService {
             errors.push(`Duplicate question number: ${q.number}`);
           }
           seenNumbers.add(q.number);
+
+          if (isQuizSkill) {
+            if (!q.prompt || !q.prompt.trim()) {
+              errors.push(`Question #${q.number} must have question text`);
+            }
+            const validOptions = (q.options || []).filter((o: any) => o?.text?.trim());
+            if (validOptions.length < 2) {
+              errors.push(`Question #${q.number} must have at least 2 answer options`);
+            }
+          }
 
           if (!q.grading || !q.grading.acceptedKeys || q.grading.acceptedKeys.length === 0) {
             errors.push(`Question #${q.number} is missing grading/acceptedKeys`);

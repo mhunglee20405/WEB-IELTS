@@ -71,6 +71,10 @@ export class ExamQuestion {
    */
   @Prop({ type: Object })
   grading?: ExamGrading;
+
+  /** Optional answer explanation shown to student after submission */
+  @Prop({ trim: true })
+  explanation?: string;
 }
 
 export const ExamQuestionSchema = SchemaFactory.createForClass(ExamQuestion);
@@ -103,6 +107,10 @@ export class QuestionGroup {
   @Prop()
   maxWords?: number;
 
+  /** Rich formatted HTML stimulus template containing numbered blanks (e.g. (1)_____) */
+  @Prop()
+  summaryTemplateHtml?: string;
+
   @Prop({ type: [ExamQuestionSchema], required: true, default: [] })
   questions: ExamQuestion[];
 }
@@ -134,6 +142,26 @@ export class ExamPart {
   /** Reference to an audio asset (Listening tests) */
   @Prop({ type: Types.ObjectId })
   audioAssetId?: Types.ObjectId;
+
+  /** Direct or resolved audio playback URL (e.g. /audio/section1.wav or CDN stream) */
+  @Prop({ trim: true })
+  audioPlaybackUrl?: string;
+
+  /** Audio transcript for teachers and post-exam review */
+  @Prop()
+  transcript?: string;
+
+  /** Whether pausing audio is permitted during test */
+  @Prop({ default: true })
+  audioAllowPause?: boolean;
+
+  /** Whether seeking audio progress is permitted during test */
+  @Prop({ default: true })
+  audioAllowSeek?: boolean;
+
+  /** Maximum allowed play count (null = unlimited) */
+  @Prop({ type: Number, default: null })
+  audioMaxPlayCount?: number;
 
   /** Time limit for this part in seconds (null = unlimited / follows fullDurationSeconds) */
   @Prop()

@@ -12,6 +12,8 @@ import { TranslationsService } from 'src/modules/translations/translations.servi
 import { ExtensionsService } from 'src/modules/extensions/extensions.service';
 import { StudentAssignment } from 'src/database/schemas/student-assignment.schema';
 import { Assignment } from 'src/database/schemas/assignment.schema';
+import { ExamTest } from 'src/database/schemas/exam-test.schema';
+import { PassageVocab } from 'src/database/schemas/passage-vocab.schema';
 import { Submission } from 'src/database/schemas/submission.schema';
 import { TranslationSubmission } from 'src/database/schemas/translation-submission.schema';
 import { Course } from 'src/database/schemas/course.schema';
@@ -28,6 +30,7 @@ function createChainableQuery(resolvedValue: any) {
     populate: jest.fn().mockImplementation(() => query),
     select: jest.fn().mockImplementation(() => query),
     sort: jest.fn().mockImplementation(() => query),
+    lean: jest.fn().mockImplementation(() => query),
     exec: jest.fn().mockResolvedValue(resolvedValue),
   };
   return query;
@@ -40,6 +43,8 @@ describe('StudentAssignmentsController', () => {
   let submissionModel: any;
   let translationModel: any;
   let courseModel: any;
+  let examTestModel: any;
+  let passageVocabModel: any;
   let submissionsService: any;
   let translationsService: any;
   let extensionsService: any;
@@ -142,6 +147,14 @@ describe('StudentAssignmentsController', () => {
       ),
     };
 
+    examTestModel = {
+      findById: jest.fn().mockReturnValue(createChainableQuery(null)),
+    };
+
+    passageVocabModel = {
+      find: jest.fn().mockReturnValue(createChainableQuery([])),
+    };
+
     submissionsService = {
       submit: jest.fn(),
     };
@@ -166,6 +179,8 @@ describe('StudentAssignmentsController', () => {
         { provide: getModelToken(Submission.name), useValue: submissionModel },
         { provide: getModelToken(TranslationSubmission.name), useValue: translationModel },
         { provide: getModelToken(Course.name), useValue: courseModel },
+        { provide: getModelToken(ExamTest.name), useValue: examTestModel },
+        { provide: getModelToken(PassageVocab.name), useValue: passageVocabModel },
         { provide: SubmissionsService, useValue: submissionsService },
         { provide: TranslationsService, useValue: translationsService },
         { provide: ExtensionsService, useValue: extensionsService },
@@ -487,6 +502,104 @@ describe('StudentAssignmentsController', () => {
         controller.submitTranslation(saId.toHexString(), { translatedText: 'early' }, studentA),
       ).rejects.toThrow(ForbiddenException);
       expect(translationsService.submit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Contextual Vocabulary & ExamTest Metadata Sync', () => {
+    it('resolves examTestId, passageId, passages, and passageVocabs on getDetail/getReview/getTranslation when unlocked and hides before openAt', async () => {
+      const testId = new Types.ObjectId();
+      const part1Id = new Types.ObjectId();
+      const part2Id = new Types.ObjectId();
+      const vocab1Id = new Types.ObjectId();
+
+      const examTestDoc = {
+        _id: testId,
+        title: 'Academic Reading Test 1',
+        skill: 'READING',
+        parts: [
+          { _id: part1Id, ordinal: 1, title: 'Passage 1', contentHtml: '<p>Vertical farming text</p>' },
+          { _id: part2Id, ordinal: 2, title: 'Passage 2', contentHtml: '<p>Other passage</p>' },
+        ],
+      };
+      examTestModel.findById.mockReturnValue(createChainableQuery(examTestDoc));
+      passageVocabModel.find.mockReturnValue(
+        createChainableQuery([
+          {
+            _id: vocab1Id,
+            passageId: part1Id.toHexString(),
+            testId,
+            partNumber: 1,
+            word: 'aeroponic',
+            partOfSpeech: 'adj',
+            meaningVi: 'khí canh',
+            order: 0,
+          },
+        ]),
+      );
+
+      const v2Assignment = {
+        ...sampleAssignment,
+        examTestId: testId,
+        exerciseId: testId,
+        requiredScope: 'PART',
+        requiredPartId: part1Id.toHexString(),
+        allowRetake: true,
+        strictExamMode: false,
+      };
+
+      studentAssignmentModel.findById.mockReturnValue(
+        createChainableQuery({
+          _id: saId,
+          studentId: { _id: studentAId, fullName: 'Student A', email: 'a@test.com' },
+          assignmentId: {
+            ...v2Assignment,
+            courseId: { _id: courseId, code: 'C1', title: 'Course 1', teacherId: teacherAId },
+          },
+          effectiveDeadlineAt: futureDeadlineAt,
+          status: StudentAssignmentStatus.PASSED,
+          isTargetAchieved: true,
+          bestScore: 90,
+        }),
+      );
+      assignmentModel.findById.mockReturnValue(createChainableQuery(v2Assignment));
+
+      const detail: any = await controller.getDetail(saId.toHexString(), studentA);
+      expect(detail.examTestId).toBe(testId.toHexString());
+      expect(detail.passageId).toBe(part1Id.toHexString());
+      expect(detail.strictExamMode).toBe(false);
+      expect(detail.passages).toHaveLength(1);
+      expect(detail.passageVocabs).toHaveLength(1);
+      expect(detail.passageVocabs[0].word).toBe('aeroponic');
+
+      const review: any = await controller.getReview(saId.toHexString(), studentA);
+      expect(review.testId).toBe(testId.toHexString());
+      expect(review.passageId).toBe(part1Id.toHexString());
+      expect(review.passages).toHaveLength(1);
+      expect(review.passageVocabs[0].word).toBe('aeroponic');
+
+      const trans: any = await controller.getTranslation(saId.toHexString(), studentA);
+      expect(trans.testId).toBe(testId.toHexString());
+      expect(trans.passageId).toBe(part1Id.toHexString());
+      expect(trans.passageVocabs[0].word).toBe('aeroponic');
+
+      // Ensure locked pre-openAt assignment hides passages and passageVocabs
+      studentAssignmentModel.findById.mockReturnValue(
+        createChainableQuery({
+          _id: saId,
+          studentId: { _id: studentAId, fullName: 'Student A', email: 'a@test.com' },
+          assignmentId: {
+            ...v2Assignment,
+            openAt: futureOpenAt,
+            courseId: { _id: courseId, code: 'C1', title: 'Course 1', teacherId: teacherAId },
+          },
+          effectiveDeadlineAt: futureDeadlineAt,
+          status: StudentAssignmentStatus.NOT_STARTED,
+        }),
+      );
+      const lockedDetail: any = await controller.getDetail(saId.toHexString(), studentA);
+      expect(lockedDetail.exercise.isLocked).toBe(true);
+      expect(lockedDetail.passages).toBeUndefined();
+      expect(lockedDetail.passageVocabs).toBeUndefined();
     });
   });
 });

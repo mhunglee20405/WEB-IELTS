@@ -87,3 +87,12 @@ export const examKeys = {
     ["teacher", "reading-translations", status ?? "ALL", testId ?? "ALL"] as const,
 };
 
+export const vocabKeys = {
+  root: ["vocabulary"] as const,
+  teacherPassage: (passageId: string) => ["vocabulary", "teacher-passage", passageId] as const,
+  studentPassage: (passageId: string) => ["vocabulary", "student-passage", passageId] as const,
+  notebookRoot: ["vocabulary", "notebook"] as const,
+  notebookList: (search?: string, passageId?: string, status?: string, page = 1) =>
+    ["vocabulary", "notebook", search ?? "", passageId ?? "ALL", status ?? "ALL", page] as const,
+};
+

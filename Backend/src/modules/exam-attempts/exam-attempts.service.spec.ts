@@ -1297,6 +1297,71 @@ describe('ExamAttemptsService', () => {
         ForbiddenException,
       );
     });
+
+    it('returns options and teacher explanation for VOCABULARY and GRAMMAR quizzes', async () => {
+      const quizTestId = new Types.ObjectId();
+      const quizPartId = new Types.ObjectId();
+      const quizTestDoc = {
+        _id: quizTestId,
+        title: 'Grammar Quiz 01',
+        skill: ExamSkill.GRAMMAR,
+        status: ExamTestStatus.PUBLISHED,
+        passScore: 70,
+        createdBy: teacherOwnerId,
+        parts: [
+          {
+            _id: quizPartId,
+            ordinal: 1,
+            type: PartType.QUIZ,
+            title: 'Grammar Quiz',
+            questionGroups: [
+              {
+                _id: new Types.ObjectId(),
+                type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                questions: [
+                  {
+                    number: 1,
+                    prompt: 'Despite ________ hard, he failed.',
+                    type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                    points: 1,
+                    options: [
+                      { key: 'A', text: 'working' },
+                      { key: 'B', text: 'worked' },
+                    ],
+                    grading: { acceptedKeys: ['A'] },
+                    explanation: 'Despite + V-ing.',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(quizTestDoc),
+      });
+
+      const attemptDoc = {
+        _id: new Types.ObjectId(),
+        studentId,
+        testId: quizTestId,
+        skill: ExamSkill.GRAMMAR,
+        mode: ExamMode.FULL,
+        status: AttemptStatus.SUBMITTED,
+        scopeQuestionIds: ['1'],
+        savedAnswers: new Map([['1', 'A']]),
+      };
+      examAttemptModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(attemptDoc),
+      });
+
+      const review = await service.getReview(attemptDoc._id.toHexString(), student);
+      expect(review.items).toHaveLength(1);
+      expect(review.items[0].isCorrect).toBe(true);
+      expect(review.items[0].explanation).toBe('Despite + V-ing.');
+      expect(review.items[0].options).toHaveLength(2);
+    });
   });
 });
 

@@ -17,6 +17,10 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth/auth-provider";
+import {
+  ContextualPassageReader,
+  ReadingVocabToolbarButton,
+} from "@/components/exam/reading-vocab-workspace";
 import { QuestionRenderer } from "@/components/student/question-renderer";
 import { ReadingSplitWorkspace } from "@/components/student/reading-split-workspace";
 import { SignedAudioPlayer } from "@/components/student/signed-audio-player";
@@ -24,7 +28,6 @@ import {
   ConfirmDialog,
   PageHeader,
   QueryState,
-  SafeHtml,
   StatusBadge,
 } from "@/components/ui";
 import { createIdempotencyKey } from "@/lib/api/client";
@@ -65,6 +68,8 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [latestResult, setLatestResult] = useState<SubmissionResult | null>(null);
+  const [vocabDrawerOpen, setVocabDrawerOpen] = useState(false);
+  const [selectedPassageId, setSelectedPassageId] = useState<string>("");
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() =>
     createIdempotencyKey(),
   );
@@ -150,6 +155,28 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
     !detail.exerciseType ||
     String(detail.exerciseType).toLowerCase() === "reading";
   const isTranslationAvailable = Boolean(isPassed && isReadingExercise);
+  const canUseVocabNotebook = isPassed || !detail.strictExamMode;
+  const readingPassages =
+    detail.passages && detail.passages.length > 0
+      ? detail.passages
+      : isReadingExercise
+        ? [
+            {
+              passageId:
+                detail.passageId || detail.exercise.passageId || detail.exercise.id,
+              partNumber: 1,
+              title: detail.exercise.title,
+              passageTitle: detail.exercise.title,
+              passageHtml:
+                detail.exercise.passageHtml ||
+                "<p>Không có nội dung bài đọc.</p>",
+              passageVocabs: detail.passageVocabs ?? [],
+            },
+          ]
+        : [];
+  const activeReadingPassage =
+    readingPassages.find((p) => p.passageId === selectedPassageId) ??
+    readingPassages[0];
 
   const questionsPanel = (
     <div className="space-y-4">
@@ -367,18 +394,31 @@ function ExerciseRunner({ detail, userId, submissions }: ExerciseRunnerProps) {
         </section>
       ) : null}
 
-      {detail.exerciseType === "reading" ? (
+      {isReadingExercise ? (
         <ReadingSplitWorkspace
           leftLabel="Bài đọc"
           rightLabel={`Câu hỏi (${totalQuestions})`}
           leftTitle={detail.exercise.title}
+          leftHeaderActions={
+            activeReadingPassage ? (
+              <ReadingVocabToolbarButton
+                passageId={activeReadingPassage.passageId}
+                enabled={canUseVocabNotebook}
+                initialItems={activeReadingPassage.passageVocabs}
+                onClick={() => setVocabDrawerOpen(true)}
+              />
+            ) : null
+          }
           leftContent={
-            <SafeHtml
-              html={
-                detail.exercise.passageHtml || (detail.exercise as any).passage || "<p>Không có nội dung bài đọc.</p>"
-              }
-              lang="en"
-              preset="richText"
+            <ContextualPassageReader
+              passages={readingPassages}
+              testId={detail.testId ?? detail.examTestId}
+              testTitle={detail.exercise.title}
+              enableVocab={canUseVocabNotebook}
+              selectedPassageId={activeReadingPassage?.passageId}
+              onSelectPassageId={setSelectedPassageId}
+              drawerOpen={vocabDrawerOpen}
+              onOpenDrawerChange={setVocabDrawerOpen}
             />
           }
           rightContent={questionsPanel}

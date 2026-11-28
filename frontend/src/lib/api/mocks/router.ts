@@ -769,6 +769,8 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
       allowedModes: body.allowedModes,
       durationSecondsOverride: body.durationSecondsOverride ?? null,
       maxAttempts: body.maxAttempts ?? null,
+      allowRetake: body.allowRetake ?? true,
+      strictExamMode: Boolean(body.strictExamMode),
     };
     mockState.assignments.unshift(created);
     const enrolled = (mockState.courseStudents[course.id] ?? []).filter(
@@ -798,11 +800,14 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
         translationStatus: "not_started",
         penaltyApplied: false,
         examTestId: body.examTestId,
+        testId: body.examTestId,
         requiredScope: body.requiredScope,
         requiredPartId: body.requiredPartId ?? null,
         allowedModes: body.allowedModes,
         durationSecondsOverride: body.durationSecondsOverride ?? null,
         maxAttempts: body.maxAttempts ?? null,
+        allowRetake: body.allowRetake ?? true,
+        strictExamMode: Boolean(body.strictExamMode),
       });
     }
     return created as T;
@@ -920,13 +925,88 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
       }
       const assignment = mockState.assignments.find((a) => a.id === sa.assignmentId);
       const exercise = mockState.exercises.find((e) => e.id === assignment?.exerciseId);
-      if (!exercise) notFound();
+      const v2Test = assignment?.examTestId
+        ? mockState.examV2.tests.find((t) => t.id === assignment.examTestId)
+        : undefined;
+      if (!exercise && !v2Test) notFound();
       const submittedMap = mockState.lastSubmittedAnswers[saId] ?? {};
+      if (v2Test) {
+        const scopedParts =
+          assignment?.requiredScope === "PART" && assignment?.requiredPartId
+            ? v2Test.parts.filter((p) => p.id === assignment.requiredPartId)
+            : v2Test.parts;
+        const passages =
+          v2Test.skill === "READING"
+            ? scopedParts.map((p) => ({
+                passageId: p.id,
+                partNumber: p.partNumber,
+                title: p.title,
+                passageTitle: p.passageTitle ?? p.title,
+                passageHtml: p.passageHtml ?? "",
+                passageVocabs: mockState.examV2.passageVocabs[p.id] ?? [],
+              }))
+            : [];
+        const flatQs = scopedParts.flatMap((p) =>
+          p.questionGroups.flatMap((g) => g.questions),
+        );
+        return {
+          studentAssignmentId: saId,
+          passed: sa.passed,
+          score: sa.bestScore ?? 0,
+          title: assignment?.title ?? v2Test.title,
+          exerciseType: v2Test.skill === "LISTENING" ? "listening" : "reading",
+          examTestId: v2Test.id,
+          testId: v2Test.id,
+          passageId: passages[0]?.passageId,
+          passageTitle: passages[0]?.passageTitle,
+          passageHtml: passages.map((p) => p.passageHtml).filter(Boolean).join("\n\n"),
+          passages,
+          passageVocabs: passages[0]?.passageVocabs ?? [],
+          strictExamMode: Boolean(assignment?.strictExamMode),
+          items: flatQs.map((q) => {
+            const corr = Array.isArray(q.correctAnswer)
+              ? q.correctAnswer.join(" / ")
+              : String(q.correctAnswer ?? "");
+            return {
+              questionId: q.id,
+              orderIndex: q.questionNumber,
+              prompt: q.prompt,
+              studentAnswer: submittedMap[q.id] ?? "",
+              correctAnswer: corr,
+              isCorrect:
+                (submittedMap[q.id] ?? "").trim().toLowerCase() === corr.trim().toLowerCase(),
+              explanation: q.explanation,
+            };
+          }),
+        } as T;
+      }
+      const exVocabs = exercise ? (mockState.examV2.passageVocabs[exercise.id] ?? []) : [];
       return {
         studentAssignmentId: saId,
         passed: sa.passed,
         score: sa.bestScore ?? 0,
-        items: exercise.questions.map((q) => ({
+        title: assignment?.title ?? exercise!.title,
+        exerciseType: exercise!.type,
+        ...(exercise!.type === "reading"
+          ? {
+              passageId: exercise!.id,
+              passageTitle: exercise!.title,
+              passageHtml: exercise!.passageHtml ?? "",
+              passages: [
+                {
+                  passageId: exercise!.id,
+                  partNumber: 1,
+                  title: exercise!.title,
+                  passageTitle: exercise!.title,
+                  passageHtml: exercise!.passageHtml ?? "",
+                  passageVocabs: exVocabs,
+                },
+              ],
+              passageVocabs: exVocabs,
+            }
+          : {}),
+        strictExamMode: Boolean(assignment?.strictExamMode),
+        items: exercise!.questions.map((q) => ({
           questionId: q.id,
           orderIndex: q.orderIndex,
           prompt: q.prompt,
@@ -943,11 +1023,44 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
     if (subRoute?.startsWith("translation")) {
       const assignment = mockState.assignments.find((a) => a.id === sa.assignmentId);
       const exercise = mockState.exercises.find((e) => e.id === assignment?.exerciseId);
+      const v2Test = assignment?.examTestId
+        ? mockState.examV2.tests.find((t) => t.id === assignment.examTestId)
+        : undefined;
+      const scopedParts = v2Test
+        ? assignment?.requiredScope === "PART" && assignment?.requiredPartId
+          ? v2Test.parts.filter((p) => p.id === assignment.requiredPartId)
+          : v2Test.parts
+        : [];
+      const passages = v2Test
+        ? scopedParts.map((p) => ({
+            passageId: p.id,
+            partNumber: p.partNumber,
+            title: p.title,
+            passageTitle: p.passageTitle ?? p.title,
+            passageHtml: p.passageHtml ?? "",
+            passageVocabs: mockState.examV2.passageVocabs[p.id] ?? [],
+          }))
+        : exercise
+          ? [
+              {
+                passageId: exercise.id,
+                partNumber: 1,
+                title: exercise.title,
+                passageTitle: exercise.title,
+                passageHtml: exercise.passageHtml ?? "",
+                passageVocabs: mockState.examV2.passageVocabs[exercise.id] ?? [],
+              },
+            ]
+          : [];
       const workspace = (mockState.translations[saId] ??= {
         translationId: `tr-${saId}`,
         studentAssignmentId: saId,
-        passageTitle: exercise?.title ?? sa.title,
-        passageHtml: exercise?.passageHtml ?? "<p>Nội dung bài đọc.</p>",
+        ...(v2Test ? { examTestId: v2Test.id, testId: v2Test.id } : {}),
+        passageId: passages[0]?.passageId ?? exercise?.id,
+        passageTitle: passages[0]?.passageTitle ?? exercise?.title ?? sa.title,
+        passageHtml: passages[0]?.passageHtml ?? exercise?.passageHtml ?? "<p>Nội dung bài đọc.</p>",
+        passages,
+        passageVocabs: passages[0]?.passageVocabs ?? [],
         draftText: "",
         status: "not_started",
       });
@@ -1186,12 +1299,33 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
   if (method === "POST" && pathname === "/media/audio/upload-complete") {
     return { ok: true } as T;
   }
+  if (method === "POST" && pathname === "/media/images/upload-intent") {
+    const assetId = `img-${Date.now()}`;
+    const bodyObj = (options.body ?? {}) as { filename?: string };
+    const safeName = (bodyObj.filename || "diagram.png").replace(/[^a-zA-Z0-9._-]/g, "_");
+    const objectKey = `${assetId}-${safeName}`;
+    return {
+      assetId,
+      objectKey,
+      uploadUrl: `https://mock-upload.local/images/${objectKey}`,
+      streamUrl: `/api/v1/media/images/stream/${encodeURIComponent(objectKey)}`,
+      expiresAt: new Date(Date.now() + 900_000).toISOString(),
+    } as T;
+  }
   const audioPlayMatch = /^\/media\/audio\/([^/]+)\/playback$/.exec(pathname);
   if (audioPlayMatch && method === "GET") {
+    const rawAssetId = audioPlayMatch[1] ?? "";
+    let streamUrl = "/audio/ielts-listening-section1.wav";
+    if (rawAssetId.includes("s2") || rawAssetId.includes("section2") || rawAssetId.endsWith("-2")) {
+      streamUrl = "/audio/ielts-listening-section2.wav";
+    } else if (rawAssetId.includes("s3") || rawAssetId.includes("section3") || rawAssetId.endsWith("-3")) {
+      streamUrl = "/audio/ielts-listening-section3.wav";
+    } else if (rawAssetId.includes("s4") || rawAssetId.includes("section4") || rawAssetId.endsWith("-4")) {
+      streamUrl = "/audio/ielts-listening-section4.wav";
+    }
     return {
-      assetId: audioPlayMatch[1],
-      streamUrl:
-        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=",
+      assetId: rawAssetId,
+      streamUrl,
       mimeType: "audio/wav",
       durationSeconds: 180,
       expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
@@ -1199,6 +1333,12 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
   }
 
   // Phase 9 Exam Modes V2 routes
+  const strictExamModeByStudentAssignmentId = Object.fromEntries(
+    mockState.studentAssignments.map((sa) => [
+      sa.studentAssignmentId,
+      Boolean(sa.strictExamMode),
+    ]),
+  );
   const v2Result = dispatchExamV2MockRequest<T>(mockState.examV2, {
     method,
     pathname,
@@ -1206,6 +1346,7 @@ export async function dispatchMockRequest<T>(options: MockDispatchOptions): Prom
     body: options.body,
     headers: options.headers,
     currentUser: getCurrentUser(),
+    strictExamModeByStudentAssignmentId,
   });
   if (v2Result.handled) {
     return v2Result.data as T;

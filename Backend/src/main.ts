@@ -21,8 +21,12 @@ async function bootstrap() {
   // Correlation ID tracking
   app.use(new CorrelationIdMiddleware().use);
 
-  // Security
-  app.use(helmet());
+  // Security (allow cross-origin audio/media resource playback from Vercel/localhost frontend)
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
   app.use(cookieParser());
 
   // CORS
@@ -76,9 +80,20 @@ async function bootstrap() {
   // Global interceptors
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // Request size limit
+  // Request size limit (55MB for audio, 15MB for image binary uploads, 10MB for standard API payloads)
   app.use((req: any, res: any, next: any) => {
-    if (req.headers['content-length'] && parseInt(req.headers['content-length']) > 10 * 1024 * 1024) {
+    const contentLength = req.headers['content-length']
+      ? parseInt(req.headers['content-length'], 10)
+      : 0;
+    const url = typeof req.originalUrl === 'string' ? req.originalUrl : '';
+    const isAudioUpload = url.includes('/media/audio/upload');
+    const isImageUpload = url.includes('/media/images/upload');
+    const maxBytes = isAudioUpload
+      ? 55 * 1024 * 1024
+      : isImageUpload
+        ? 15 * 1024 * 1024
+        : 10 * 1024 * 1024;
+    if (contentLength > maxBytes) {
       res.status(413).json({ statusCode: 413, message: 'Payload too large' });
       return;
     }

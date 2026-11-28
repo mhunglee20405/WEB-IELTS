@@ -28,8 +28,11 @@ const SANITIZE_CONFIGS: Record<
       "td",
       "span",
       "div",
+      "img",
+      "figure",
+      "figcaption",
     ],
-    attributes: ["class", "style"],
+    attributes: ["class", "style", "src", "alt", "width", "height", "title"],
   },
   inline: {
     elements: ["b", "strong", "i", "em", "u", "br", "span"],
@@ -58,6 +61,18 @@ type ElementWithSanitizer = Element & {
   ) => void;
 };
 
+const SAFE_IMAGE_SRC_RE = /^(?:https?:\/\/|\/(?!\/))/i;
+
+function stripDisallowedImageSources(root: ParentNode): void {
+  const images = root.querySelectorAll("img");
+  images.forEach((img) => {
+    const rawSrc = (img.getAttribute("src") ?? "").trim();
+    if (!rawSrc || !SAFE_IMAGE_SRC_RE.test(rawSrc)) {
+      img.remove();
+    }
+  });
+}
+
 /**
  * Safely parses and inserts untrusted HTML into an element.
  * Uses the native Sanitizer API (`Element.prototype.setHTML`) when supported,
@@ -75,6 +90,7 @@ export async function safeSetHtml(
     (element as ElementWithSanitizer).setHTML(html, {
       sanitizer: { elements, attributes },
     });
+    stripDisallowedImageSources(element);
     return;
   }
 
@@ -87,6 +103,7 @@ export async function safeSetHtml(
     KEEP_CONTENT: false,
   });
   element.innerHTML = clean;
+  stripDisallowedImageSources(element);
 }
 
 /**
@@ -112,17 +129,22 @@ export async function sanitizeHtml(
     (scratch as unknown as ElementWithSanitizer).setHTML(html, {
       sanitizer: { elements, attributes },
     });
+    stripDisallowedImageSources(scratch);
     return scratch.innerHTML;
   }
 
   const DOMPurify = await loadDOMPurify();
-  return DOMPurify.sanitize(html, {
+  const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS: [...elements, "#text"],
     ALLOWED_ATTR: attributes,
     ALLOW_ARIA_ATTR: false,
     ALLOW_DATA_ATTR: false,
     KEEP_CONTENT: false,
   });
+  const scratch = document.createElement("div");
+  scratch.innerHTML = clean;
+  stripDisallowedImageSources(scratch);
+  return scratch.innerHTML;
 }
 
 export function escapeHtmlText(value: string): string {

@@ -7,6 +7,8 @@ import { ExtensionRequestSchema } from './extension-request.schema';
 import { NotificationSchema } from './notification.schema';
 import { PenaltyTransactionSchema } from './penalty-transaction.schema';
 import { TranslationSubmissionSchema } from './translation-submission.schema';
+import { PassageVocabSchema } from './passage-vocab.schema';
+import { UserVocabNotebookSchema } from './user-vocab-notebook.schema';
 
 type IndexEntry = [Record<string, unknown>, Record<string, unknown>];
 
@@ -190,6 +192,38 @@ describe('MongoDB Schema & Index Integrity', () => {
       const idempotencyIdx = findIndex(EmailDeliverySchema, { idempotencyKey: 1 });
       expect(idempotencyIdx).toBeDefined();
       expect(idempotencyIdx![1]).toMatchObject({ unique: true });
+    });
+
+    it('PassageVocabSchema and UserVocabNotebookSchema enforce partialFilterExpression deduplication', () => {
+      const passageUniqueIdx = findIndex(PassageVocabSchema, {
+        passageId: 1,
+        normalizedWord: 1,
+      });
+      expect(passageUniqueIdx).toBeDefined();
+      expect(passageUniqueIdx![1]).toMatchObject({ unique: true });
+
+      const userPassageIdx = findIndex(UserVocabNotebookSchema, {
+        userId: 1,
+        passageId: 1,
+        normalizedWord: 1,
+      });
+      expect(userPassageIdx).toBeDefined();
+      expect(userPassageIdx![1]).toMatchObject({
+        unique: true,
+        partialFilterExpression: { passageId: { $type: 'string' } },
+      });
+      expect(userPassageIdx![1].sparse).toBeUndefined();
+
+      const userStandaloneIdx = findIndex(UserVocabNotebookSchema, {
+        userId: 1,
+        normalizedWord: 1,
+      });
+      expect(userStandaloneIdx).toBeDefined();
+      expect(userStandaloneIdx![1]).toMatchObject({
+        unique: true,
+        partialFilterExpression: { passageId: { $exists: false } },
+      });
+      expect(userStandaloneIdx![1].sparse).toBeUndefined();
     });
   });
 });

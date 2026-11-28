@@ -485,5 +485,83 @@ describe('ExamTestsService', () => {
       );
     });
   });
+
+  describe('VOCABULARY & GRAMMAR quiz tests', () => {
+    it('allows creating, validating without passage/audio, and editing even after PUBLISHED', async () => {
+      const created = await service.create(
+        {
+          title: 'Academic Vocabulary Quiz 01',
+          skill: ExamSkill.VOCABULARY,
+          fullDurationSeconds: 600,
+        },
+        teacherA,
+      );
+
+      expect(created.skill).toBe(ExamSkill.VOCABULARY);
+      expect(created.allowedModes).toEqual([ExamMode.FULL]);
+      expect(created.totalDurationSeconds).toBe(600);
+
+      const publishedQuizDoc: any = {
+        _id: new Types.ObjectId(),
+        title: 'Published Grammar Quiz',
+        skill: ExamSkill.GRAMMAR,
+        status: ExamTestStatus.PUBLISHED,
+        createdBy: teacherAId,
+        parts: [
+          {
+            _id: new Types.ObjectId(),
+            ordinal: 1,
+            type: PartType.QUIZ,
+            title: 'Grammar Quiz',
+            questionGroups: [
+              {
+                _id: new Types.ObjectId(),
+                type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                order: 1,
+                questions: [
+                  {
+                    number: 1,
+                    prompt: 'Choose the right option.',
+                    type: ExamQuestionType.MULTIPLE_CHOICE_SINGLE,
+                    points: 1,
+                    options: [
+                      { key: 'A', text: 'opt A' },
+                      { key: 'B', text: 'opt B' },
+                    ],
+                    grading: { acceptedKeys: ['A'] },
+                    explanation: 'Because A is grammatically correct.',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        toObject() {
+          return this;
+        },
+        save: jest.fn().mockImplementation(async function (this: any) {
+          return this;
+        }),
+      };
+
+      examTestModel.findById.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(publishedQuizDoc),
+      });
+
+      const validation = await service.validateTest(publishedQuizDoc._id.toHexString(), teacherA);
+      expect(validation.valid).toBe(true);
+      expect(validation.totalQuestions).toBe(1);
+
+      const updated = await service.update(
+        publishedQuizDoc._id.toHexString(),
+        { title: 'Updated Published Grammar Quiz' },
+        teacherA,
+      );
+      expect(updated.title).toBe('Updated Published Grammar Quiz');
+      expect(updated.parts[0].questionGroups[0].questions[0].explanation).toBe(
+        'Because A is grammatically correct.',
+      );
+    });
+  });
 });
 
